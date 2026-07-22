@@ -1,0 +1,109 @@
+{# Shared Mermaid helpers for workflow diagrams. Include this once per page that
+   needs to draw a workflow. Defines two globals used by the template form and the
+   instance progress view. #}
+<script>
+  function plmEscapeMermaid(s) {
+    return String(s == null ? "" : s)
+      .replace(/"/g, "'")
+      .replace(/[\r\n]+/g, " ");
+  }
+
+  // Build a Mermaid `flowchart TD` string from a workflow definition object.
+  // statusByStepKey (optional) maps step.key -> "APPROVED"|"PENDING"|"REJECTED"
+  // and color-codes the nodes.
+  function plmBuildMermaid(def, statusByStepKey) {
+    statusByStepKey = statusByStepKey || null;
+    var stages = (def && def.stages) ? def.stages : [];
+    var lines = ["flowchart TD"];
+    if (!stages.length) {
+      lines.push('empty["No stages defined"]');
+      return lines.join("\n");
+    }
+    lines.push("start((Start))");
+
+    var stageEntries = []; // entry node ids per stage
+    var stageExits = [];   // exit node ids per stage
+    stages.forEach(function (stage, si) {
+      var sLabel = plmEscapeMermaid(stage.name || ("Stage " + (si + 1)));
+      if (stage.parallel) sLabel += " · parallel";
+      lines.push('subgraph S' + si + '["' + sLabel + '"]');
+
+      var steps = stage.steps || [];
+      var nodeIds = [];
+      steps.forEach(function (step, ti) {
+        var nid = "n" + si + "_" + ti;
+        var role = step.assignee ||
+          (step.assignee_type ? (step.assignee_type + ":" + (step.assignee || "")) : "");
+        var label = plmEscapeMermaid(step.name || ("Step " + (ti + 1)));
+        if (role) label += "<br/><small>@" + plmEscapeMermaid(role) + "</small>";
+        var cls = "";
+        if (statusByStepKey && step.key && statusByStepKey[step.key]) {
+          var st = statusByStepKey[step.key];
+          if (st === "APPROVED") cls = ":::done";
+          else if (st === "REJECTED") cls = ":::rej";
+          else if (st === "PENDING") cls = ":::pend";
+        }
+        lines.push(nid + '["' + label + '"]' + cls);
+        nodeIds.push(nid);
+      });
+
+      // Sequential stage chains its steps; parallel stage fans them out together.
+      if (!stage.parallel && nodeIds.length > 1) {
+        for (var i = 0; i < nodeIds.length - 1; i++) {
+          lines.push(nodeIds[i] + " --> " + nodeIds[i + 1]);
+        }
+      }
+      lines.push("end");
+
+      if (stage.parallel) {
+        stageEntries.push(nodeIds.slice());
+        stageExits.push(nodeIds.slice());
+      } else {
+        stageEntries.push(nodeIds.length ? [nodeIds[0]] : []);
+        stageExits.push(nodeIds.length ? [nodeIds[nodeIds.length - 1]] : []);
+      }
+    });
+
+    // Connect each stage's entries from the previous stage's exits.
+    for (var si = 0; si < stages.length; si++) {
+      var entries = stageEntries[si];
+      var prevExits = si === 0 ? ["start"] : stageExits[si - 1];
+      prevExits.forEach(function (from) {
+        entries.forEach(function (to) {
+          lines.push(from + " --> " + to);
+        });
+      });
+    }
+    stageExits[stageExits.length - 1].forEach(function (nid) {
+      lines.push(nid + " --> finish");
+    });
+    lines.push("finish((Done))");
+
+    if (statusByStepKey) {
+      lines.push("classDef done fill:#198754,stroke:#fff,color:#fff;");
+      lines.push("classDef pend fill:#ffc107,stroke:#000,color:#000;");
+      lines.push("classDef rej fill:#dc3545,stroke:#fff,color:#fff;");
+    }
+    return lines.join("\n");
+  }
+
+  // Render Mermaid text into a container element. Never throws to the page.
+  async function plmRenderMermaid(containerEl, text) {
+    if (!containerEl) return;
+    if (typeof mermaid === "undefined") {
+      containerEl.innerHTML = '<div class="text-warning small">Mermaid failed to load (offline?).</div>';
+      return;
+    }
+    containerEl.className = "mermaid";
+    containerEl.removeAttribute("data-processed");
+    containerEl.innerHTML = text;
+    try {
+      await mermaid.run({ nodes: [containerEl] });
+    } catch (e) {
+      containerEl.className = "";
+      containerEl.innerHTML =
+        '<div class="text-danger small">Cannot render diagram: ' +
+        plmEscapeMermaid(e && e.message ? e.message : e) + "</div>";
+    }
+  }
+</script>

@@ -1,0 +1,11 @@
+part_number,level,qty,uom,parent_assembly,bom_type,part_name
+BB-001,0,1,ea,,DESIGN,Bicycle Assembly
+WHL-001,1,2,ea,BB-001,DESIGN,Wheel Assembly
+FRM-001,1,1,ea,BB-001,DESIGN,Frame
+SPK-001,2,32,ea,WHL-001,DESIGN,Spoke
+TYR-001,2,1,ea,WHL-001,DESIGN,Tire
+HUB-001,2,1,ea,WHL-001,DESIGN,Hub
+BRK-001,1,2,ea,BB-001,DESIGN,Brake Assembly
+SADC-001,1,1,ea,BB-001,DESIGN,Saddle
+HNDL-001,1,1,ea,BB-001,DESIGN,Handlebar
+CHN-001,1,1,ea,BB-001,DESIGN,Chain

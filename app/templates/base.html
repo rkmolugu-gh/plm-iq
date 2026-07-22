@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PLM-IQ{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { padding-top: 60px; }
+        .sidebar { position: fixed; top: 56px; bottom: 0; left: 0; width: 220px; overflow-y: auto; }
+        .main-content { margin-left: 220px; padding: 20px; }
+        .navbar-brand small { font-size: 0.75rem; opacity: 0.6; }
+        .badge-status { font-size: 0.75rem; }
+        .stat-card { transition: transform 0.15s; }
+        .stat-card:hover { transform: translateY(-2px); }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-content { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top border-bottom border-secondary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-gear-wide-connected"></i> PLM-IQ
+                <small class="d-none d-md-inline">The intelligent PLM</small>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                {% if current_user %}
+                <form class="d-flex mx-auto my-2 my-md-0" role="search" action="/search" method="get" style="width: 100%; max-width: 560px;">
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search-heart"></i></span>
+                        <input type="search" name="q" class="form-control bg-dark text-light border-secondary" placeholder="Search parts, BOMs, ECOs, documents…" aria-label="Search">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Search options">
+                            <i class="bi bi-sliders"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark p-3" style="min-width: 260px;">
+                            <li><label class="form-label small text-muted mb-1">Search mode</label></li>
+                            <li>
+                                <select name="mode" class="form-select form-select-sm bg-dark text-light border-secondary mb-3">
+                                    <option value="bm25" selected>BM25 (Keyword)</option>
+                                    <option value="rag">RAG (AI-Powered)</option>
+                                    <option value="hybrid">Hybrid (Vector)</option>
+                                </select>
+                            </li>
+                            <li><label class="form-label small text-muted mb-1">Entity type</label></li>
+                            <li>
+                                <select name="entity" class="form-select form-select-sm bg-dark text-light border-secondary">
+                                    <option value="">All Entities</option>
+                                    <option value="Parts">Parts</option>
+                                    <option value="BOM">BOM</option>
+                                    <option value="Costing">Costing</option>
+                                    <option value="ECO">ECO</option>
+                                    <option value="AML">AML</option>
+                                    <option value="AVL">AVL</option>
+                                    <option value="CAD">CAD</option>
+                                    <option value="Documents">Documents</option>
+                                </select>
+                            </li>
+                        </ul>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i></button>
+                    </div>
+                </form>
+                {% endif %}
+                <ul class="navbar-nav ms-auto align-items-center">
+                    {% if current_user %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle position-relative" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i>
+                            <span class="d-none d-md-inline">{{ current_user.full_name }}</span>
+                            {% if unread_count|default(0) > 0 %}<span class="badge bg-danger rounded-pill ms-1">{{ unread_count }}</span>{% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" style="min-width: 270px;">
+                            <li class="px-3 py-2">
+                                <div class="fw-bold"><i class="bi bi-person-circle"></i> {{ current_user.full_name }}</div>
+                                <div class="small text-muted">@{{ current_user.username }}</div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><span class="dropdown-item-text small">
+                                <div class="d-flex justify-content-between"><span class="text-muted">Email</span><span class="text-light text-break">{{ current_user.email or '—' }}</span></div>
+                                <div class="d-flex justify-content-between"><span class="text-muted">Tenant</span><span class="text-light">{{ current_tenant.tenant_name if current_tenant else '—' }}</span></div>
+                                <div class="d-flex justify-content-between align-items-center"><span class="text-muted">Role</span>
+                                    {% if current_user.role is none %}
+                                    <span class="badge bg-warning text-dark">SUPER</span>
+                                    {% elif current_user.role == 'tenantadmin' %}
+                                    <span class="badge bg-info">TENANTADMIN</span>
+                                    {% elif current_user.role == 'author' %}
+                                    <span class="badge bg-success">AUTHOR</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ current_user.role|upper }}</span>
+                                    {% endif %}
+                                </div>
+                            </span></li>
+                            <li>
+                                <a class="dropdown-item d-flex justify-content-between align-items-center" href="/workflow/inbox">
+                                    <span><i class="bi bi-inboxes"></i> Inbox</span>
+                                    {% if inbox_count|default(0) > 0 %}<span class="badge bg-warning rounded-pill">{{ inbox_count }}</span>{% endif %}
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item d-flex justify-content-between align-items-center" href="/workflow/inbox">
+                                    <span><i class="bi bi-bell"></i> Notifications</span>
+                                    {% if unread_count|default(0) > 0 %}<span class="badge bg-danger rounded-pill">{{ unread_count }}</span>{% endif %}
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% if current_user.role not in ('tenantadmin',) and current_user.role is not none %}
+                            <li class="px-3 py-2">
+                                <div class="small text-muted mb-1">Switch role</div>
+                                <div class="d-flex gap-2">
+                                    <form method="post" action="/role">
+                                        <input type="hidden" name="role" value="user">
+                                        <button type="submit" class="btn btn-sm {% if current_user.role == 'user' %}btn-primary{% else %}btn-outline-light{% endif %}" {% if current_user.role == 'user' %}disabled{% endif %}>User</button>
+                                    </form>
+                                    <form method="post" action="/role">
+                                        <input type="hidden" name="role" value="author">
+                                        <button type="submit" class="btn btn-sm {% if current_user.role == 'author' %}btn-primary{% else %}btn-outline-light{% endif %}" {% if current_user.role == 'author' %}disabled{% endif %}>Author</button>
+                                    </form>
+                                </div>
+                            </li>
+                            {% endif %}
+                            {% if all_users %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="px-3 py-2">
+                                <div class="small text-muted mb-1">Switch user (testing)</div>
+                                <form method="post" action="/switch-user">
+                                    <select name="user_id" class="form-select form-select-sm bg-dark text-light border-secondary mb-2" onchange="this.form.submit()">
+                                        <option value="">— select user —</option>
+                                        {% for u in all_users %}
+                                        <option value="{{ u.user_id }}" {% if u.user_id == current_user.user_id %}selected disabled{% endif %}>
+                                            {{ u.username }} ({{ u.full_name }}){% if u.role is none %} [SUPER]{% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                            </li>
+                            {% endif %}
+                            <li>
+                                <form method="post" action="/logout">
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="bi bi-box-arrow-right"></i> Sign Out
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/login"><i class="bi bi-box-arrow-in-right"></i> Sign In</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <div class="sidebar bg-dark border-end border-secondary pt-3">
+        <ul class="nav nav-pills flex-column">
+            <li class="nav-item">
+                <a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/assistant"><i class="bi bi-robot"></i> Assistant</a>
+            </li>
+            <li class="nav-item">
+                <hr class="nav-divider my-1 mx-3 border-secondary">
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/queries"><i class="bi bi-sliders"></i> Queries</a>
+            </li>
+            {% if current_user and (current_user.role == 'tenantadmin' or current_user.role is none) %}
+            <li class="nav-item">
+                <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#adminSubmenu" role="button" aria-expanded="false">
+                    <span><i class="bi bi-shield-lock"></i> Admin</span>
+                    <i class="bi bi-chevron-down small"></i>
+                </a>
+                <div class="collapse" id="adminSubmenu">
+                    <ul class="nav nav-pills flex-column ms-3 border-start border-secondary ps-2">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/workflow/templates"><i class="bi bi-diagram-3"></i> Workflow Templates</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin"><i class="bi bi-people"></i> Users &amp; Tenants</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/tenant"><i class="bi bi-building"></i> My Tenant</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/import"><i class="bi bi-upload"></i> Import CSV</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>if (window.mermaid) mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
+</body>
+</html>

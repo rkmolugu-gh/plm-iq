@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}My Tenant - PLM-IQ{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-building"></i> My Tenant</h4>
+    <a href="/admin" class="btn btn-sm btn-outline-secondary">Full Admin</a>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <!-- Tenant settings -->
+  <div class="card bg-dark border-secondary mb-4">
+    <div class="card-header">Tenant: {{ tenant.tenant_name }}</div>
+    <div class="card-body">
+      <form method="post" action="/admin/tenant">
+        <div class="mb-3">
+          <label class="form-label">Subdomain</label>
+          <input type="text" name="subdomain" class="form-control"
+                 value="{{ tenant.subdomain or '' }}" placeholder="e.g. tenant1">
+          <div class="form-text text-secondary">
+            Your workspace will be served at
+            <code>{% if tenant.subdomain %}{{ tenant.subdomain }}{% else %}&lt;subdomain&gt;{% endif %}.{{ base_domain }}</code>.
+            Lowercase letters, numbers, dashes.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="2">{{ tenant.description or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Tenant</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Users in this tenant -->
+  <div class="card bg-dark border-secondary">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-people"></i> Users ({{ users | length }})</span>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newUserModal">
+        <i class="bi bi-person-add"></i> New User
+      </button>
+    </div>
+    <div class="card-body">
+      <table class="table table-sm table-striped">
+        <thead class="table-light">
+          <tr><th>Username</th><th>Full name</th><th>Role</th><th>Active</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u.username }}</td>
+            <td>{{ u.full_name }}</td>
+            <td><span class="badge bg-info">{{ u.role }}</span></td>
+            <td>{% if u.is_active %}<span class="badge bg-success">Yes</span>{% else %}<span class="badge bg-secondary">No</span>{% endif %}</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#editUserModal{{ u.user_id }}">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <form method="post" action="/admin/tenant/user/{{ u.user_id }}/delete" class="d-inline"
+                    onsubmit="return confirm('Delete user {{ u.username }}?');">
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+
+          <!-- Edit modal -->
+          <div class="modal fade" id="editUserModal{{ u.user_id }}" tabindex="-1">
+            <div class="modal-dialog">
+              <div class="modal-content bg-dark">
+                <form method="post" action="/admin/tenant/user/{{ u.user_id }}/edit">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Edit {{ u.username }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-2"><input class="form-control" name="username" value="{{ u.username }}" required></div>
+                    <div class="mb-2"><input class="form-control" name="full_name" value="{{ u.full_name }}" required></div>
+                    <div class="mb-2"><input class="form-control" name="email" value="{{ u.email or '' }}" placeholder="email"></div>
+                    <div class="mb-2"><input class="form-control" name="password" placeholder="new password (blank = keep)"></div>
+                    <div class="row g-2">
+                      <div class="col-6">
+                        <select name="role" class="form-select">
+                          {% for r in user_roles %}<option value="{{ r }}" {% if r == u.role %}selected{% endif %}>{{ r }}</option>{% endfor %}
+                        </select>
+                      </div>
+                      <div class="col-6 d-flex align-items-end">
+                        <div class="form-check">
+                          <input type="checkbox" name="is_active" value="on" class="form-check-input" id="eu{{ u.user_id }}" {% if u.is_active %}checked{% endif %}>
+                          <label class="form-check-label" for="eu{{ u.user_id }}">Active</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <tr><td colspan="5" class="text-secondary">No users yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- New user modal -->
+<div class="modal fade" id="newUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark">
+      <form method="post" action="/admin/tenant/user">
+        <div class="modal-header">
+          <h5 class="modal-title">New User ({{ tenant.tenant_name }})</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2"><input class="form-control" name="username" placeholder="username" required></div>
+          <div class="mb-2"><input class="form-control" name="full_name" placeholder="full name" required></div>
+          <div class="mb-2"><input class="form-control" name="email" placeholder="email"></div>
+          <div class="mb-2"><input class="form-control" name="password" placeholder="password" required></div>
+          <div class="row g-2">
+            <div class="col-6">
+              <select name="role" class="form-select">
+                {% for r in user_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-6 d-flex align-items-end">
+              <div class="form-check">
+                <input type="checkbox" name="is_active" value="on" class="form-check-input" id="nuActive" checked>
+                <label class="form-check-label" for="nuActive">Active</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+services:
+  gitea:
+    image: gitea/gitea:1.22
+    container_name: plm-gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__server__DOMAIN=localhost
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__ROOT_URL=http://localhost:3000
+      - GITEA__server__LFS_START_SERVER=true
+      - GITEA__admin__USERNAME=plm-iq-org
+      - GITEA__admin__PASSWORD=Admin123!
+      - GITEA__admin__EMAIL=admin@plm-iq.local
+    volumes:
+      - gitea_data:/data
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:2222:22"
+    restart: unless-stopped
+
+volumes:
+  gitea_data:

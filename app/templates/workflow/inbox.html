@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Inbox - PLM-IQ{% endblock %}
+{% block content %}
+
+<h4><i class="bi bi-inbox"></i> My Inbox</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+    <!-- Tasks -->
+    <div class="col-lg-7 mb-3">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-check2-square"></i> Tasks awaiting your action</div>
+            <div class="card-body">
+                {% if not tasks %}
+                <p class="text-muted mb-0">You have no pending approval tasks.</p>
+                {% endif %}
+                {% for t in tasks %}
+                <div class="border rounded p-2 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ t.step_name }}</strong>
+                        <a href="/{% if t.instance.object_type == 'part' %}parts{% else %}eco{% endif %}/{{ t.instance.object_id }}" class="badge bg-secondary text-decoration-none">
+                            {{ t.instance.object_type|upper }} {{ t.instance.object_id }}
+                        </a>
+                    </div>
+                    <div class="small text-muted mb-2">
+                        Workflow: {{ t.instance.template.name if t.instance.template else '—' }}
+                        {% if t.due_date %} · Due {{ t.due_date }}{% endif %}
+                    </div>
+                    <form method="POST" action="/workflow/task/{{ t.id }}/decide" class="row g-2 align-items-end">
+                        <div class="col">
+                            <input type="text" name="comment" class="form-control form-control-sm" placeholder="Comment (optional)">
+                        </div>
+                        <div class="col-auto d-flex gap-2">
+                            <button type="submit" name="decision" value="approve" class="btn btn-sm btn-success">Approve</button>
+                            <button type="submit" name="decision" value="reject" class="btn btn-sm btn-danger">Reject</button>
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications -->
+    <div class="col-lg-5 mb-3">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-bell"></i> Notifications</div>
+            <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+                {% if not notifications %}
+                <p class="text-muted mb-0">No notifications.</p>
+                {% endif %}
+                {% for n in notifications %}
+                <div class="border-start border-3 {% if n.is_read %}border-secondary{% else %}border-info{% endif %} ps-2 mb-2">
+                    <div class="fw-bold small">{{ n.title }}</div>
+                    <div class="small text-muted">{{ n.message }}</div>
+                    <div class="small text-muted">{{ n.created_at }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,191 @@
+{
+  "test_suite": "PLM-IQ API Integration Tests",
+  "start_time": "2026-07-21T11:19:20.427314",
+  "end_time": "2026-07-21T11:19:20.603605",
+  "total_duration_ms": 176,
+  "overall_success": false,
+  "test_results": [
+    {
+      "test_name": "Basic Health Check",
+      "endpoint": "/health",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 2,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: {\"status\":\"ok\",\"version\":\"1.0.0\"}",
+      "timestamp": "2026-07-21T11:19:20.444210"
+    },
+    {
+      "test_name": "Login Form",
+      "endpoint": "/auth/login",
+      "method": "GET",
+      "status": "FAIL",
+      "duration_ms": 1,
+      "expected_status": 200,
+      "actual_status": 404,
+      "details": "Response: {\"detail\":\"Not Found\"}",
+      "timestamp": "2026-07-21T11:19:20.445790"
+    },
+    {
+      "test_name": "Login Submission",
+      "endpoint": "/auth/login",
+      "method": "POST",
+      "status": "FAIL",
+      "duration_ms": 1,
+      "expected_status": 200,
+      "actual_status": 404,
+      "details": "Response: {\"detail\":\"Not Found\"}",
+      "timestamp": "2026-07-21T11:19:20.447300"
+    },
+    {
+      "test_name": "Login Error Case",
+      "endpoint": "/auth/login",
+      "method": "POST",
+      "status": "FAIL",
+      "duration_ms": 1,
+      "expected_status": 200,
+      "actual_status": 404,
+      "details": "Response: {\"detail\":\"Not Found\"}",
+      "timestamp": "2026-07-21T11:19:20.448736"
+    },
+    {
+      "test_name": "List Parts",
+      "endpoint": "/parts",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 40,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.489667"
+    },
+    {
+      "test_name": "New Part Form",
+      "endpoint": "/parts/new",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.500471"
+    },
+    {
+      "test_name": "Create Part",
+      "endpoint": "/parts/new",
+      "method": "POST",
+      "status": "PASS",
+      "duration_ms": 9,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.510516"
+    },
+    {
+      "test_name": "Part Detail",
+      "endpoint": "/parts/TEST-PART-API-001",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.520923"
+    },
+    {
+      "test_name": "Part Edit Form",
+      "endpoint": "/parts/TEST-PART-API-001/edit",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.531234"
+    },
+    {
+      "test_name": "Update Part",
+      "endpoint": "/parts/TEST-PART-API-001/edit",
+      "method": "POST",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.541359"
+    },
+    {
+      "test_name": "Delete Part",
+      "endpoint": "/parts/TEST-PART-API-001/delete",
+      "method": "POST",
+      "status": "PASS",
+      "duration_ms": 9,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.551429"
+    },
+    {
+      "test_name": "List BOM",
+      "endpoint": "/bom",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.561943"
+    },
+    {
+      "test_name": "BOM Hierarchy Form",
+      "endpoint": "/bom/hierarchy",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 9,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.571761"
+    },
+    {
+      "test_name": "Queries Builder",
+      "endpoint": "/queries",
+      "method": "GET",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.582260"
+    },
+    {
+      "test_name": "Run Guided Query",
+      "endpoint": "/queries/run",
+      "method": "POST",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.592513"
+    },
+    {
+      "test_name": "Run SQL Query",
+      "endpoint": "/queries/run-sql",
+      "method": "POST",
+      "status": "PASS",
+      "duration_ms": 10,
+      "expected_status": 200,
+      "actual_status": 200,
+      "details": "Response: <!DOCTYPE html>\n<html lang=\"en\" data-bs-theme=\"dark\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Login - PLM-IQ</title>\n   ",
+      "timestamp": "2026-07-21T11:19:20.603234"
+    }
+  ],
+  "statistics": {
+    "total_tests": 16,
+    "passed_tests": 13,
+    "failed_tests": 3,
+    "success_rate_percent": 81.25
+  }
+}

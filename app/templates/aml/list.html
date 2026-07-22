@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}AML - PLM-IQ{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-buildings"></i> Approved Manufacturer List</h4>
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-muted small">{{ total }} entries</span>
+        {% if current_user and current_user.role == 'author' %}
+        <a href="/aml/new" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> New Manufacturer</a>
+        {% endif %}
+    </div>
+</div>
+
+<form method="GET" class="row g-2 mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" name="q" class="form-control" placeholder="Search part or manufacturer..." value="{{ q }}">
+            <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select name="preferred" class="form-select" onchange="this.form.submit()">
+            <option value="">All</option>
+            <option value="Yes" {% if preferred_filter == 'Yes' %}selected{% endif %}>Preferred Only</option>
+        </select>
+    </div>
+</form>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+        <thead class="table-dark">
+            <tr><th>Part</th><th>Manufacturer</th><th>MPN</th><th>Source</th><th>Status</th><th>Preferred</th><th>Lead Time</th><th>Cost</th><th>Quality</th><th>Compliance</th></tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></td>
+                <td>{{ item.manufacturer_name }}</td>
+                <td><small>{{ item.manufacturer_part_number or '-' }}</small></td>
+                <td><span class="badge bg-dark badge-status">{{ item.source_type }}</span></td>
+                <td>{{ item.manufacturer_status or '-' }}</td>
+                <td>{% if item.preferred_flag == 'Yes' %}<i class="bi bi-star-fill text-warning"></i>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
+                <td>{{ item.lead_time_days or '-' }}d</td>
+                <td>{{ item.unit_cost|currency if item.unit_cost else '-' }}</td>
+                <td><span class="badge bg-{{ 'success' if item.quality_rating in ('A','B') else 'warning' }} badge-status">{{ item.quality_rating or '-' }}</span></td>
+                <td><small>{{ item.compliance_status or '-' }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="10" class="text-center text-muted py-4">No AML entries.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if pages > 1 %}
+<nav><ul class="pagination justify-content-center">
+    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+        <a class="page-link" href="?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}{% if preferred_filter %}&preferred={{ preferred_filter }}{% endif %}">Previous</a>
+    </li>
+    {% for p in range(1, pages + 1) %}
+    <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?page={{ p }}{% if q %}&q={{ q }}{% endif %}{% if preferred_filter %}&preferred={{ preferred_filter }}{% endif %}">{{ p }}</a></li>
+    {% endfor %}
+    <li class="page-item {% if page >= pages %}disabled{% endif %}">
+        <a class="page-link" href="?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}{% if preferred_filter %}&preferred={{ preferred_filter }}{% endif %}">Next</a>
+    </li>
+</ul></nav>
+{% endif %}
+
+{% endblock %}

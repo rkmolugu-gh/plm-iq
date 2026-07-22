@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}My Favorites - PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/dashboard">Dashboard</a></li>
+        <li class="breadcrumb-item active">My Favorites</li>
+    </ol>
+</nav>
+
+<div class="card">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-star-fill text-warning"></i> My Favorites</h5></div>
+    <div class="card-body">
+        {% if favorites %}
+        <p class="text-muted">You have {{ favorites|length }} favorite item(s). Maximum {{ max_favorites }} per object type.</p>
+        <div class="list-group">
+            {% for fav in favorites %}
+            <a href="{{ fav.url }}" class="list-group-item list-group-item-action bg-dark border-secondary">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-{% if fav.object_type == 'part' %}box-seam text-primary{% elif fav.object_type == 'document' %}file-earmark text-info{% else %}arrow-left-right text-warning{% endif %} me-2"></i>
+                        <strong>{{ fav.name }}</strong>
+                        <span class="badge bg-secondary ms-2">{{ fav.object_type|upper }}</span>
+                    </div>
+                    <div>
+                        <small class="text-muted">{{ fav.created_date }}</small>
+                        <form method="POST" action="/favorites/remove" class="d-inline ms-2">
+                            <input type="hidden" name="object_type" value="{{ fav.object_type }}">
+                            <input type="hidden" name="object_id" value="{{ fav.object_id }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Remove from favorites">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-star display-1 text-muted"></i>
+            <p class="text-muted mt-3">You don't have any favorites yet.</p>
+            <p class="text-muted">Click the star icon on Parts, Documents, or ECOs to add them to your favorites.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

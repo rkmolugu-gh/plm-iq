@@ -1,0 +1,52 @@
+{% set stages = stages if stages is defined else (instance.template.definition.stages if instance.template and instance.template.definition else []) %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-diagram-3"></i> Release Workflow
+            {% if instance.template %}<span class="text-muted">· {{ instance.template.name }}</span>{% endif %}</span>
+        <span class="badge bg-{% if instance.status == 'COMPLETED' %}success{% elif instance.status == 'REJECTED' %}danger{% elif instance.status == 'IN_PROGRESS' %}info{% else %}secondary{% endif %}">
+            {{ instance.status }}
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="small text-muted mb-3">
+            Object: <a href="/{{ 'parts' if instance.object_type == 'part' else 'eco' }}/{{ instance.object_id }}">{{ instance.object_type|upper }} {{ instance.object_id }}</a>
+            · Started {{ instance.started_at }}
+            {% if instance.completed_at %}· Completed {{ instance.completed_at }}{% endif %}
+            {% if instance.due_date %}· Due {{ instance.due_date }}{% endif %}
+        </div>
+
+        <div class="timeline">
+            {% for stage in stages %}
+            {% set si = loop.index0 %}
+            {% set is_current = (instance.status == 'IN_PROGRESS' and si == instance.current_stage) %}
+            <div class="border rounded p-2 mb-2 {% if is_current %}border-info{% endif %}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>{{ stage.name or ('Stage ' ~ (si + 1)) }}</strong>
+                    {% if stage.parallel %}<span class="badge bg-info">parallel (all approve)</span>{% endif %}
+                    {% if is_current %}<span class="badge bg-info">current</span>{% endif %}
+                </div>
+                {% for step in stage.steps %}
+                <div class="ms-3 mt-2">
+                    <div class="small fw-bold">{{ step.name }}</div>
+                    {% for task in instance.tasks if task.stage_index == si and task.step_key == step.key %}
+                    <div class="small d-flex justify-content-between">
+                        <span>
+                            <i class="bi bi-{% if task.status == 'APPROVED' %}check-circle-fill text-success{% elif task.status == 'REJECTED' %}x-circle-fill text-danger{% else %}circle text-muted{% endif %}"></i>
+                            {{ task.assignee.full_name if task.assignee else 'System (auto)' }}
+                        </span>
+                        <span class="text-muted">
+                            {{ task.status }}{% if task.comment %}: {{ task.comment }}{% endif %}
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="small text-muted fst-italic">no assignees</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <a href="/workflow/instance/{{ instance.id }}" class="btn btn-sm btn-outline-light mt-2">Open full view</a>
+    </div>
+</div>

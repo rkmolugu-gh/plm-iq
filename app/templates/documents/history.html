@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}History {{ item.name }} - Documents - PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/documents">Documents</a></li>
+        {% for cid, cname in breadcrumb %}
+        <li class="breadcrumb-item"><a href="/documents?parent_id={{ cid }}">{{ cname }}</a></li>
+        {% endfor %}
+        <li class="breadcrumb-item"><a href="/documents/{{ item.id }}">{{ item.name }}</a></li>
+        <li class="breadcrumb-item active">History</li>
+    </ol>
+</nav>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-clock-history"></i> Version History — {{ item.name }}</h5>
+        <span class="badge bg-info">v{{ item.doc_version }}</span>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small"><code>{{ item.git_repo_path }}</code></p>
+        {% if commits %}
+        <ul class="list-group list-group-flush">
+            {% for c in commits %}
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div>{{ c.commit.message }}</div>
+                        <small class="text-muted">
+                            {{ c.commit.author.name if c.commit.author else 'unknown' }}
+                            — {{ (c.commit.author.date if c.commit.author else '') }}
+                        </small>
+                    </div>
+                    <code class="small">{{ (c.sha or '')[:10] }}</code>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted text-center py-4">No version history available.</p>
+        {% endif %}
+        <a href="/documents/{{ item.id }}" class="btn btn-outline-secondary mt-3"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}{% if template %}Edit{% else %}New{% endif %} Workflow Template - PLM-IQ{% endblock %}
+{% block content %}
+
+<h4><i class="bi bi-diagram-3"></i> {% if template %}Edit{% else %}New{% endif %} Workflow Template</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% set default_def %}
+{
+  "stages": [
+    {
+      "name": "Engineering",
+      "parallel": false,
+      "steps": [
+        {"name": "Engineering Review", "assignee": "author"}
+      ]
+    },
+    {
+      "name": "Approvals",
+      "parallel": true,
+      "steps": [
+        {"name": "QA Approval", "assignee": "quality"},
+        {"name": "Mfg Approval", "assignee": "manufacturing"}
+      ]
+    },
+    {
+      "name": "Release",
+      "parallel": false,
+      "steps": [
+        {"name": "Release", "assignee": "admin"}
+      ]
+    }
+  ]
+}
+{% endset %}
+
+<ul class="nav nav-pills mb-3" id="tmplTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="editTab" data-bs-toggle="pill" data-bs-target="#editPane" type="button" role="tab" aria-controls="editPane">Edit</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visTab" data-bs-toggle="pill" data-bs-target="#visPane" type="button" role="tab" aria-controls="visPane">Visualize</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="editPane" role="tabpanel" aria-labelledby="editTab">
+    <form method="POST">
+    <div class="mb-3">
+        <label class="form-label">Template Name</label>
+        <input type="text" name="name" class="form-control" required
+               value="{{ template.name if template else (name or '') }}">
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Object Type</label>
+        <select name="object_type" class="form-select">
+            {% for ot in object_types %}
+            <option value="{{ ot }}" {% if template and template.object_type == ot %}selected{% endif %}>{{ ot|upper }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <textarea name="description" class="form-control" rows="2">{{ template.description if template else (description or '') }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Workflow Definition (JSON)</label>
+        <textarea name="definition" class="form-control font-monospace" rows="16" spellcheck="false"
+                  placeholder='{ "stages": [ ... ] }'>{% if definition %}{{ definition }}{% elif template and template.definition %}{{ template.definition | tojson(indent=2) }}{% else %}{{ default_def }}{% endif %}</textarea>
+        <div class="form-text">
+            Stages run <strong>in order</strong>. Each stage has a <code>name</code>, an optional
+            <code>"parallel": true</code> (all steps must approve before the stage completes), and a
+            list of <code>steps</code>. Each step needs a <code>name</code> and an <code>assignee</code>
+            role — one of: {{ roles|join(', ') }}.
+        </div>
+        <details class="mt-2">
+            <summary class="small text-muted">Show example</summary>
+<pre class="bg-dark text-light p-2 rounded small mt-2">{{ default_def }}</pre>
+        </details>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Template</button>
+        <a href="/workflow/templates" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+    </form>
+    </div>
+
+    <div class="tab-pane fade" id="visPane" role="tabpanel" aria-labelledby="visTab">
+        <div class="mb-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="tmplRefresh"><i class="bi bi-arrow-clockwise"></i> Refresh from JSON</button>
+            <span class="text-muted small ms-2">Live preview of the definition on the Edit tab.</span>
+        </div>
+        <div id="tmplDiagram" class="mermaid"></div>
+    </div>
+</div>
+
+{% include "workflow/_mermaid.html" %}
+<script>
+    function tmplRender() {
+        var ta = document.querySelector('textarea[name=definition]');
+        var box = document.getElementById('tmplDiagram');
+        if (!ta || !box) return;
+        var raw = (ta.value || '').trim();
+        if (!raw) { box.className = ''; box.innerHTML = '<div class="text-muted small">Definition is empty.</div>'; return; }
+        var def;
+        try { def = JSON.parse(raw); }
+        catch (e) { box.className = ''; box.innerHTML = '<div class="text-danger small">Invalid JSON: ' + plmEscapeMermaid(e.message) + '</div>'; return; }
+        plmRenderMermaid(box, plmBuildMermaid(def));
+    }
+    var tmplRefresh = document.getElementById('tmplRefresh');
+    if (tmplRefresh) tmplRefresh.addEventListener('click', tmplRender);
+    var visTab = document.getElementById('visTab');
+    if (visTab) visTab.addEventListener('shown.bs.tab', tmplRender);
+</script>
+
+{% endblock %}

@@ -1,0 +1,51 @@
+/* PLM-IQ — Custom Styles */
+/* Dark mode via Bootstrap 5.3 data-bs-theme="dark" */
+
+body {
+    font-size: 0.9rem;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table td, .table th {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.badge-status {
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.stat-card .card-body {
+    padding: 1.25rem;
+}
+
+.sidebar .nav-link {
+    border-radius: 0;
+    padding: 0.6rem 1rem;
+    color: rgba(255, 255, 255, 0.65);
+    transition: all 0.15s;
+}
+
+.sidebar .nav-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar .nav-link i {
+    margin-right: 0.5rem;
+    width: 1.2rem;
+    text-align: center;
+}
+
+.breadcrumb {
+    background: transparent;
+    padding: 0.5rem 0;
+}
+
+code {
+    font-size: 0.8rem;
+}

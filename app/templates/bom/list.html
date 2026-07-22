@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}BOM - PLM-IQ{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="bi bi-diagram-3"></i> Bill of Materials</h4>
+    <div>
+        {% if current_user and current_user.role == 'author' %}
+        <a href="/bom/new" class="btn btn-sm btn-primary me-2"><i class="bi bi-plus-lg"></i> New BOM Item</a>
+        <a href="/bom/hierarchy" class="btn btn-sm btn-outline-primary me-2"><i class="bi bi-diagram-3"></i> New Hierarchy</a>
+        {% endif %}
+        <span class="text-muted small me-2">{{ tree_total }} items</span>
+        <div class="btn-group btn-group-sm">
+            <a href="?view=tree{% if q %}&q={{ q }}{% endif %}{% if bom_type_filter %}&bom_type={{ bom_type_filter }}{% endif %}" class="btn btn-outline-primary {% if view_mode == 'tree' %}active{% endif %}">
+                <i class="bi bi-diagram-3"></i> Tree
+            </a>
+            <a href="?view=flat{% if q %}&q={{ q }}{% endif %}{% if bom_type_filter %}&bom_type={{ bom_type_filter }}{% endif %}" class="btn btn-outline-secondary {% if view_mode == 'flat' %}active{% endif %}">
+                <i class="bi bi-list"></i> Flat
+            </a>
+        </div>
+    </div>
+</div>
+
+<form method="GET" class="row g-2 mb-3">
+    <input type="hidden" name="view" value="{{ view_mode }}">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" name="q" class="form-control" placeholder="Search part number or name..." value="{{ q }}">
+            <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <select name="bom_type" class="form-select" onchange="this.form.submit()">
+            <option value="">All Types</option>
+            {% for t in bom_types %}
+            <option value="{{ t }}" {% if bom_type_filter == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+{% if view_mode == 'flat' %}
+    {# --- FLAT TABLE VIEW --- #}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead class="table-dark">
+                <tr><th>Level</th><th>Part Number</th><th>Revision</th><th>Name</th><th>Qty</th><th>UOM</th><th>Parent</th><th>BOM Type</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.level }}</td>
+                    <td><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></td>
+                    <td>{{ item.part_revision or '-' }}</td>
+                    <td>{{ item.part_name or '-' }}</td>
+                    <td>{{ item.qty }}</td>
+                    <td>{{ item.uom or '-' }}</td>
+                    <td>{% if item.parent_assembly %}<a href="/bom/tree/{{ item.parent_assembly }}" class="small">{{ item.parent_assembly }}</a>{% else %}-{% endif %}</td>
+                    <td><span class="badge bg-info badge-status">{{ item.bom_type }}</span></td>
+                    <td><small class="text-muted">{{ (item.material_notes or '')|truncate(30) or '-' }}</small></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9" class="text-center text-muted py-4">No BOM items.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pages > 1 %}
+    <nav><ul class="pagination justify-content-center">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="?view=flat&page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}{% if bom_type_filter %}&bom_type={{ bom_type_filter }}{% endif %}">Previous</a>
+        </li>
+        {% for p in range(1, pages + 1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="?view=flat&page={{ p }}{% if q %}&q={{ q }}{% endif %}{% if bom_type_filter %}&bom_type={{ bom_type_filter }}{% endif %}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        <li class="page-item {% if page >= pages %}disabled{% endif %}">
+            <a class="page-link" href="?view=flat&page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}{% if bom_type_filter %}&bom_type={{ bom_type_filter }}{% endif %}">Next</a>
+        </li>
+    </ul></nav>
+    {% endif %}
+
+{% else %}
+    {# --- TREE VIEW (collapsible) --- #}
+    <div class="card">
+        <div class="card-body p-0">
+            {% if tree %}
+            <div class="bom-tree" id="bomTree">
+                {% macro render_tree_node(node, depth=0) %}
+                {% set has_children = node.children|length > 0 %}
+                {% set node_id = 'node-' ~ node.item.id %}
+                <div class="bom-tree-node" data-node-id="{{ node_id }}">
+                    <div class="bom-tree-row d-flex align-items-center gap-2 px-3 py-2 border-bottom border-secondary" style="padding-left: {{ depth * 24 + 12 }}px !important;">
+                        {% if has_children %}
+                        <button class="btn btn-sm p-0 border-0 bg-transparent toggle-btn" data-target="{{ node_id }}" type="button" style="width: 20px; line-height: 1; font-size: 1.1rem;">
+                            <i class="bi bi-dash-circle text-primary"></i>
+                        </button>
+                        {% else %}
+                        <span style="width: 20px; display: inline-block;">
+                            <i class="bi bi-dot text-muted"></i>
+                        </span>
+                        {% endif %}
+                        <i class="bi {% if has_children %}bi-folder2-open text-warning{% else %}bi-file-earmark text-muted{% endif %} small"></i>
+                        <a href="/parts/{{ node.item.part_number }}" class="fw-bold text-nowrap">{{ node.item.part_number }}</a>
+                        {% if node.item.part_revision %}<span class="badge bg-dark badge-status ms-1">{{ node.item.part_revision }}</span>{% endif %}
+                        <small class="text-muted text-truncate ms-1">{{ node.item.part_name }}</small>
+                        <span class="badge bg-info badge-status ms-auto">{{ node.item.bom_type }}</span>
+                        <span class="text-muted small text-nowrap">Qty: {{ node.item.qty }} {{ node.item.uom }}</span>
+                        {% if node.item.parent_assembly %}
+                        <a href="/bom/tree/{{ node.item.parent_assembly }}" class="small text-muted ms-1" title="Parent: {{ node.item.parent_assembly }}">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% if has_children %}
+                    <div class="bom-tree-children" id="{{ node_id }}">
+                        {% for child in node.children %}
+                            {{ render_tree_node(child, depth + 1) }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endmacro %}
+
+                {% for root in tree %}
+                    {{ render_tree_node(root, 0) }}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-4">No BOM items found for the current filters.</div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+
+{% if view_mode == 'tree' %}
+<style>
+.bom-tree-row:hover { background-color: rgba(255,255,255,0.03); }
+.toggle-btn { cursor: pointer; }
+.toggle-btn:hover i { color: #0a58ca !important; }
+.bom-tree-children.collapsed { display: none; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var children = document.getElementById(btn.getAttribute('data-target'));
+            var icon = btn.querySelector('i');
+            if (children) {
+                children.classList.toggle('collapsed');
+                icon.className = children.classList.contains('collapsed')
+                    ? 'bi bi-plus-circle text-success'
+                    : 'bi bi-dash-circle text-primary';
+            }
+        });
+    });
+
+    // Expand all / Collapse all via keyboard shortcut: press 'e' to expand all, 'c' to collapse all
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT') return;
+        if (e.key === 'e') {
+            document.querySelectorAll('.bom-tree-children').forEach(function(el) {
+                el.classList.remove('collapsed');
+            });
+            document.querySelectorAll('.toggle-btn i').forEach(function(icon) {
+                icon.className = 'bi bi-dash-circle text-primary';
+            });
+        } else if (e.key === 'c') {
+            document.querySelectorAll('.bom-tree-children').forEach(function(el) {
+                el.classList.add('collapsed');
+            });
+            document.querySelectorAll('.toggle-btn i').forEach(function(icon) {
+                icon.className = 'bi bi-plus-circle text-success';
+            });
+        }
+    });
+});
+</script>
+{% endif %}
+
+{% endblock %}

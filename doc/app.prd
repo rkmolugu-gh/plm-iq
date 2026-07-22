@@ -1,0 +1,47 @@
+#Introduction
+Build a PLM-IQ PLM-IQ
+ that indexes BOMs, cost sheets, SAP-style documents, engineering change notices, and PDFs. Implement layout-aware chunking, BM25 plus vector retrieval, RRF, reranking, metadata filters (tenant, product, revision), and source citations.
+
+#Data - folder plm_enterprise_corpus
+ 
+100,000+ parts and 10,000+ assemblies
+Deep hierarchical BOMs (up to 10 levels)
+Revision history and supersession chains
+AML/AVL (approved manufacturer/vendor lists)
+ECR/ECO workflows with before/after states
+CAD metadata and drawing references
+Manufacturing routings and work instructions
+Test reports, quality records, and inspection results
+Compliance documents (RoHS, REACH, etc.)
+Supplier quotations and historical pricing
+Synthetic emails, change discussions, and support tickets
+PDFs containing tables, images, and scanned text to exercise OCR and layout-aware chunking
+Cross-linked metadata (tenant, program, plant, product family, release status)
+
+That style of corpus is excellent for validating BM25, semantic search, hybrid retrieval, RRF, reranking, citation quality, and complex enterprise question answering.
+
+
+Indexing
+chunking
+
+BM25
+Semantic search
+Hybrid retrieval
+RRF
+Re-reranking
+Citation quality
+Complex Question and answering
+
+100,000+ parts and 10,000+ assemblies
+Deep hierarchical BOMs (up to 10 levels)
+Revision history and supersession chains
+AML/AVL (approved manufacturer/vendor lists)
+ECR/ECO workflows with before/after states
+CAD metadata and drawing references
+Manufacturing routings and work instructions
+Test reports, quality records, and inspection results
+Compliance documents (RoHS, REACH, etc.)
+Supplier quotations and historical pricing
+Synthetic emails, change discussions, and support tickets
+PDFs containing tables, images, and scanned text to exercise OCR and layout-aware chunking
+Cross-linked metadata (tenant, program, plant, product family, release status)

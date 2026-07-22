@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}{{ item.eco_number }} - ECO - PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/eco">ECOs</a></li>
+        <li class="breadcrumb-item active">{{ item.eco_number }}</li>
+    </ol>
+</nav>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-arrow-left-right"></i> {{ item.eco_number }} — {{ item.eco_title }}</h5>
+        <div class="d-flex align-items-center gap-2">
+            {% if current_user and current_user.role == 'author' %}
+            {% if active_release is none and item.eco_status == 'DRAFT' %}
+            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#startReleaseModal">
+                <i class="bi bi-play-circle"></i> Start Release
+            </button>
+            {% endif %}
+            {% if release_instance %}
+            <a href="/workflow/instance/{{ release_instance.id }}" class="btn btn-sm btn-outline-info"><i class="bi bi-diagram-3"></i> Workflow</a>
+            {% endif %}
+            <a href="/eco/{{ item.eco_number }}/edit" class="btn btn-sm btn-outline-light"><i class="bi bi-pencil"></i> Edit</a>
+            <form method="POST" action="/eco/{{ item.eco_number }}/delete" onsubmit="return confirm('Delete ECO {{ item.eco_number }}?');">
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">ECO Number</dt>
+                    <dd class="col-sm-8"><strong>{{ item.eco_number }}</strong></dd>
+                    <dt class="col-sm-4">Title</dt>
+                    <dd class="col-sm-8">{{ item.eco_title }}</dd>
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-{% if item.eco_status == 'APPROVED' %}success{% elif item.eco_status == 'REVIEW' %}info{% else %}secondary{% endif %} badge-status">{{ item.eco_status }}</span>
+                    </dd>
+                    <dt class="col-sm-4">Part</dt>
+                    <dd class="col-sm-8"><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></dd>
+                    <dt class="col-sm-4">Change Type</dt>
+                    <dd class="col-sm-8"><span class="badge bg-dark badge-status">{{ item.change_type or 'N/A' }}</span></dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Current Rev</dt>
+                    <dd class="col-sm-8">{{ item.current_revision or '-' }}</dd>
+                    <dt class="col-sm-4">New Rev</dt>
+                    <dd class="col-sm-8">{{ item.new_revision or '-' }}</dd>
+                    <dt class="col-sm-4">Drafter</dt>
+                    <dd class="col-sm-8">{{ item.change_drafter or '-' }}</dd>
+                    <dt class="col-sm-4">Approver</dt>
+                    <dd class="col-sm-8">{{ item.change_approver or '-' }}</dd>
+                    <dt class="col-sm-4">Drafted</dt>
+                    <dd class="col-sm-8">{{ item.drafted_date or '-' }}</dd>
+                </dl>
+            </div>
+        </div>
+        {% if item.eco_description %}
+        <div class="mt-3">
+            <h6>Description</h6>
+            <p class="text-muted">{{ item.eco_description }}</p>
+        </div>
+        {% endif %}
+        {% if item.change_detail %}
+        <div class="mt-2">
+            <h6>Change Details</h6>
+            <p class="text-muted">{{ item.change_detail }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if release_instance %}
+{% with instance = release_instance %}
+{% include "workflow/_instance_panel.html" %}
+{% endwith %}
+{% endif %}
+
+{% if current_user and current_user.role == 'author' and active_release is none and item.eco_status == 'DRAFT' %}
+<div class="modal fade" id="startReleaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/workflow/start">
+                <input type="hidden" name="object_type" value="eco">
+                <input type="hidden" name="object_id" value="{{ item.eco_number }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-play-circle"></i> Start Release — {{ item.eco_number }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Workflow Template</label>
+                        <select class="form-select" name="template_id" required>
+                            {% for t in release_templates %}
+                            <option value="{{ t.id }}">{{ t.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if not release_templates %}
+                        <div class="form-text text-warning">No release templates exist. Ask an admin to create one.</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Due Date (optional)</label>
+                        <input type="date" class="form-control" name="due_date">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" {% if not release_templates %}disabled{% endif %}>Start Release</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

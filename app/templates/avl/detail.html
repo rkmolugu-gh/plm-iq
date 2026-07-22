@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ item.vendor_name }} - AVL - PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/avl">AVL</a></li>
+        <li class="breadcrumb-item active">{{ item.vendor_name }}</li>
+    </ol>
+</nav>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-truck"></i> {{ item.vendor_name }}</h5>
+        <div class="d-flex align-items-center gap-2">
+            {% if current_user and current_user.role == 'author' %}
+            <a href="/avl/{{ item.id }}/edit" class="btn btn-sm btn-outline-light"><i class="bi bi-pencil"></i> Edit</a>
+            <form method="POST" action="/avl/{{ item.id }}/delete" onsubmit="return confirm('Delete this vendor entry?');">
+                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Part</dt>
+                    <dd class="col-sm-8"><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></dd>
+                    <dt class="col-sm-4">Vendor</dt>
+                    <dd class="col-sm-8">{{ item.vendor_name }}</dd>
+                    <dt class="col-sm-4">VPN</dt>
+                    <dd class="col-sm-8"><small>{{ item.vendor_part_number or '-' }}</small></dd>
+                    <dt class="col-sm-4">Preferred</dt>
+                    <dd class="col-sm-8">{% if item.preferred_flag == 'Yes' %}<i class="bi bi-star-fill text-warning"></i> Yes{% else %}No{% endif %}</dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Unit Price</dt>
+                    <dd class="col-sm-8">{{ item.unit_price|currency if item.unit_price else '-' }}</dd>
+                    <dt class="col-sm-4">MOQ</dt>
+                    <dd class="col-sm-8">{{ item.min_order_qty or '-' }}</dd>
+                    <dt class="col-sm-4">Lead Time</dt>
+                    <dd class="col-sm-8">{{ item.lead_time_days or '-' }} days</dd>
+                    <dt class="col-sm-4">ISO Certified</dt>
+                    <dd class="col-sm-8">{% if item.iso_certified == 'Yes' %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<span class="text-muted">No</span>{% endif %}</dd>
+                </dl>
+            </div>
+        </div>
+        {% if item.notes %}
+        <div class="mt-3">
+            <h6>Notes</h6>
+            <p class="text-muted">{{ item.notes }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}New Manufacturer - PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/aml">AML</a></li>
+        <li class="breadcrumb-item active">New</li>
+    </ol>
+</nav>
+
+<div class="card">
+    <div class="card-header"><h5 class="mb-0"><i class="bi bi-plus-lg"></i> New Manufacturer Entry</h5></div>
+    <div class="card-body">
+        <form method="POST" action="/aml/new">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Part Number</label>
+                    <input type="text" name="part_number" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Manufacturer Name</label>
+                    <input type="text" name="manufacturer_name" class="form-control" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">MPN</label>
+                    <input type="text" name="manufacturer_part_number" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Source Type</label>
+                    <select name="source_type" class="form-select">
+                        <option value="FABRICATED">FABRICATED</option>
+                        <option value="PURCHASED">PURCHASED</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Preferred</label>
+                    <select name="preferred_flag" class="form-select">
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Create</button>
+                <a href="/aml" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,19 @@
+PLM-IQ API Integration Test Summary
+==================================================
+Total tests: 16
+Passed: 13 (81.25%)
+Failed: 3 (18.75%)
+
+Detailed results saved to: test_results.json
+
+Recent test results:
+  Create Part - PASS - 9ms
+  Part Detail - PASS - 10ms
+  Part Edit Form - PASS - 10ms
+  Update Part - PASS - 10ms
+  Delete Part - PASS - 9ms
+  List BOM - PASS - 10ms
+  BOM Hierarchy Form - PASS - 9ms
+  Queries Builder - PASS - 10ms
+  Run Guided Query - PASS - 10ms
+  Run SQL Query - PASS - 10ms

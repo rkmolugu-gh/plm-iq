@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}PLM Assistant - PLM-IQ{% endblock %}
+{% block content %}
+<style>
+    .chat-container {
+        max-height: calc(100vh - 280px);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 8px 4px;
+    }
+    .chat-message {
+        display: flex;
+        flex-direction: column;
+    }
+    .chat-message.user-message {
+        align-items: flex-end;
+    }
+    .chat-message.assistant-message {
+        align-items: flex-start;
+    }
+    .message-bubble {
+        max-width: 75%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .user-bubble {
+        background: var(--bs-primary);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+    .assistant-bubble {
+        background: var(--bs-dark);
+        border: 1px solid var(--bs-border-color);
+        border-bottom-left-radius: 4px;
+    }
+    .message-role-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+        opacity: 0.6;
+    }
+    .chat-input-form {
+        position: sticky;
+        bottom: 0;
+        background: var(--bs-body-bg);
+        padding-top: 12px;
+        padding-bottom: 4px;
+    }
+    .file-attachment-badge {
+        font-size: 0.75rem;
+        cursor: default;
+        user-select: none;
+    }
+    .file-attachment-badge i {
+        margin-right: 2px;
+    }
+    .empty-chat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: calc(100vh - 350px);
+        opacity: 0.5;
+        text-align: center;
+    }
+    .empty-chat i {
+        font-size: 3rem;
+        margin-bottom: 12px;
+    }
+    .assistant-badge {
+        font-size: 0.65rem;
+        vertical-align: middle;
+        padding: 2px 6px;
+    }
+    .thinking-indicator {
+        display: inline-block;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+    }
+    .tool-call-log {
+        font-size: 0.75rem;
+        background: var(--bs-dark);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-top: 4px;
+        max-width: 75%;
+        color: var(--bs-info);
+    }
+    .tool-call-log i {
+        margin-right: 4px;
+    }
+    .btn-loading .spinner-border {
+        width: 0.9rem;
+        height: 0.9rem;
+        margin-right: 6px;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div>
+        <h4 class="mb-0">
+            <i class="bi bi-robot"></i> PLM Assistant
+            <span class="badge bg-info assistant-badge ms-1">Agent</span>
+        </h4>
+        <small class="text-muted">Goal-driven engineering assistant with tool calling</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <details class="small" style="cursor:pointer">
+            <summary class="text-muted" style="font-size:0.7rem;">
+                <i class="bi bi-cpu"></i> Model
+            </summary>
+            <div class="bg-dark border rounded p-2 mt-1" style="position:absolute;z-index:100;min-width:260px;right:0;">
+                <div class="small"><strong>Assistant Model:</strong> <code>{{ assistant_model or 'not set' }}</code></div>
+                <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> Set <code>ASSISTANT_MODEL</code> in <code>plm-iq/.env</code></div>
+            </div>
+        </details>
+        <form method="POST" action="/assistant/new" style="display:inline">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-plus-circle"></i> New Conversation
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if messages %}
+<div class="chat-container" id="chatMessages">
+    {% for msg in messages %}
+    <div class="chat-message {{ msg.role }}-message">
+        <div class="message-role-label">
+            {% if msg.role == 'assistant' %}
+            <i class="bi bi-robot"></i> Assistant
+            {% else %}
+            <i class="bi bi-person"></i> You
+            {% endif %}
+        </div>
+        {% if msg.files and msg.files|length > 0 %}
+        <div class="attached-files mb-1">
+            {% for f in msg.files %}
+            <span class="badge bg-secondary file-attachment-badge me-1">
+                {% if f.type_hint == 'image' %}
+                <i class="bi bi-file-image"></i>
+                {% elif f.type_hint == 'pdf' %}
+                <i class="bi bi-file-pdf"></i>
+                {% elif f.type_hint == 'text' %}
+                <i class="bi bi-file-text"></i>
+                {% else %}
+                <i class="bi bi-file"></i>
+                {% endif %}
+                {{ f.filename }}
+                <small>({{ f.size_display }})</small>
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="message-bubble {{ msg.role }}-bubble">{{ msg.display_text or msg.content }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-chat">
+    <i class="bi bi-robot"></i>
+    <h5 class="text-muted">How can I help you with PLM?</h5>
+    <p class="text-muted small">Ask about parts, create new parts, or upload images for analysis.</p>
+    <div class="d-flex gap-2 mt-2">
+        <span class="badge bg-secondary">"Show me part BB-001"</span>
+        <span class="badge bg-secondary">"Create a part similar to FRM-003"</span>
+        <span class="badge bg-secondary">"What parts are in the BOM?"</span>
+    </div>
+</div>
+{% endif %}
+
+<form method="POST" action="/assistant" class="chat-input-form" enctype="multipart/form-data" id="assistantForm">
+    <div class="d-flex gap-2 mb-2">
+        <label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+            <i class="bi bi-paperclip"></i> Attach files
+            <input type="file" name="files" class="d-none" multiple
+                   accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv,.txt,.csv"
+                   title="Attach images, PDFs, or text files (max 10 MB each)">
+        </label>
+        <div class="flex-grow-1 small text-muted align-self-center" id="fileNames">
+            <i class="bi bi-info-circle"></i> PNG, JPG, GIF, WebP, PDF, TXT, CSV
+        </div>
+    </div>
+    <div class="input-group">
+        <input type="text" name="message" class="form-control" id="assistantMessageInput"
+               placeholder="Ask the PLM Assistant..."
+               autofocus maxlength="2000">
+        <button type="submit" class="btn btn-info" id="assistantSubmitBtn">
+            <i class="bi bi-send"></i> Ask
+        </button>
+    </div>
+    <div class="small text-info mt-2 d-none" id="assistantSubmittingHint">
+        <span class="thinking-indicator"><i class="bi bi-cpu"></i></span> Assistant is working...
+    </div>
+</form>
+
+<script>
+    // Auto-scroll chat to bottom on load
+    var chatEl = document.getElementById('chatMessages');
+    if (chatEl) {
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    // Show selected file names in the hint area
+    var fileInput = document.querySelector('input[name="files"]');
+    var fileNameDisplay = document.getElementById('fileNames');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            var names = [];
+            for (var i = 0; i < this.files.length; i++) {
+                var f = this.files[i];
+                var size = f.size < 1024 ? f.size + ' B' :
+                           f.size < 1048576 ? (f.size / 1024).toFixed(1) + ' KB' :
+                           (f.size / 1048576).toFixed(1) + ' MB';
+                names.push(f.name + ' (' + size + ')');
+            }
+            fileNameDisplay.innerHTML = names.length
+                ? '<i class="bi bi-paperclip"></i> ' + names.join(', ')
+                : '<i class="bi bi-info-circle"></i> PNG, JPG, GIF, WebP, PDF, TXT, CSV';
+        });
+    }
+
+    // Show immediate submit feedback so UI doesn't appear stuck
+    var formEl = document.getElementById('assistantForm');
+    var submitBtn = document.getElementById('assistantSubmitBtn');
+    var messageInput = document.getElementById('assistantMessageInput');
+    var submittingHint = document.getElementById('assistantSubmittingHint');
+    if (formEl && submitBtn && messageInput && submittingHint) {
+        formEl.addEventListener('submit', function() {
+            var hasText = (messageInput.value || '').trim().length > 0;
+            var hasFiles = fileInput && fileInput.files && fileInput.files.length > 0;
+            if (!hasText && !hasFiles) {
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.classList.add('btn-loading');
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>Thinking...';
+            messageInput.readOnly = true;
+            if (fileInput) {
+                fileInput.disabled = true;
+            }
+            submittingHint.classList.remove('d-none');
+        });
+    }
+</script>
+{% endblock %}
