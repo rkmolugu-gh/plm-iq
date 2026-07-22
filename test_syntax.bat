@@ -1,4 +1,7 @@
+@echo off  
 @echo off
+setlocal enabledelayedexpansion
+
 title PLM-IQ - AI-Native Product Lifecycle Management
 color 0A
 
@@ -23,9 +26,30 @@ for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
 echo [INFO] Python version: %PYTHON_VERSION%
 echo.
 
-REM Check if dependencies are installed
-python -c "import fastapi" >nul 2>&1
+REM Check if virtual environment exists
+if not exist ".venv" (
+    echo [SETUP] Creating virtual environment...
+    python -m venv .venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create virtual environment
+        pause
+        exit /b 1
+    )
+    echo [SETUP] Virtual environment created successfully
+    echo.
+)
+
+REM Activate virtual environment
+echo [INFO] Activating virtual environment...
+call .venv\Scripts\activate.bat
 if errorlevel 1 (
+    echo [ERROR] Failed to activate virtual environment
+    pause
+    exit /b 1
+)
+
+REM Check if dependencies are installed
+if not exist ".venv\Lib\site-packages\fastapi" (
     echo [SETUP] Installing dependencies...
     echo.
 
@@ -134,3 +158,5 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+
+endlocal

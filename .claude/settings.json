@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd.exe //c \"echo @echo off > test_syntax.bat && type run.bat >> test_syntax.bat\")"
+    ]
+  }
+}
