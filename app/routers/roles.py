@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/roles")
 
 _NAME_RE = re.compile(r"^[a-z0-9_]+$")
-_DEFAULT_ROLES = ["user", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver"]
+_DEFAULT_ROLES = ["reader", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver"]
 
 
 @router.post("", response_class=HTMLResponse)

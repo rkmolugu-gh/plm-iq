@@ -86,7 +86,7 @@ def migrate_schema():
                 "tenant_id INTEGER NOT NULL DEFAULT 1, "
                 "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
                 "created_date DATE, "
-                "role TEXT DEFAULT 'user', "
+                "role TEXT DEFAULT 'reader',"
                 "FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id))"
             )
             conn.exec_driver_sql(
@@ -253,7 +253,7 @@ def _normalize_tenants():
             if admins:
                 admins[0].role = "tenantadmin"
                 for other in admins[1:]:
-                    other.role = "user"
+                    other.role = "reader"
                 sess.commit()
             else:
                 users = (

@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     subdomain   TEXT    UNIQUE,
     description TEXT,
     created_date DATE,
-    role        TEXT NOT NULL DEFAULT 'user',
+    role        TEXT NOT NULL DEFAULT 'reader',
     is_active   BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -30,8 +30,20 @@ CREATE TABLE IF NOT EXISTS users (
     tenant_id   INTEGER NOT NULL DEFAULT 1,
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_date DATE,
-    role        TEXT DEFAULT 'user',
+    role        TEXT DEFAULT 'reader',
     FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+);
+
+-- ----------------------------------------------------------------------------
+-- 0.1 ROLES CATALOG
+-- Reference table listing all available roles in the system.
+-- The users.role column stores the role name (text), not a foreign key.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS roles (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT    NOT NULL UNIQUE,
+    description TEXT,
+    created_at  DATE
 );
 
 -- ----------------------------------------------------------------------------

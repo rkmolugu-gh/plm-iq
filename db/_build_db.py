@@ -16,6 +16,7 @@ SEED = os.path.join(DB_DIR, "seed.sql")
 TABLES = [
     "tenants",
     "users",
+    "roles",
     "parts",
     "bom",
     "costing_bom",
@@ -23,6 +24,12 @@ TABLES = [
     "approved_manufacturer_list",
     "approved_vendor_list",
     "cad_metadata",
+    "documents",
+    "workflow_templates",
+    "workflow_instances",
+    "workflow_tasks",
+    "notifications",
+    "favorites",
 ]
 
 

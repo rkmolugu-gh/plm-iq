@@ -31,8 +31,8 @@ def _today() -> str:
 
 
 def _valid_role(db: Session, role: str) -> str:
-    """Return `role` if it exists in the catalog, else the default 'user'."""
-    return role if role in set(role_names(db)) else "user"
+    """Return `role` if it exists in the catalog, else the default 'reader'."""
+    return role if role in set(role_names(db)) else "reader"
 
 
 def _tenant_admins(db: Session, tenant_id: int, active_only: bool = True):
@@ -164,7 +164,7 @@ def admin_tenant_create(
     tenant_name: str = Form(...),
     subdomain: str = Form(""),
     description: str = Form(""),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _role: User = Depends(require_superuser),
@@ -201,7 +201,7 @@ def admin_tenant_edit(
     tenant_name: str = Form(...),
     subdomain: str = Form(""),
     description: str = Form(""),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _role: User = Depends(require_superuser),
@@ -322,7 +322,7 @@ def tenant_user_create(
     full_name: str = Form(...),
     email: str = Form(""),
     password: str = Form(...),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _u: User = Depends(require_role(["tenantadmin"])),
@@ -363,7 +363,7 @@ def tenant_user_edit(
     full_name: str = Form(...),
     email: str = Form(""),
     password: str = Form(""),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _u: User = Depends(require_role(["tenantadmin"])),
@@ -446,7 +446,7 @@ def admin_user_create(
     email: str = Form(""),
     password: str = Form(...),
     tenant_id: Optional[int] = Form(None),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _role: User = Depends(require_role(["tenantadmin"])),
@@ -493,7 +493,7 @@ def admin_user_edit(
     email: str = Form(""),
     password: str = Form(""),
     tenant_id: Optional[int] = Form(None),
-    role: str = Form("user"),
+    role: str = Form("reader"),
     is_active: str = Form("off"),
     db: Session = Depends(get_db),
     _role: User = Depends(require_role(["tenantadmin"])),

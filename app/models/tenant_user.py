@@ -13,7 +13,7 @@ class Tenant(Base):
     subdomain = Column("subdomain", String, unique=True, nullable=True)
     description = Column("description", String)
     created_date = Column("created_date", String)
-    role = Column("role", String, default="user")
+    role = Column("role", String, default="reader")
     is_active = Column("is_active", Boolean, default=True)
 
     users = relationship("User", back_populates="tenant")
@@ -32,7 +32,7 @@ class User(Base):
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
     is_active = Column("is_active", Boolean, default=True)
     created_date = Column("created_date", String)
-    role = Column("role", String, default="user")
+    role = Column("role", String, default="reader")
 
     tenant = relationship("Tenant", back_populates="users")
     favorites = relationship("Favorite", back_populates="user")

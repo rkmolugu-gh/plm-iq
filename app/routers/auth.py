@@ -217,10 +217,10 @@ def change_role(
     role: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """Let the signed-in user switch their own role between 'user' and 'author'."""
+    """Let the signed-in user switch their own role between 'reader' and 'author'."""
     user = require_user(request, db)
     back = request.headers.get("Referer", "/")
-    if role not in ("user", "author"):
+    if role not in ("reader", "author"):
         return RedirectResponse(url=back, status_code=303)
     if user.role != role:
         user.role = role

@@ -15,7 +15,9 @@
       "Bash(timeout 10 uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level debug)",
       "Bash(curl -v http://127.0.0.1:8000/)",
       "Bash(kill %1)",
-      "Bash(python -m py_compile app/db_init.py)"
+      "Bash(python -m py_compile app/db_init.py)",
+      "Bash(cmd //c doinitdb.bat)",
+      "Bash(python db/_build_db.py)"
     ]
   }
 }
