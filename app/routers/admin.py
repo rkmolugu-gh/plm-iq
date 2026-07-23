@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.database import get_db
-from app.models import Tenant, User, Part
+from app.models import Tenant, User, Part, AppSetting
 from app.models.role import role_names, role_rows
 from app.routers.auth import require_user, require_role, require_superuser, auth_context, is_superuser, _hash_password
 from app.template_utils import render
@@ -101,6 +101,7 @@ def _render_tree(request: Request, db: Session, error: Optional[str] = None,
         can_manage_tenants=superuser,
         can_manage_roles=superuser,
         user_tenant_locked=not superuser,
+        show_inactive_users=_get_setting(db, "showinactiveusers", "true").lower() != "false",
     ))
 
 
@@ -110,6 +111,12 @@ def _load_tenant(db: Session, tid: int) -> Optional[Tenant]:
 
 def _load_user(db: Session, uid: int) -> Optional[User]:
     return db.query(User).filter(User.user_id == uid).first()
+
+
+def _get_setting(db: Session, key: str, default: str = "") -> str:
+    """Return the value of an app setting, or `default` if not set."""
+    row = db.query(AppSetting).filter(AppSetting.key == key).first()
+    return row.value if row else default
 
 
 # ── Tree views ────────────────────────────────────────────
@@ -558,3 +565,51 @@ def admin_user_delete(
                 error="Cannot delete this user: it is still referenced by other records (parts, documents, etc.).",
             )
     return RedirectResponse(url="/admin", status_code=303)
+
+
+# ── App Settings ──────────────────────────────────────────
+# Key-value configuration managed from the UI. Settings are stored in the
+# `app_settings` table and exposed as `show_inactive_users` (and future keys)
+# in the template context.
+
+
+def _all_settings(db: Session):
+    """Return all settings as a list of (key, value) tuples."""
+    rows = db.query(AppSetting).order_by(AppSetting.key).all()
+    return [{"key": r.key, "value": r.value} for r in rows]
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def admin_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+    _role: User = Depends(require_role(["tenantadmin"])),
+    error: str = "",
+):
+    """Show all app settings in an editable form."""
+    return HTMLResponse(content=render(
+        "admin/settings.html",
+        **auth_context(request, db),
+        settings=_all_settings(db),
+        error=error,
+    ))
+
+
+@router.post("/settings", response_class=HTMLResponse)
+async def admin_settings_save(
+    request: Request,
+    db: Session = Depends(get_db),
+    _role: User = Depends(require_role(["tenantadmin"])),
+):
+    """Save all setting key-value pairs from the form."""
+    form = await request.form()
+    for key, value in form.items():
+        if key.startswith("setting__"):
+            setting_key = key[len("setting__"):]
+            row = db.query(AppSetting).filter(AppSetting.key == setting_key).first()
+            if row:
+                row.value = value
+            else:
+                db.add(AppSetting(key=setting_key, value=value))
+    db.commit()
+    return RedirectResponse(url="/admin/settings", status_code=303)

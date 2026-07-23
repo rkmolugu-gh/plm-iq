@@ -54,7 +54,7 @@
                             </span>
                         </div>
                         <ul id="tenant-{{ t.tenant_id }}" class="list-unstyled ms-4 mt-1">
-                            {% for u in t.users|sort(attribute='username') %}
+                            {% for u in t.users|sort(attribute='username') if show_inactive_users or u.is_active %}
                             <li class="user-node mb-1">
                                 <div class="tree-row d-flex align-items-center gap-2 p-1 rounded {% if selected_user_id == u.user_id %}table-primary{% endif %}">
                                     <i class="bi bi-person text-light"></i>

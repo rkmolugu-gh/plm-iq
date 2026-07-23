@@ -13,6 +13,7 @@ from app.models.queries import SavedQuery
 from app.models.workflow import WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification
 from app.models.role import Role, role_names
 from app.models.favorite import Favorite
+from app.models.setting import AppSetting
 
 __all__ = [
     "Tenant",
@@ -33,4 +34,5 @@ __all__ = [
     "Role",
     "role_names",
     "Favorite",
+    "AppSetting",
 ]

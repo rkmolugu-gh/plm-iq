@@ -16,7 +16,7 @@ from app.routers.auth import _RedirectToLogin
 from aisearch import router as search_router
 from plmassistant.assistant_router import router as assistant_router
 from app.database import engine, Base
-from app.models import SavedQuery, WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, Role, Favorite
+from app.models import SavedQuery, WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, Role, Favorite, AppSetting
 
 # Create ORM-only tables that aren't in db/schema.sql
 # This is safe to run multiple times (won't recreate existing tables)
@@ -28,6 +28,7 @@ Base.metadata.create_all(bind=engine, tables=[
     Notification.__table__,
     Role.__table__,
     Favorite.__table__,
+    AppSetting.__table__,
 ])
 
 # ── Logging configuration ─────────────────────────────────────
