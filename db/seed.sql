@@ -1421,3 +1421,42 @@ INSERT INTO cad_metadata (part_number, part_revision, part_name, status, cad_fil
 
 PRAGMA foreign_keys = ON;
 
+
+-- ============================================================
+-- Default Roles Seed Data
+-- ============================================================
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('user', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('author', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('tenantadmin', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('quality', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('manufacturing', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('reviewer', date('now'));
+INSERT OR IGNORE INTO roles (name, created_at) VALUES ('approver', date('now'));
+
+-- ============================================================
+-- Default Workflow Templates Seed Data
+-- ============================================================
+-- Standard Part Release workflow template for tenant_id=1
+INSERT OR IGNORE INTO workflow_templates (name, object_type, definition, is_active, tenant_id, created_at)
+SELECT 'Standard Part Release', 'part',
+'{"stages": [{"name": "Engineering", "parallel": false, "steps": [{"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author"}]}, {"name": "Approvals", "parallel": true, "steps": [{"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality"}, {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing"}]}, {"name": "Release", "parallel": false, "steps": [{"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin"}]}]}',
+TRUE, 1, date('now')
+WHERE NOT EXISTS (SELECT 1 FROM workflow_templates WHERE tenant_id=1 AND object_type='part');
+
+-- Standard ECO Release workflow template for tenant_id=1
+INSERT OR IGNORE INTO workflow_templates (name, object_type, definition, is_active, tenant_id, created_at)
+SELECT 'Standard ECO Release', 'eco',
+'{"stages": [{"name": "Review", "parallel": false, "steps": [{"key": "rev", "name": "Change Review", "assignee_type": "role", "assignee": "author"}]}, {"name": "Approvals", "parallel": true, "steps": [{"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality"}, {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing"}]}, {"name": "Release", "parallel": false, "steps": [{"key": "rel", "name": "Release Change", "assignee_type": "role", "assignee": "tenantadmin"}]}]}',
+TRUE, 1, date('now')
+WHERE NOT EXISTS (SELECT 1 FROM workflow_templates WHERE tenant_id=1 AND object_type='eco');
+
+-- ============================================================
+-- Master Admin Seed Data
+-- ============================================================
+-- Note: The masteradmin user is created with password 'superadmin'
+-- The password hash below is for 'superadmin' using bcrypt
+INSERT OR IGNORE INTO users (username, full_name, email, password_hash, tenant_id, is_active, created_date, role)
+SELECT 'masteradmin', 'Master Admin', NULL,
+'$2b$12$/lprcRhuQOtubH2mNs/RTeEY8KHvNZozMOVDE1E77EPNPjbSs2lZy',
+1, TRUE, date('now'), NULL
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='masteradmin');

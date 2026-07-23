@@ -96,8 +96,33 @@ def _ensure_workflow_indexes():
         )
 
 
+def _execute_seed_sql():
+    """Execute the seed.sql file to populate initial data."""
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    seed_file = Path(__file__).resolve().parent.parent / "db" / "seed.sql"
+    if not seed_file.exists():
+        _log.warning("seed.sql not found at %s, skipping", seed_file)
+        return
+    with engine.begin() as conn:
+        sql = seed_file.read_text(encoding="utf-8")
+        # Execute each statement separately (SQLite doesn't support multi-statement exec)
+        for stmt in sql.split(";"):
+            stmt = stmt.strip()
+            if stmt and not stmt.startswith("--"):
+                try:
+                    conn.exec_driver_sql(stmt)
+                except Exception as e:
+                    _log.debug("Skipping statement due to error: %s", e)
+    _log.info("Executed seed.sql")
+
+
 def _seed_workflow_templates():
-    """Idempotently seed default release templates for every tenant that has none."""
+    """Idempotently seed default release templates for new tenants.
+
+    Templates for the default tenant are seeded via seed.sql; this function
+    handles any tenants created at runtime that don't yet have templates.
+    """
     import logging as _logging
     from app.models import Tenant
     _log = _logging.getLogger(__name__)
@@ -151,29 +176,11 @@ def _seed_workflow_templates():
         _log.info("Seeded default workflow templates for tenant %s", tid)
 
 
-def _seed_roles():
-    """Idempotently seed the global role catalog with the default roles."""
-    import logging as _logging
-    _log = _logging.getLogger(__name__)
-    sess = SessionLocal()
-    try:
-        today = datetime.date.today().isoformat()
-        # Upsert the default roles so the catalog always contains them (including
-        # the per-tenant `tenantadmin` role), even if custom roles were added first.
-        for name in ["user", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver"]:
-            if sess.query(Role).filter(Role.name == name).count() == 0:
-                sess.add(Role(name=name, created_at=today))
-        sess.commit()
-        _log.info("Seeded default role catalog")
-    finally:
-        sess.close()
+def _ensure_masteradmin():
+    """Ensure the masteradmin account exists and has NULL role.
 
-
-def _seed_masteradmin():
-    """Create the global masteradmin (NULL role, password 'superadmin') exactly once.
-
-    The masteradmin is global, but the User schema requires a non-null tenant_id,
-    so we attach it to the first existing tenant (or a bootstrap 'master' tenant).
+    The masteradmin user is primarily seeded via seed.sql; this function
+    handles repairs (e.g., ensuring NULL role) and fallback creation if needed.
     """
     import logging as _logging
     from app.models import User, Tenant
@@ -190,6 +197,7 @@ def _seed_masteradmin():
                 sess.commit()
                 _log.info("Ensured existing masteradmin account has NULL role.")
             return
+        # Fallback: create masteradmin if seed.sql didn't (e.g., empty DB)
         tenant = sess.query(Tenant).order_by(Tenant.tenant_id).first()
         if tenant is None:
             tenant = Tenant(
@@ -210,7 +218,7 @@ def _seed_masteradmin():
             created_date=today,
         ))
         sess.commit()
-        _log.info("Seeded masteradmin account (role=NULL, password='superadmin')")
+        _log.info("Created masteradmin account (role=NULL, password='superadmin')")
     finally:
         sess.close()
 
@@ -287,9 +295,9 @@ def _normalize_tenants():
 
 _ensure_schema_columns()
 _ensure_workflow_indexes()
+_execute_seed_sql()
 _seed_workflow_templates()
-_seed_roles()
-_seed_masteradmin()
+_ensure_masteradmin()
 _normalize_tenants()
 
 # ── Logging configuration ─────────────────────────────────────

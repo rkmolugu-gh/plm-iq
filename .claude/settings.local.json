@@ -3,6 +3,7 @@
     "allow": [
       "Bash(xargs grep *)",
       "Bash(python *)",
+      "Bash(curl *)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" -X POST http://localhost:8000/role -d \"role=author\" -H \"Referer: http://localhost:8000/parts\")",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/role)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8000/)",
