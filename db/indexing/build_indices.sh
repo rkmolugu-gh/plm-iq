@@ -84,8 +84,8 @@ if [ "$FORCE" = "--force" ]; then
     FORCE_FLAG="--force"
 fi
 
-echo "Running: python -m aisearch.setup_es $FORCE_FLAG"
-python -m aisearch.setup_es $FORCE_FLAG
+echo "Running: python -m db.indexing.setup_es $FORCE_FLAG"
+python -m db.indexing.setup_es $FORCE_FLAG
 
 # ── 5. Build all indices ─────────────────────────────────────────────
 echo ""

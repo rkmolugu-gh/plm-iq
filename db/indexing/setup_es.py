@@ -10,7 +10,7 @@ Summary:
     Platinum license). setup_inference_pipeline() remains a documented no-op.
 
     Usage:
-        python -m aisearch.setup_es [--force]
+        python -m db.indexing.setup_es [--force]
 
     Flags:
         --force   Delete and recreate each index (drops existing data).

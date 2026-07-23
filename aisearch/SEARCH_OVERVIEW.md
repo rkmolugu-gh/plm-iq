@@ -107,7 +107,7 @@ setup_inference_pipeline()          # Create inference endpoint + ingest pipelin
 **`setup_es.py`** — Run once to prepare ES:
 
 ```
-python -m aisearch.setup_es [--force]
+python -m db.indexing.setup_es [--force]
 ```
 
 This provisions all **8 indices** with proper mappings (text, keyword, dense_vector fields).
