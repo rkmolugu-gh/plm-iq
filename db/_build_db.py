@@ -1,8 +1,7 @@
 """
 Build the SQLite database from schema.sql + seed.sql.
 
-Called by init_db.bat. Can also be run directly:
-    python db/_build_db.py
+
 """
 
 import os
