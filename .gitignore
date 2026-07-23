@@ -21,6 +21,7 @@ env/
 .venv
 
 # IDEs
+.claude/
 .vscode/
 .idea/
 *.swp
