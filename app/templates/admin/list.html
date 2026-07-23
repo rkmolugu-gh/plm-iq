@@ -37,12 +37,7 @@
                                 <i class="bi bi-caret-down-fill"></i>
                             </button>
                             <i class="bi bi-building text-info"></i>
-                            <a href="/admin/tenant/{{ t.tenant_id }}" class="node-label text-decoration-none fw-bold">{{ t.tenant_name }}</a>
-                            {% if t.is_active %}
-                                <span class="badge bg-success">Active</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                            {% endif %}
+                            <a href="/admin/tenant/{{ t.tenant_id }}" class="node-label text-decoration-none">{{ t.tenant_name }}</a>
                             <span class="badge bg-info">{{ t.role }}</span>
                             {% if t.subdomain %}<span class="badge bg-light text-dark">{{ t.subdomain }}.{{ base_domain }}</span>{% endif %}
                             <span class="ms-auto d-flex gap-1">
@@ -66,7 +61,6 @@
                                     <a href="/admin/user/{{ u.user_id }}" class="node-label text-decoration-none">{{ u.username }}</a>
                                     <small class="text-muted">{{ u.full_name }}</small>
                                     <span class="badge bg-info">{{ u.role }}</span>
-                                    {% if u.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
                                     <span class="ms-auto d-flex gap-1">
                                         <a href="/admin/user/{{ u.user_id }}" class="btn btn-sm btn-outline-light py-0 px-1" title="Edit"><i class="bi bi-pencil"></i></a>
                                         <form method="POST" action="/admin/user/{{ u.user_id }}/delete" onsubmit="return confirm('Delete user {{ u.username }}?');">
