@@ -77,6 +77,23 @@ if not exist "data\uploads" mkdir data\uploads
 if not exist "data\vectors" mkdir data\vectors
 if not exist "logs" mkdir logs
 
+REM Initialize database if needed
+echo [SETUP] Checking database...
+python -c "from app.database import SessionLocal; from app.models import User; sess = SessionLocal(); sess.query(User).filter(User.username == 'masteradmin').first(); sess.close()" 2>nul
+if errorlevel 1 (
+    echo [SETUP] Database not initialized. Initializing...
+    python -m app.db_init
+    if errorlevel 1 (
+        echo [ERROR] Database initialization failed
+        pause
+        exit /b 1
+    )
+    echo [SETUP] Database initialized successfully
+) else (
+    echo [INFO] Database already initialized
+)
+echo.
+
 REM Display configuration
 echo ============================================
 echo   Configuration
