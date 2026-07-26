@@ -60,8 +60,7 @@ docs = [
 # Add your CLI entry points here
 # plm-iq = "plm_iq.main:main"
 
-# Development entry points
-dev = "uvicorn app.main:app --reload"
+# To run the dev server, use: uvicorn app.main:app --reload
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "db", "plmassistant", "aisearch"]
