@@ -78,7 +78,7 @@ Unlike traditional PLM systems that treat AI as an add-on feature, PLM-IQ is **b
 
 ### Prerequisites
 - Python 3.10+
-- pip or uv (recommended)
+- [uv](https://docs.astral.sh/uv/) (recommended)
 
 ### Installation
 
@@ -87,19 +87,15 @@ Unlike traditional PLM systems that treat AI as an add-on feature, PLM-IQ is **b
 git clone https://github.com/rkmolugu/plm-iq.git
 cd plm-iq
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -e ".[dev]"
+# Install dependencies and create virtual environment
+uv sync
 
 # Set up environment variables
 cp .env.example .env
 # Edit .env with your configuration
 
 # Run the application
-python run.py
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Docker Deployment
