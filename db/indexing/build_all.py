@@ -27,9 +27,9 @@ import sys
 import logging
 import time
 
-from aisearch.config import validate
+from app.aisearch.config import validate
 from db.indexing.staging import StagingStore
-from aisearch.config import (
+from app.aisearch.config import (
     INDEX_PARTS, INDEX_BOM, INDEX_COSTING, INDEX_ECO,
     INDEX_AML, INDEX_AVL, INDEX_CAD, INDEX_DOCS,
 )
@@ -78,7 +78,7 @@ def _run_stage(force: bool, index_filter: str | None) -> list[tuple[str, dict]]:
 
 
 def _run_publish(force: bool, index_filter: str | None) -> list[tuple[str, dict]]:
-    from aisearch.backend import get_backend
+    from app.aisearch.backend import get_backend
 
     for w in validate():
         logger.warning(w)

@@ -9,8 +9,8 @@ from decimal import Decimal
 from jinja2 import Environment, FileSystemLoader
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
-AISEARCH_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "aisearch" / "templates"
-PLMASSISTANT_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "plmassistant" / "templates"
+AISEARCH_TEMPLATE_DIR = Path(__file__).resolve().parent / "aisearch" / "templates"
+PLMASSISTANT_TEMPLATE_DIR = Path(__file__).resolve().parent / "plmassistant" / "templates"
 
 # Single shared environment with cache disabled.
 # Loads templates from app/templates/, aisearch/templates/, and plmassistant/templates/

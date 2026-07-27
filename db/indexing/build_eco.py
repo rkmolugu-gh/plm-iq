@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_ECO
+from app.aisearch.config import INDEX_ECO
 from app.models import EngineeringChangeOrder
 
 logger = logging.getLogger(__name__)

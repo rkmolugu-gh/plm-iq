@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_AVL
+from app.aisearch.config import INDEX_AVL
 from app.models import ApprovedVendor
 
 logger = logging.getLogger(__name__)

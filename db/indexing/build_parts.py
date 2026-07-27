@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_PARTS
+from app.aisearch.config import INDEX_PARTS
 from app.models import Part
 
 logger = logging.getLogger(__name__)

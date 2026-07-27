@@ -13,23 +13,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import APP_TITLE, APP_DESCRIPTION, APP_VERSION, SECRET_KEY
 from app.routers import dashboard, parts, bom, costing, eco, aml, avl, cad, documents, admin, auth, import_router, queries, workflow, roles, favorites
 from app.routers.auth import _RedirectToLogin
-from aisearch import router as search_router
-from plmassistant.assistant_router import router as assistant_router
+from app.aisearch import router as search_router
+from app.plmassistant.assistant_router import router as assistant_router
 from app.database import engine, Base
 from app.models import SavedQuery, WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, Role, Favorite, AppSetting
-
-# Create ORM-only tables that aren't in db/schema.sql
-# This is safe to run multiple times (won't recreate existing tables)
-Base.metadata.create_all(bind=engine, tables=[
-    SavedQuery.__table__,
-    WorkflowTemplate.__table__,
-    WorkflowInstance.__table__,
-    WorkflowTask.__table__,
-    Notification.__table__,
-    Role.__table__,
-    Favorite.__table__,
-    AppSetting.__table__,
-])
 
 # ── Logging configuration ─────────────────────────────────────
 _log_level = os.environ.get("LOG_LEVEL", "INFO").upper()

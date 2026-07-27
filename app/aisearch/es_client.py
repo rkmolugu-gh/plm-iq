@@ -11,7 +11,7 @@ import logging
 from typing import Optional
 from elasticsearch import Elasticsearch
 
-from aisearch.config import (
+from .config import (
     ES_HOST, ES_USER, ES_PASSWORD,
     EMBEDDING_DIMENSIONS,
     INDEX_PARTS, INDEX_BOM, INDEX_COSTING, INDEX_ECO,

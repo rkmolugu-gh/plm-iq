@@ -15,11 +15,11 @@ from __future__ import annotations
 import json
 import logging
 
-from aisearch.llm_client import chat_with_tools
-from aisearch.vision import vision_chat
+from app.aisearch.llm_client import chat_with_tools
+from app.aisearch.vision import vision_chat
 
-from plmassistant.config import ASSISTANT_MODEL, VISION_MODEL, MAX_TOOL_ROUNDS
-from plmassistant.plm_tools import ALL_TOOLS, execute_tool
+from .config import ASSISTANT_MODEL, VISION_MODEL, MAX_TOOL_ROUNDS
+from .plm_tools import ALL_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
 

@@ -41,7 +41,7 @@ from openai import (
 )
 from PIL import Image, UnidentifiedImageError
 
-from aisearch.config import (
+from .config import (
     LLM_BASE_URL,
     LLM_API_KEY,
     CHAT_MODEL,

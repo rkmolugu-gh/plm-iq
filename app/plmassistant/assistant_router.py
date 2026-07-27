@@ -23,13 +23,13 @@ from fastapi import APIRouter, Form, UploadFile, File, Request, Depends, HTTPExc
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from aisearch.vision import prepare_image
+from app.aisearch.vision import prepare_image
 from app.database import get_db
 from app.routers.auth import require_user, auth_context
 from app.template_utils import render
 
-from plmassistant.config import ASSISTANT_MODEL, MAX_UPLOAD_SIZE, MAX_HISTORY_TURNS, MAX_SESSIONS
-from plmassistant.agent import assistant_chat, prepare_assistant_messages
+from .config import ASSISTANT_MODEL, MAX_UPLOAD_SIZE, MAX_HISTORY_TURNS, MAX_SESSIONS
+from .agent import assistant_chat, prepare_assistant_messages
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_COSTING
+from app.aisearch.config import INDEX_COSTING
 from app.models import CostingBomItem
 
 logger = logging.getLogger(__name__)

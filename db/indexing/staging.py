@@ -29,7 +29,7 @@ import logging
 from pathlib import Path
 from typing import Iterator, Optional
 
-from aisearch.config import STAGING_DIR
+from app.aisearch.config import STAGING_DIR
 
 logger = logging.getLogger(__name__)
 

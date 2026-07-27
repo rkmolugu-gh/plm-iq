@@ -13,7 +13,7 @@ from pathlib import Path
 
 from db.indexing.base import BaseIndexBuilder
 from db.indexing.staging import StagingStore
-from aisearch.config import INDEX_DOCS, VOLUME_DIR, MAX_EMBED_CHARS
+from app.aisearch.config import INDEX_DOCS, VOLUME_DIR, MAX_EMBED_CHARS
 
 logger = logging.getLogger(__name__)
 

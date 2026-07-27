@@ -19,9 +19,9 @@ import logging
 import time
 from typing import Optional
 
-from aisearch.search import hybrid_search
-from aisearch.llm_client import chat, vision_chat, prepare_image
-from aisearch.config import CHAT_MODEL, VISION_MODEL, RAG_MAX_CONTEXT_DOCS
+from .search import hybrid_search
+from .llm_client import chat, vision_chat, prepare_image
+from .config import CHAT_MODEL, VISION_MODEL, RAG_MAX_CONTEXT_DOCS
 
 logger = logging.getLogger(__name__)
 

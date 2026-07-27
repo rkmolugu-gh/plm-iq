@@ -20,7 +20,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Iterable, Iterator, Optional
 
-from aisearch.config import BULK_BATCH_SIZE, SEARCH_BACKEND
+from .config import BULK_BATCH_SIZE, SEARCH_BACKEND
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class ElasticsearchBackend(SearchBackend):
 
     def __init__(self) -> None:
         # Late import keeps this module usable even if elasticsearch isn't installed.
-        from aisearch import es_client
+        from . import es_client
 
         self._es_client = es_client
         self.es = es_client.get_es()

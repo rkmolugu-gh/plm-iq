@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_BOM
+from app.aisearch.config import INDEX_BOM
 from app.models import BomItem
 
 logger = logging.getLogger(__name__)

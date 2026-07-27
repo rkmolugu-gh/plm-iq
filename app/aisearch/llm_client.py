@@ -20,7 +20,7 @@ import time
 import requests
 from typing import Optional
 
-from aisearch.config import LLM_BASE_URL, LLM_API_KEY, EMBEDDING_MODEL, CHAT_MODEL
+from .config import LLM_BASE_URL, LLM_API_KEY, EMBEDDING_MODEL, CHAT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -215,4 +215,4 @@ def chat_with_tools(
 # (OpenAI SDK-based, with image resize / format conversion / base64).
 # Re-exported here so callers can import everything from llm_client.
 
-from aisearch.vision import vision_chat, prepare_image  # noqa: E402, F401
+from .vision import vision_chat, prepare_image  # noqa: E402, F401

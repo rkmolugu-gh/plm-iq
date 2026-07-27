@@ -21,8 +21,8 @@ import logging
 from typing import Any
 from sqlalchemy import text
 from app.database import SessionLocal
-from aisearch.config import MAX_EMBED_CHARS
-from aisearch.llm_client import embed as generate_embedding
+from app.aisearch.config import MAX_EMBED_CHARS
+from app.aisearch.llm_client import embed as generate_embedding
 from db.indexing.staging import StagingStore
 
 logger = logging.getLogger(__name__)

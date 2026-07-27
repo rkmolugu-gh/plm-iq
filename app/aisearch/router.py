@@ -18,10 +18,10 @@ from fastapi import APIRouter, Query, Request, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from aisearch.search import hybrid_search, ENTITY_LABELS
-from aisearch.rag import rag_answer, rag_answer_multimodal
-from aisearch.config import SEARCH_DEFAULT_SIZE, MAX_UPLOAD_SIZE
-from aisearch.vision import prepare_image, ImageValidationError
+from .search import hybrid_search, ENTITY_LABELS
+from .rag import rag_answer, rag_answer_multimodal
+from .config import SEARCH_DEFAULT_SIZE, MAX_UPLOAD_SIZE
+from .vision import prepare_image, ImageValidationError
 from app.database import get_db
 from app.routers.auth import require_user, auth_context
 from app.template_utils import render

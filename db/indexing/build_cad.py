@@ -7,7 +7,7 @@ Summary:
 
 import logging
 from db.indexing.base import BaseIndexBuilder
-from aisearch.config import INDEX_CAD
+from app.aisearch.config import INDEX_CAD
 from app.models import CadMetadata
 
 logger = logging.getLogger(__name__)

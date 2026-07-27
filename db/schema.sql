@@ -394,3 +394,32 @@ CREATE TABLE IF NOT EXISTS favorites (
 
 CREATE INDEX idx_fav_user_type ON favorites(user_id, object_type);
 CREATE INDEX idx_fav_tenant     ON favorites(tenant_id);
+
+-- ----------------------------------------------------------------------------
+-- 10. SAVED QUERIES
+-- User-saved queries and reports.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS saved_queries (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    description  TEXT,
+    mode         TEXT    NOT NULL DEFAULT 'guided' CHECK (mode IN ('guided', 'sql')),
+    definition   TEXT    NOT NULL,
+    created_by   INTEGER REFERENCES users(user_id),
+    created_at   TEXT,
+    is_public    BOOLEAN NOT NULL DEFAULT FALSE,
+    tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+);
+
+CREATE INDEX idx_saved_query_tenant ON saved_queries(tenant_id);
+
+-- ----------------------------------------------------------------------------
+-- 11. APP SETTINGS
+-- Application-level key-value settings.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_settings (
+    key    TEXT    PRIMARY KEY,
+    value  TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE INDEX idx_app_settings_key ON app_settings(key);

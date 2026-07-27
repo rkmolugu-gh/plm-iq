@@ -19,12 +19,12 @@ import logging
 import time
 from typing import Optional
 
-from aisearch.config import (
+from .config import (
     ALL_INDICES, SEARCH_DEFAULT_SIZE, SEARCH_MAX_SIZE,
     INDEX_PARTS, INDEX_BOM, INDEX_COSTING, INDEX_ECO,
     INDEX_AML, INDEX_AVL, INDEX_CAD, INDEX_DOCS,
 )
-from aisearch.es_client import get_es
+from .es_client import get_es
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +252,7 @@ def _embed_query(query: str) -> list[float]:
     Calls the LLM API directly via llm_client.embed() instead of using
     an ES inference pipeline (which requires a Platinum ES license).
     """
-    from aisearch.llm_client import embed as api_embed
+    from .llm_client import embed as api_embed
     return api_embed(query)
 
 

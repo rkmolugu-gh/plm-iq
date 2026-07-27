@@ -1489,3 +1489,36 @@ INSERT OR IGNORE INTO users (user_id, username, full_name, email, password_hash,
     (17, 'pedaladmin',    'Liam Gallagher',   'liam.gallagher@pedalforce.com','$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tenantadmin', TRUE, '2021-10-01'),
     (18, 'pedalauthor',   'Mia Rodriguez',    'mia.rodriguez@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'author',      TRUE, '2021-11-01'),
     (19, 'pedaluser',     'Noah Bennett',     'noah.bennett@pedalforce.com',  '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'reader',      TRUE, '2022-01-01');
+
+-- saved_queries (sample saved queries)
+INSERT OR IGNORE INTO saved_queries (id, name, description, mode, definition, created_by, created_at, is_public, tenant_id) VALUES
+    (1, 'All Released Parts', 'List all parts with RELEASED status', 'guided', '{"filters": [{"field": "status", "op": "=", "value": "RELEASED"}]}', 1, '2024-01-01', TRUE, 1),
+    (2, 'High Cost Parts', 'Parts with unit cost > $100', 'sql', 'SELECT * FROM costing_bom WHERE unit_cost > 100', 1, '2024-01-02', FALSE, 1),
+    (3, 'Recent ECOs', 'ECOs created in the last 30 days', 'guided', '{"filters": [{"field": "created_date", "op": ">=", "value": "last_30_days"}]}', 2, '2024-01-03', TRUE, 1);
+
+-- app_settings (sample application settings)
+INSERT OR IGNORE INTO app_settings (key, value) VALUES
+    ('default_tenant_id', '1'),
+    ('max_upload_size_mb', '10'),
+    ('enable_elasticsearch', 'true'),
+    ('llm_model', 'deepseek-v4-flash'),
+    ('maintenance_mode', 'false');
+
+-- workflow_templates (sample workflow templates)
+INSERT OR IGNORE INTO workflow_templates (id, name, object_type, description, definition, is_active, created_by, tenant_id, created_at) VALUES
+    (1, 'Standard Part Release', 'part', 'Standard workflow for releasing a new part', '{"stages": [{"name": "Draft Review", "steps": [{"name": "Review Design", "role": "author"}]}, {"name": "Approval", "steps": [{"name": "Approve Design", "role": "approver"}]}]}', TRUE, 1, 1, '2024-01-01'),
+    (2, 'ECO Approval', 'eco', 'Workflow for approving engineering change orders', '{"stages": [{"name": "Technical Review", "steps": [{"name": "Review Change", "role": "author"}]}, {"name": "Final Approval", "steps": [{"name": "Approve ECO", "role": "approver"}]}]}', TRUE, 1, 1, '2024-01-01');
+
+-- notifications (sample notifications)
+INSERT OR IGNORE INTO notifications (id, user_id, type, title, message, link, is_read, created_at, tenant_id) VALUES
+    (1, 1, 'workflow', 'Workflow Task Assigned', 'You have a new approval task for part FRM-001', '/workflow/tasks/1', FALSE, '2024-01-01', 1),
+    (2, 2, 'eco', 'ECO Approved', 'ECO ECO-001 has been approved', '/eco/ECO-001', TRUE, '2024-01-02', 1),
+    (3, 1, 'system', 'Welcome to PLM-IQ', 'Welcome to the PLM-IQ system!', '/dashboard', FALSE, '2024-01-01', 1);
+
+-- favorites (sample favorites)
+INSERT OR IGNORE INTO favorites (id, user_id, object_type, object_id, created_date, tenant_id) VALUES
+    (1, 1, 'part', 'FRM-001', '2024-01-01', 1),
+    (2, 1, 'part', 'BIKE-001', '2024-01-02', 1),
+    (3, 2, 'document', '1', '2024-01-03', 1);
+
+PRAGMA foreign_keys = ON;
