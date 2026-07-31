@@ -22,6 +22,7 @@ echo Service status:
 docker compose ps
 
 echo.
+echo Compose project: %COMPOSE_PROJECT_NAME%
 echo Gitea:         http://localhost:3000
 echo Elasticsearch: http://localhost:9200
 echo.

@@ -1,7 +1,6 @@
 services:
   gitea:
     image: gitea/gitea:${GITEA_VERSION:-1.22}
-    container_name: ${GITEA_CONTAINER_NAME:-plm-iq-gitea}
     restart: unless-stopped
     environment:
       USER_UID: "${GITEA_UID:-1000}"
@@ -23,7 +22,6 @@ services:
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.15.0}
-    container_name: ${ELASTICSEARCH_CONTAINER_NAME:-plm-iq-elasticsearch}
     restart: unless-stopped
     environment:
       discovery.type: single-node

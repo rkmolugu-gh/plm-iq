@@ -44,7 +44,6 @@ htmlcov/
 
 # Project specific
 archive
-.env
 data/uploads/
 data/gitea/
 data/elasticsearch/

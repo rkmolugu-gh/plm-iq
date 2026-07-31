@@ -10,25 +10,25 @@ if _DOTENV_PATH.exists():
     load_dotenv(_DOTENV_PATH)
 
 # ── LLM API ──────────────────────────────────────────────────────
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
-ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", os.getenv("CHAT_MODEL", ""))
+LLM_API_KEY = os.environ["LLM_API_KEY"]
+LLM_BASE_URL = os.environ["LLM_BASE_URL"]
+ASSISTANT_MODEL = os.environ["ASSISTANT_MODEL"]
 
 # ── Vision Model Config ──────────────────────────────────────────
-VISION_MODEL = os.getenv("VISION_MODEL", ASSISTANT_MODEL)
-VISION_MAX_IMAGE_DIMENSION = int(os.getenv("VISION_MAX_IMAGE_DIMENSION", "4096"))
-VISION_MAX_TOKENS = int(os.getenv("VISION_MAX_TOKENS", "4096"))
-VISION_TIMEOUT_SECONDS = int(os.getenv("VISION_TIMEOUT_SECONDS", "180"))
+VISION_MODEL = os.environ["VISION_MODEL"]
+VISION_MAX_IMAGE_DIMENSION = int(os.environ["VISION_MAX_IMAGE_DIMENSION"])
+VISION_MAX_TOKENS = int(os.environ["VISION_MAX_TOKENS"])
+VISION_TIMEOUT_SECONDS = int(os.environ["VISION_TIMEOUT_SECONDS"])
 
 # ── Upload Limits ────────────────────────────────────────────────
-MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+MAX_UPLOAD_SIZE_MB = int(os.environ["MAX_UPLOAD_SIZE_MB"])
 MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 # ── Paths ────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "data" / "uploads"
+UPLOAD_DIR = BASE_DIR / os.environ["UPLOAD_DIR"]
 
 # ── Assistant Config ─────────────────────────────────────────────
-MAX_TOOL_ROUNDS = 10
-MAX_HISTORY_TURNS = 10
-MAX_SESSIONS = 1000
+MAX_TOOL_ROUNDS = int(os.environ["MAX_TOOL_ROUNDS"])
+MAX_HISTORY_TURNS = int(os.environ["MAX_HISTORY_TURNS"])
+MAX_SESSIONS = int(os.environ["MAX_SESSIONS"])
