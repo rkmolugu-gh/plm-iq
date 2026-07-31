@@ -162,12 +162,19 @@ def auth_context(request: Request, db: Session) -> dict:
 
 
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
-def login_form(request: Request, error: str = ""):
-    """Render the login form."""
+def login_form(request: Request, error: str = "", db: Session = Depends(get_db)):
+    """Render the login form with the seed-user quick-login selector."""
+    all_users = (
+        db.query(User)
+        .filter(User.is_active.is_(True))
+        .order_by(User.username)
+        .all()
+    )
     return HTMLResponse(content=render(
         "login.html",
         request=request,
         error=error,
+        all_users=all_users,
     ))
 
 
@@ -184,17 +191,21 @@ def login_submit(
     user = db.query(User).filter(User.username == username).first()
 
     if not user or not user.is_active:
+        all_users = db.query(User).filter(User.is_active.is_(True)).order_by(User.username).all()
         return HTMLResponse(content=render(
             "login.html",
             request=request,
             error="Invalid username or password.",
+            all_users=all_users,
         ))
 
     if not _check_password(password, user.password_hash or ""):
+        all_users = db.query(User).filter(User.is_active.is_(True)).order_by(User.username).all()
         return HTMLResponse(content=render(
             "login.html",
             request=request,
             error="Invalid username or password.",
+            all_users=all_users,
         ))
 
     # Set session

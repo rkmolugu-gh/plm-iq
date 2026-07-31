@@ -125,22 +125,6 @@
                                 </div>
                             </li>
                             {% endif %}
-                            {% if all_users %}
-                            <li><hr class="dropdown-divider"></li>
-                            <li class="px-3 py-2">
-                                <div class="small text-muted mb-1">Switch user (testing)</div>
-                                <form method="post" action="/switch-user">
-                                    <select name="user_id" class="form-select form-select-sm bg-dark text-light border-secondary mb-2" onchange="this.form.submit()">
-                                        <option value="">— select user —</option>
-                                        {% for u in all_users %}
-                                        <option value="{{ u.user_id }}" {% if u.user_id == current_user.user_id %}selected disabled{% endif %}>
-                                            {{ u.username }} ({{ u.full_name }}){% if u.role is none %} [SUPER]{% endif %}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                </form>
-                            </li>
-                            {% endif %}
                             <li>
                                 <form method="post" action="/logout">
                                     <button type="submit" class="dropdown-item">
