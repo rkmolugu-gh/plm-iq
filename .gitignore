@@ -46,6 +46,8 @@ htmlcov/
 archive
 .env
 data/uploads/
+data/gitea/
+data/elasticsearch/
 
 # Logs
 *.log
