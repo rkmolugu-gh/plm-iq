@@ -88,10 +88,23 @@
   }
 
   // Render Mermaid text into a container element. Never throws to the page.
-  async function plmRenderMermaid(containerEl, text) {
+  async function plmRenderMermaid(containerEl, text, attempt) {
     if (!containerEl) return;
+    attempt = attempt || 0;
+    // The shared Mermaid CDN script is loaded at the end of base.html, after
+    // page-specific scripts. Wait briefly instead of failing on the first
+    // render call while Mermaid is still downloading.
     if (typeof mermaid === "undefined") {
-      containerEl.innerHTML = '<div class="text-warning small">Mermaid failed to load (offline?).</div>';
+      if (attempt < 50) {
+        containerEl.className = "";
+        containerEl.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split"></i> Loading workflow diagram…</div>';
+        window.setTimeout(function () {
+          plmRenderMermaid(containerEl, text, attempt + 1);
+        }, 100);
+      } else {
+        containerEl.className = "";
+        containerEl.innerHTML = '<div class="text-warning small">Mermaid failed to load. Check the network connection or CDN access.</div>';
+      }
       return;
     }
     containerEl.className = "mermaid";

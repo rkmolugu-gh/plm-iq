@@ -26,17 +26,32 @@
                     <label for="quickLogin" class="form-label small">Quick Login (Seed Users)</label>
                     <select class="form-select form-select-sm" id="quickLogin" onchange="fillLoginForm(this)">
                         <option value="">— Select a seed user —</option>
-                        {% set users_by_tenant = all_users|sort(attribute='tenant.tenant_name')|groupby('tenant.tenant_name') %}
-                        {% for tenant_group in users_by_tenant %}
-                        <optgroup label="Tenant: {{ tenant_group.grouper or 'No Tenant' }}">
-                            {% set users_by_role = tenant_group.list|sort(attribute='role')|groupby('role') %}
-                            {% for role_group in users_by_role %}
-                            <option value="" disabled>— Role: {{ role_group.grouper or 'superuser' }} —</option>
-                            {% for u in role_group.list|sort(attribute='username') %}
-                            <option value="{{ u.username }}" data-password="{{ 'superadmin' if u.username == 'masteradmin' else 'user1234' }}" data-tenant="{{ tenant_group.grouper or 'No Tenant' }}" data-role="{{ role_group.grouper or 'superuser' }}">
+                        {% set role_names = ['tenantadmin', 'author', 'reader', 'quality', 'manufacturing', 'reviewer', 'approver'] %}
+                        {% set master_users = all_users|selectattr('role', 'none')|list %}
+                        {% if master_users %}
+                        <optgroup label="Tenant: No Tenant">
+                            <option value="" disabled>— Role: superuser —</option>
+                            {% for u in master_users|sort(attribute='username') %}
+                            <option value="{{ u.username }}" data-password="{{ 'superadmin' if u.username == 'masteradmin' else 'user1234' }}" data-tenant="No Tenant" data-role="superuser">
                                 &nbsp;&nbsp;{{ u.username }} ({{ u.full_name }})
                             </option>
                             {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                        {% set tenant_users = all_users|rejectattr('role', 'none')|list %}
+                        {% set users_by_tenant = tenant_users|sort(attribute='tenant.tenant_name')|groupby('tenant.tenant_name') %}
+                        {% for tenant_group in users_by_tenant %}
+                        <optgroup label="Tenant: {{ tenant_group.grouper or 'No Tenant' }}">
+                            {% for role_name in role_names %}
+                            {% set role_users = tenant_group.list|selectattr('role', 'equalto', role_name)|list %}
+                            {% if role_users %}
+                            <option value="" disabled>— Role: {{ role_name }} —</option>
+                            {% for u in role_users|sort(attribute='username') %}
+                            <option value="{{ u.username }}" data-password="{{ 'superadmin' if u.username == 'masteradmin' else 'user1234' }}" data-tenant="{{ tenant_group.grouper or 'No Tenant' }}" data-role="{{ role_name }}">
+                                &nbsp;&nbsp;{{ u.username }} ({{ u.full_name }})
+                            </option>
+                            {% endfor %}
+                            {% endif %}
                             {% endfor %}
                         </optgroup>
                         {% endfor %}
