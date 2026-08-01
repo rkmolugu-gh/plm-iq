@@ -110,6 +110,11 @@
                                     {% if unread_count|default(0) > 0 %}<span class="badge bg-danger rounded-pill">{{ unread_count }}</span>{% endif %}
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item d-flex justify-content-between align-items-center" href="/status">
+                                    <span><i class="bi bi-heart-pulse"></i> System Status</span>
+                                </a>
+                            </li>
                             <li><hr class="dropdown-divider"></li>
                             {% if current_user.role not in ('tenantadmin',) and current_user.role is not none %}
                             <li class="px-3 py-2">

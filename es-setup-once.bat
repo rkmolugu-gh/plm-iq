@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-cd /d "%~dp0\..\.."
+cd /d "%~dp0"
 
 echo =======================================================
 echo   PLM-IQ Elasticsearch One-Time Setup

@@ -66,7 +66,7 @@ UPLOAD_DIR = BASE_DIR / os.environ["UPLOAD_DIR"]
 # ── Validation ─────────────────────────────────────────────────
 def validate():
     """Check prerequisites and warn about missing config."""
-    env_path = Path(__file__).resolve().parent.parent / ".env"
+    env_path = _DOTENV_PATH
     warnings = []
     if not env_path.exists():
         warnings.append(
