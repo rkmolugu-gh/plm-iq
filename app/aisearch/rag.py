@@ -73,6 +73,9 @@ def rag_answer(query: str, entity_type: Optional[str] = None) -> dict:
         "answer": answer,
         "citations": citations,
         "results": search_result["results"],
+        "total": search_result.get("total", 0),
+        "page": search_result.get("page", 1),
+        "pages": search_result.get("pages", 1),
         "timing": {
             "total_seconds": round(t_elapsed, 3),
             "retrieve_seconds": round(t_retrieve_elapsed, 3),
@@ -120,6 +123,9 @@ def rag_answer_multimodal(
             "answer": "Elasticsearch is not reachable. Please ensure the Elasticsearch server is running and try again.",
             "citations": [],
             "results": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
             "es_error": es_error,
             "timing": {"total_seconds": round(t_elapsed, 3)},
         }
@@ -156,6 +162,9 @@ def rag_answer_multimodal(
         "answer": answer,
         "citations": citations,
         "results": search_result.get("results", []),
+        "total": search_result.get("total", 0),
+        "page": search_result.get("page", 1),
+        "pages": search_result.get("pages", 1),
         "timing": {
             "total_seconds": round(t_elapsed, 3),
             "retrieve_seconds": round(t_retrieve_elapsed, 3),
@@ -213,6 +222,9 @@ def _check_early_return(search_result: dict, t_start: float) -> dict | None:
             "answer": "Elasticsearch is not reachable. Please ensure the Elasticsearch server is running and try again.",
             "citations": [],
             "results": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
             "es_error": es_error,
             "timing": {"total_seconds": round(time.time() - t_start, 3)},
         }
@@ -224,6 +236,9 @@ def _check_early_return(search_result: dict, t_start: float) -> dict | None:
             "answer": "The embedding service is not reachable, so semantic search is unavailable. Please try again later or use BM25 keyword search.",
             "citations": [],
             "results": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
             "embed_error": embed_error,
             "timing": {"total_seconds": round(time.time() - t_start, 3)},
         }
@@ -233,6 +248,9 @@ def _check_early_return(search_result: dict, t_start: float) -> dict | None:
             "answer": "I don't have enough information to answer this. No relevant documents were found.",
             "citations": [],
             "results": [],
+            "total": 0,
+            "page": 1,
+            "pages": 1,
             "timing": {"total_seconds": round(time.time() - t_start, 3)},
         }
 
