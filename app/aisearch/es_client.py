@@ -10,6 +10,7 @@ Summary:
 import logging
 from typing import Optional
 from elasticsearch import Elasticsearch
+from elasticsearch.serializer import JsonSerializer
 
 from .config import (
     ES_HOST, ES_USER, ES_PASSWORD,
@@ -47,6 +48,14 @@ def get_es() -> Elasticsearch:
     # Self-signed certs from ES auto-configuration
     kwargs["verify_certs"] = False
     kwargs["ssl_show_warn"] = False
+
+    # Use serverless mode to avoid automatic Accept header conversion
+    # (elasticsearch-py 9.x converts application/json -> application/vnd.elasticsearch+json; compatible-with=9
+    # which ES 8.x rejects)
+    kwargs["server_mode"] = "serverless"
+
+    # Disable client meta header
+    kwargs["meta_header"] = False
 
     # Fail fast when ES is not running — don't let the user wait
     kwargs["request_timeout"] = 3

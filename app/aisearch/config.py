@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # ── Load shared .env from project root ──────────────────────────
-_DOTENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+_DOTENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 if _DOTENV_PATH.exists():
     from dotenv import load_dotenv
     load_dotenv(_DOTENV_PATH)
