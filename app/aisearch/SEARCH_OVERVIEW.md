@@ -62,7 +62,7 @@ User Query
 | `LLM_API_KEY` | `""` | LLM API key for the OpenAI-compatible endpoint (must be set in .env or env var) |
 | `LLM_BASE_URL` | `""` | OpenAI-compatible API base URL (set in .env) |
 | `EMBEDDING_MODEL` | `bge-m3` | 1024-dim embedding model |
-| `CHAT_MODEL` | `deepseek-v4-flash` | Chat model for RAG answer generation |
+| `CHAT_MODEL` | Chat model for RAG answer generation |
 | `EMBEDDING_DIMENSIONS` | `1024` | Vector dimension count |
 | `ALL_INDICES` | (8 index names) | `plm_parts`, `plm_bom`, `plm_costing`, `plm_eco`, `plm_aml`, `plm_avl`, `plm_cad`, `plm_docs` |
 | `SEARCH_DEFAULT_SIZE` | `10` | Results per page |
@@ -79,7 +79,7 @@ User Query
 
 ```python
 embed(text, model="bge-m3") → list[float]   # Returns 1024-dim vector
-chat(messages, model="deepseek-v4-flash") → str  # Returns generated text
+chat(messages, model="somemodel") → str  # Returns generated text
 ```
 
 - Used directly for query embedding if the ES inference pipeline falls back
@@ -181,7 +181,7 @@ rag_answer(query, entity_type) → dict
 Flow:
 1. **Retrieve**: Calls `hybrid_search()` in RAG mode to get top 10 results
 2. **Build context**: Formats results as structured text with `[N]` citation markers
-3. **Generate**: Calls `deepseek-v4-flash` via `llm_client.chat()` with:
+3. **Generate**: Calls  via `llm_client.chat()` with:
    - System prompt: "Answer ONLY using context below. Cite with [N]."
    - User message: context + question
 4. **Return**: Answer text + citations list + search results + timing breakdown

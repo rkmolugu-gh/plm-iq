@@ -2,7 +2,7 @@
 
 Summary:
     Provides embed() for generating vector embeddings (bge-m3, 1024-dim)
-    and chat() for RAG answer generation (deepseek-v4-flash).
+    and chat() for RAG answer generation .
     Uses OpenAI-compatible request/response format.
 
     Tool calling:
@@ -91,7 +91,7 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
 
     Args:
         messages: List of dicts with 'role' and 'content' keys.
-        model: Model name (defaults to deepseek-v4-flash).
+        model: Model name 
         max_retries: Max retries on 429 rate limit errors (default 5).
 
     Returns:
@@ -154,7 +154,7 @@ def chat_with_tools(
     Args:
         messages: List of dicts with 'role' and 'content' keys.
         tools: List of tool definition dicts (OpenAI function-calling format).
-        model: Model name (defaults to deepseek-v4-flash).
+        model: Model name.
         max_retries: Max retries on 429 rate limit errors (default 5).
 
     Returns:

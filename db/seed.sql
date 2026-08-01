@@ -1501,7 +1501,7 @@ INSERT OR IGNORE INTO app_settings (key, value) VALUES
     ('default_tenant_id', '1'),
     ('max_upload_size_mb', '10'),
     ('enable_elasticsearch', 'true'),
-    ('llm_model', 'deepseek-v4-flash'),
+    ('llm_model', 'notset'),
     ('maintenance_mode', 'false');
 
 -- workflow_templates (sample workflow templates)

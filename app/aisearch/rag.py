@@ -2,7 +2,7 @@
 
 Summary:
     Takes a user query, retrieves relevant context via hybrid search,
-    then calls deepseek-v4-flash to generate a grounded answer with
+    then calls to generate a grounded answer with
     citations back to the source documents.
 
     Multimodal support:
