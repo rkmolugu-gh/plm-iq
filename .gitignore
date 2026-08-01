@@ -57,6 +57,5 @@ logs/
 *.bak
 *.backup
 
-.env
-.env.example
+
 
