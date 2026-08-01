@@ -102,22 +102,33 @@
 
     {% if result.answer is defined and result.answer %}
     <!-- ─── RAG Answer Box ─── -->
-    <div class="card border-info mb-4">
-        <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center">
+    {% set answer_lower = result.answer.lower() %}
+    {% set is_unhelpful = "don't have enough information" in answer_lower or "do not have enough information" in answer_lower or "no relevant" in answer_lower %}
+    <div class="card border-{{ 'warning' if is_unhelpful else 'info' }} mb-4">
+        <div class="card-header bg-{{ 'warning' if is_unhelpful else 'info' }} text-dark d-flex justify-content-between align-items-center">
             <span>
                 <i class="bi bi-magic"></i> AI-Generated Answer
                 {% if result.multimodal %}<span class="badge bg-dark text-info ms-2"><i class="bi bi-image"></i> Multimodal</span>{% endif %}
-                <small class="text-muted">(powered by {{ "llm model"}})</small>
+                <small class="text-dark opacity-75">(powered by AI model)</small>
             </span>
-            <span class="badge bg-dark text-info">{{ result.timing.total_seconds }}s</span>
+            <span class="badge bg-dark text-{{ 'warning' if is_unhelpful else 'info' }}">{{ result.timing.total_seconds }}s</span>
         </div>
         <div class="card-body">
-            <div class="mb-3" style="white-space: pre-wrap; line-height: 1.6;">{{ result.answer }}</div>
+            {% if is_unhelpful and result.results %}
+            <div class="alert alert-warning mb-3 py-2">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>AI couldn't generate a direct answer</strong> — but {{ result.total }} relevant document{{ "s" if result.total != 1 else "" }} found below. Try rephrasing your question or switching to <strong>BM25 mode</strong> for keyword matching.
+            </div>
+            {% endif %}
+            <div class="{% if not is_unhelpful %}mb-3{% endif %}" style="white-space: pre-wrap; line-height: 1.6;">{{ result.answer }}</div>
 
             {% if result.citations %}
             <!-- Citations -->
             <hr>
-            <h6 class="text-muted"><i class="bi bi-link-45deg"></i> Sources ({{ result.citations|length }})</h6>
+            <h6 class="text-muted"><i class="bi bi-link-45deg"></i> Sources ({{ result.citations|length }}) <i class="bi bi-question-circle" title="These are the documents the AI used to generate the answer above"></i></h6>
+            <div class="small mb-2">
+                <span class="text-muted"><i class="bi bi-info-circle"></i> The AI answer above is generated based on these source documents. Citations [N] in the answer refer to these sources.</span>
+            </div>
             <div class="small">
                 {% for c in result.citations %}
                 <div class="mb-1">
@@ -140,7 +151,7 @@
             {% if mode == "bm25" %}found{% endif %}
         </span>
         <span class="badge bg-{% if mode == 'rag' %}info{% elif mode == 'hybrid' %}primary{% else %}secondary{% endif %}">
-            {{ "RAG (Hybrid)" if mode == "rag" else "Hybrid (Vector)" if mode == "hybrid" else "BM25 (Keyword)" }}
+            {{ "RAG (AI-Powered)" if mode == "rag" else "Hybrid (Vector)" if mode == "hybrid" else "BM25 (Keyword)" }}
         </span>
     </div>
 
@@ -148,6 +159,16 @@
     {% if result.es_error %}
     <!-- ES error banner already shown above — skip results section -->
     {% elif result.results %}
+    <div class="mb-2">
+        <small class="text-muted">
+            <i class="bi bi-info-circle"></i>
+            {% if mode == "rag" %}
+            These are the raw documents matching your query. The AI answer above (if any) was generated from these sources.
+            {% else %}
+            These are the documents matching your search query. Click on any result to view details.
+            {% endif %}
+        </small>
+    </div>
     <div class="list-group mb-4">
         {% for r in result.results %}
         <div class="list-group-item list-group-item-action">

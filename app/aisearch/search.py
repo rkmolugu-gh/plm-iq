@@ -192,8 +192,14 @@ def hybrid_search(
                     entry = _format_hit(hit, idx_name, query)
                     all_results.append(entry)
 
-            # True match count: sum of accurate total_hits across all indices.
-            true_total += _extract_total(resp if search_mode != "rag" else bm25_resp)
+            # True match count: use the richer of BM25/kNN totals for rag mode,
+            # because fusion can surface kNN-only hits that BM25 missed.
+            if search_mode == "rag" and query_vector:
+                bm25_total = _extract_total(bm25_resp)
+                knn_total = _extract_total(knn_resp)
+                true_total += max(bm25_total, knn_total)
+            else:
+                true_total += _extract_total(resp)
         except Exception as e:
             logger.warning(f"Search failed on {idx_name}: {e}")
 
