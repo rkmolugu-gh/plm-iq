@@ -333,6 +333,7 @@ async def cad_upload(
     part_number: str = Form(...),
     files: list[UploadFile] = File(...),
     file_reference_type: str = Form("LocalServer"),
+    is_folder: bool = Form(False),
     db: Session = Depends(get_db),
     _role: User = Depends(require_role(["author"])),
 ):
@@ -366,9 +367,9 @@ async def cad_upload(
         parts = filename.replace("\\", "/").split("/")
         return "/".join(parts[1:]) if (has_dir and len(parts) > 1) else parts[-1]
 
-    has_dir = any("/" in (f.filename or "").replace("\\", "/") for f in files)
+    has_dir = is_folder or any("/" in (f.filename or "").replace("\\", "/") for f in files)
 
-    # Validate extensions per reference type.
+    # Validate extensions per reference type - now all ref types support all formats
     for f in files:
         if not f.filename:
             return _error_page("a file with no name was provided")
@@ -379,7 +380,10 @@ async def cad_upload(
                     f"disallowed extension '{ext}' for Git — allowed: "
                     f"{', '.join(sorted(e.lstrip('.') for e in GIT_ALLOWED_UPLOAD_EXTENSIONS))}"
                 )
-            return _error_page(f"disallowed extension '{ext}' — LocalServer accepts PDF only")
+            elif file_reference_type == "LocalServer":
+                return _error_page(f"disallowed extension '{ext}' — allowed: "
+                    f"{', '.join(sorted(e.lstrip('.') for e in ALLOWED_UPLOAD_EXTENSIONS))}")
+            return _error_page(f"disallowed extension '{ext}'")
 
     logger.debug("UPLOAD [OK] validation passed for %d file(s)", len(files))
 
@@ -394,23 +398,31 @@ async def cad_upload(
     username = current_user.username or "unknown"
 
     if file_reference_type == "LocalServer":
-        if len(files) != 1:
-            return _error_page("LocalServer accepts exactly one PDF file")
-        logger.debug("UPLOAD [STORE] ref_type=LocalServer → calling _store_file_locally")
-        _log_request_dump(part_number, files[0].filename, file_reference_type, file_size, "STORE_BEGIN")
+        logger.debug("UPLOAD [STORE] ref_type=LocalServer → storing %d file(s) locally", len(files))
+        _log_request_dump(part_number, display, file_reference_type, file_size, "STORE_BEGIN")
         try:
-            if hasattr(files[0].file, "seekable") and files[0].file.seekable():
-                files[0].file.seek(0, os.SEEK_END)
-                files[0].file.seek(0)
-        except Exception:
-            pass
-        try:
-            file_reference_url, file_size = _store_file_locally(files[0], part_number)
+            stored_files = []
+            total_size = 0
+            for f in files:
+                if hasattr(f.file, "seekable") and f.file.seekable():
+                    f.file.seek(0, os.SEEK_END)
+                    f.file.seek(0)
+                ref_url, size = _store_file_locally(f, part_number)
+                stored_files.append((f.filename, ref_url, size))
+                total_size += size
+            file_reference_url = stored_files[0][1] if stored_files else None
+            file_size = total_size
+            if len(files) > 1:
+                cad_file_format = "ASSEMBLY"
+                if has_dir:
+                    cad_file_name = files[0].filename.replace("\\", "/").split("/")[0]
+            else:
+                cad_file_format = Path(files[0].filename).suffix.lstrip(".").upper() or "PDF"
         except Exception as e:
             logger.exception("UPLOAD [STORE_FAIL] could not write file: %s", e)
             return _error_page(f"Failed to store file: {e}", status=500)
-        _log_request_dump(part_number, files[0].filename, file_reference_type, file_size, "STORE_DONE")
-        logger.info("UPLOAD [STORE] wrote %d bytes to %s", file_size, file_reference_url)
+        _log_request_dump(part_number, display, file_reference_type, file_size, "STORE_DONE")
+        logger.info("UPLOAD [STORE] wrote %d bytes (%d file(s)) to %s", file_size, len(files), file_reference_url)
 
     elif file_reference_type == "Git":
         logger.debug("UPLOAD [GITEA] ref_type=Git → pushing %d file(s) to Gitea repo", len(files))
@@ -443,7 +455,15 @@ async def cad_upload(
     else:
         # AWS S3 or others — store the reference only, file handling is external
         logger.debug("UPLOAD [SKIP] ref_type=%s — recording reference only", file_reference_type)
-        file_reference_url = f"{file_reference_type.lower()}://{part_number}/{files[0].filename}"
+        if len(files) > 1:
+            cad_file_format = "ASSEMBLY"
+            if has_dir:
+                cad_file_name = files[0].filename.replace("\\", "/").split("/")[0]
+            # For multiple files, create a reference that includes all filenames
+            file_reference_url = f"{file_reference_type.lower()}://{part_number}/" + ",".join(f.filename for f in files)
+        else:
+            file_reference_url = f"{file_reference_type.lower()}://{part_number}/{files[0].filename}"
+            cad_file_format = Path(files[0].filename).suffix.lstrip(".").upper() or "PDF"
 
     # Create the CAD metadata record
     logger.debug("UPLOAD [DB] creating CadMetadata record")

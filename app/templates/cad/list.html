@@ -109,7 +109,7 @@
         <div class="modal-content">
             <form method="POST" action="/cad/upload" enctype="multipart/form-data">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="uploadModalLabel"><i class="bi bi-cloud-upload"></i> Upload PDF</h5>
+                    <h5 class="modal-title" id="uploadModalLabel"><i class="bi bi-cloud-upload"></i> Upload File</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -119,7 +119,16 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="file">CAD File or Folder</label>
-                        <input type="file" name="files" id="file" class="form-control" accept=".pdf" required multiple>
+                        <div class="d-flex gap-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is-folder" value="true">
+                                <label class="form-check-label" for="is-folder">
+                                    <i class="bi bi-folder"></i> Folder (Git preserves structure)
+                                </label>
+                            </div>
+                        </div>
+                        <input type="file" name="files" id="file" class="form-control" accept=".pdf" required>
+                        <input type="hidden" name="is_folder" id="is_folder_hidden" value="false">
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="file_reference_type">Reference Type</label>
@@ -144,42 +153,89 @@
 
 <script>
 /* ── Reference type hint switcher ───────────────────────── */
-const GIT_ACCEPT = '.pdf,.step,.stp,.dwg,.dxf,.sldprt,.sldasm,.stl,.3mf,.iges,.igs,.catpart,.catproduct,.x_t,.x_b,.prt,.asm';
+const ALL_FORMATS = '.pdf,.step,.stp,.dwg,.dxf,.sldprt,.sldasm,.stl,.3mf,.iges,.igs,.catpart,.catproduct,.x_t,.x_b,.prt,.asm';
 function toggleRefTypeHint(value) {
     const hint = document.getElementById('refTypeHint');
     const fileInput = document.getElementById('file');
-    // Reset selection whenever the reference type changes.
-    if (fileInput) fileInput.value = '';
-    if (value === 'LocalServer') {
-        if (fileInput) {
-            fileInput.removeAttribute('webkitdirectory');
-            fileInput.removeAttribute('directory');
-            fileInput.multiple = false;
-            fileInput.accept = '.pdf';
-        }
-        hint.innerHTML = '<i class="bi bi-info-circle"></i> File will be stored in <code>data/volume/{part_number}/</code>';
-        hint.className = 'form-text text-info mt-1';
-    } else if (value === 'Git') {
-        if (fileInput) {
+    const isFolderCheckbox = document.getElementById('is-folder');
+    const isFolderHidden = document.getElementById('is_folder_hidden');
+
+    // Check if folder checkbox is checked
+    const isFolder = isFolderCheckbox ? isFolderCheckbox.checked : false;
+
+    // Configure file input based on checkbox state for ALL ref types
+    if (fileInput) {
+        if (isFolder) {
             // Folder picker: the browser sends each file with its relative path.
             fileInput.setAttribute('webkitdirectory', '');
             fileInput.setAttribute('directory', '');
             fileInput.multiple = true;
-            fileInput.accept = GIT_ACCEPT;
-        }
-        hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a <b>folder</b> — it is pushed to Gitea as one assembly record, preserving subfolders.';
-        hint.className = 'form-text text-success mt-1';
-    } else {
-        if (fileInput) {
+            fileInput.accept = ALL_FORMATS;
+        } else {
+            // File picker for individual files
             fileInput.removeAttribute('webkitdirectory');
             fileInput.removeAttribute('directory');
             fileInput.multiple = false;
-            fileInput.accept = '';
+            fileInput.accept = ALL_FORMATS;
         }
-        hint.innerHTML = '<i class="bi bi-info-circle"></i> Reference will be recorded; file storage is managed externally.';
-        hint.className = 'form-text text-muted mt-1';
+    }
+
+    // Update hint text based on ref type and folder state
+    if (value === 'LocalServer') {
+        if (isFolder) {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a <b>folder</b> — files will be stored in <code>data/volume/{part_number}/</code> preserving structure.';
+            hint.className = 'form-text text-primary mt-1';
+        } else {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select <b>files</b> — will be stored in <code>data/volume/{part_number}/</code>.';
+            hint.className = 'form-text text-info mt-1';
+        }
+    } else if (value === 'Git') {
+        if (isFolder) {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a <b>folder</b> for Git reference — it is pushed to Gitea as one assembly record, preserving subfolders.';
+            hint.className = 'form-text text-primary mt-1';
+        } else {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select individual <b>files</b> for Git reference — each file uploaded separately.';
+            hint.className = 'form-text text-warning mt-1';
+        }
+    } else {
+        if (isFolder) {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a <b>folder</b> — reference will be recorded with folder structure preserved.';
+            hint.className = 'form-text text-primary mt-1';
+        } else {
+            hint.innerHTML = '<i class="bi bi-info-circle"></i> Select individual <b>files</b> — reference will be recorded for each file.';
+            hint.className = 'form-text text-warning mt-1';
+        }
     }
 }
+
+/* ── Toggle folder checkbox for ALL ref types ─────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+    const isFolderCheckbox = document.getElementById('is-folder');
+    const refTypeSelect = document.getElementById('file_reference_type');
+    const fileInput = document.getElementById('file');
+    const isFolderHidden = document.getElementById('is_folder_hidden');
+
+    if (isFolderCheckbox && refTypeSelect) {
+        // Initialize on page load
+        toggleRefTypeHint(refTypeSelect.value);
+
+        isFolderCheckbox.addEventListener('change', function() {
+            const refType = refTypeSelect.value;
+            const hint = document.getElementById('refTypeHint');
+
+            if (isFolderHidden) isFolderHidden.value = this.checked.toString();
+
+            // Re-apply the hint and file input config for the current ref type
+            toggleRefTypeHint(refType);
+        });
+
+        // Also react when ref type changes - keep file selection, just update hint
+        refTypeSelect.addEventListener('change', function() {
+            // Don't reset file selection, just update hint and accept attribute
+            toggleRefTypeHint(this.value);
+        });
+    }
+});
 
 /* ── Row single-selection ───────────────────────────────── */
 let _selectedCadId = null;
