@@ -171,7 +171,7 @@
     </div>
     <div class="list-group mb-4">
         {% for r in result.results %}
-        <div class="list-group-item list-group-item-action">
+        <a href="{{ r.url }}" class="list-group-item list-group-item-action text-decoration-none">
             <div class="d-flex w-100 justify-content-between">
                 <h6 class="mb-1">
                     <span class="badge bg-{{ 'info' if r.entity_label == 'Parts' else 'secondary' }} me-2">
@@ -182,8 +182,8 @@
                 <small class="text-muted">score: {{ r.score }}</small>
             </div>
             <p class="mb-1 small text-muted">{{ r.snippet[:200] }}{% if r.snippet|length > 200 %}...{% endif %}</p>
-            <small class="text-muted">{{ r.index }}</small>
-        </div>
+            <small class="text-muted"><i class="bi bi-box-arrow-up-right"></i> {{ r.url }}</small>
+        </a>
         {% endfor %}
     </div>
 

@@ -11,15 +11,15 @@ Summary:
         search context.
 
     Flow:
-        query → hybrid_search() → context docs → build prompt → LLM → answer + citations
-        query + image(s) → hybrid_search() → context docs → build prompt → vision LLM → answer + citations
+        query → search() → context docs → build prompt → LLM → answer + citations
+        query + image(s) → search() → context docs → build prompt → vision LLM → answer + citations
 """
 
 import logging
 import time
 from typing import Optional
 
-from .search import hybrid_search
+from .search import search
 from .llm_client import chat, vision_chat, prepare_image
 from .config import CHAT_MODEL, VISION_MODEL, RAG_MAX_CONTEXT_DOCS
 
@@ -186,12 +186,12 @@ def _retrieve_context(query: str, entity_type: Optional[str], t_start: float):
         (search_result, context_parts, citations, retrieve_elapsed)
     """
     t_retrieve_start = time.time()
-    search_result = hybrid_search(
+    search_result = search(
         query=query,
+        mode="rag",
         entity_type=entity_type,
         page=1,
         size=RAG_MAX_CONTEXT_DOCS,
-        search_mode="rag",
     )
     t_retrieve_elapsed = time.time() - t_retrieve_start
     logger.info(f"RAG retrieved {len(search_result.get('results', []))} results in {t_retrieve_elapsed:.3f}s")

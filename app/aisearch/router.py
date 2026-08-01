@@ -18,8 +18,8 @@ from fastapi import APIRouter, Query, Request, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from .search import hybrid_search, ENTITY_LABELS
-from .rag import rag_answer, rag_answer_multimodal
+from .search import search, ENTITY_LABELS
+from .ragai import rag_answer, rag_answer_multimodal
 from .config import SEARCH_DEFAULT_SIZE, MAX_UPLOAD_SIZE
 from .vision import prepare_image, ImageValidationError
 from app.database import get_db
@@ -55,22 +55,14 @@ def search_page(
     if q:
         if mode == "rag":
             result = rag_answer(query=q, entity_type=entity)
-        elif mode == "hybrid":
-            # Raw hybrid (BM25 + vector) retrieval — no LLM answer.
-            result = hybrid_search(
-                query=q,
-                entity_type=entity,
-                page=page,
-                size=SEARCH_DEFAULT_SIZE,
-                search_mode="rag",
-            )
         else:
-            result = hybrid_search(
+            # BM25 or hybrid mode — use the search() function
+            result = search(
                 query=q,
+                mode=mode,
                 entity_type=entity,
                 page=page,
                 size=SEARCH_DEFAULT_SIZE,
-                search_mode="bm25",
             )
 
     return HTMLResponse(content=render(
@@ -157,22 +149,14 @@ def search_api(
 
     if mode == "rag":
         result = rag_answer(query=q, entity_type=entity)
-    elif mode == "hybrid":
-        # Raw hybrid (BM25 + vector) retrieval — no LLM answer.
-        result = hybrid_search(
-            query=q,
-            entity_type=entity,
-            page=page,
-            size=SEARCH_DEFAULT_SIZE,
-            search_mode="rag",
-        )
     else:
-        result = hybrid_search(
+        # BM25 or hybrid mode — use the search() function
+        result = search(
             query=q,
+            mode=mode,
             entity_type=entity,
             page=page,
             size=SEARCH_DEFAULT_SIZE,
-            search_mode="bm25",
         )
 
     return JSONResponse(content=result)
