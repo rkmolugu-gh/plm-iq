@@ -96,7 +96,7 @@
                     <tbody>
                         {% for c in costing_items %}
                         <tr>
-                            <td><span class="badge bg-{% if c.cost_type == 'LEAF' %}light{% else %}primary{% endif %} badge-status">{{ c.cost_type }}</span></td>
+                            <td><span class="badge bg-{% if c.cost_type == 'LEAF' %}secondary{% else %}primary{% endif %} badge-status">{{ c.cost_type }}</span></td>
                             <td>{{ c.unit_cost|currency }}</td>
                             <td>{{ c.extended_cost|currency }}</td>
                             <td><strong>{{ c.rolled_total|currency }}</strong></td>

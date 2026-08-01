@@ -9,6 +9,7 @@ be used directly for pure keyword-based search.
 """
 
 import logging
+import time
 from typing import Optional
 
 from .config import ALL_INDICES, SEARCH_DEFAULT_SIZE, SEARCH_MAX_SIZE
