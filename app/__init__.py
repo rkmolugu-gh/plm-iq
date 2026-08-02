@@ -1,1 +1,1 @@
-"""PLM-IQ - Full Stack Application."""
+"""PLM-IQ - Application."""

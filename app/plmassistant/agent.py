@@ -23,7 +23,7 @@ from .plm_tools import ALL_TOOLS, execute_tool
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = """You are a helpful PLM Engineering Assistant with access to comprehensive PLM tools.
+_SYSTEM_PROMPT = """You are a helpful Assistant with access to comprehensive PLM tools.
 Your job is to answer questions about parts, BOMs, costs, engineering changes,
 manufacturers, vendors, CAD files, and spec documents.
 
