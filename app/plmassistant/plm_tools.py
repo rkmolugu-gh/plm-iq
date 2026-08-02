@@ -132,6 +132,35 @@ UPDATE_PART_STATUS_TOOL = {
     },
 }
 
+LIST_PARTS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "list_parts",
+        "description": "List parts with optional filters and sorting. Use this for 'list parts', 'show latest parts', 'recent parts', or when the user wants to browse parts without a specific search query.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of parts to return (default: 10, max: 50)",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Filter by status: DRAFT, RELEASED, or OBSOLETED",
+                    "enum": ["DRAFT", "RELEASED", "OBSOLETED"],
+                },
+                "sort": {
+                    "type": "string",
+                    "description": "Sort order: 'created_date' (newest first), 'modified_date' (most recently updated), or 'part_number'",
+                    "enum": ["created_date", "modified_date", "part_number"],
+                },
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+}
+
 GET_BOM_TOOL = {
     "type": "function",
     "function": {
@@ -285,6 +314,7 @@ GET_CAD_TOOL = {
 
 # ── All tools the agent can use ───────────────────────────────────
 ALL_TOOLS = [
+    LIST_PARTS_TOOL,
     GET_PART_TOOL,
     SEARCH_PARTS_TOOL,
     CREATE_PART_TOOL,
@@ -441,7 +471,8 @@ def _execute_search_parts(query: str, status: Optional[str] = None) -> str:
         for p in results:
             lines.append(
                 f"  - {p.part_number} | {p.part_name} | rev {p.part_revision} | "
-                f"{p.material or '-'} | status: {p.status}"
+                f"{p.material or '-'} | status: {p.status} | "
+                f"created: {p.created_date or '-'} | modified: {p.modified_date or '-'}"
             )
         return "\n".join(lines)
     finally:
@@ -535,6 +566,49 @@ def _execute_update_part_status(part_number: str, status: str) -> str:
     except Exception as e:
         db.rollback()
         return f"Error updating part status: {e}"
+    finally:
+        db.close()
+
+
+def _execute_list_parts(
+    limit: int = 10,
+    status: Optional[str] = None,
+    sort: Optional[str] = None,
+) -> str:
+    """List parts with optional filters and sorting."""
+    db = SessionLocal()
+    try:
+        q = db.query(Part)
+
+        if status:
+            q = q.filter(Part.status == status)
+
+        # Apply sorting
+        if sort == "created_date":
+            q = q.order_by(Part.created_date.desc().nullsfirst())
+        elif sort == "modified_date":
+            q = q.order_by(Part.modified_date.desc().nullsfirst())
+        elif sort == "part_number":
+            q = q.order_by(Part.part_number)
+        else:
+            # Default: most recently modified first
+            q = q.order_by(Part.modified_date.desc().nullsfirst())
+
+        # Cap limit
+        limit = min(limit, 50) if limit else 10
+        results = q.limit(limit).all()
+
+        if not results:
+            return "No parts found."
+
+        lines = [f"Found {len(results)} part(s):"]
+        for p in results:
+            lines.append(
+                f"  - {p.part_number} | {p.part_name} | rev {p.part_revision} | "
+                f"{p.material or '-'} | status: {p.status} | "
+                f"created: {p.created_date or '-'} | modified: {p.modified_date or '-'}"
+            )
+        return "\n".join(lines)
     finally:
         db.close()
 
@@ -781,6 +855,7 @@ def _execute_get_cad(part_number: str) -> str:
 # ═══════════════════════════════════════════════════════════════════
 
 TOOL_REGISTRY = {
+    "list_parts": _execute_list_parts,
     "get_part": _execute_get_part,
     "search_parts": _execute_search_parts,
     "create_part": _execute_create_part,

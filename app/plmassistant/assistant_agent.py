@@ -30,6 +30,7 @@ manufacturers, vendors, CAD files, and spec documents.
 You have access to the following tools — call them as needed to gather information:
 
 PART TOOLS:
+- list_parts(limit?, status?, sort?): List parts with optional filters. Use this for "list parts", "show latest parts", "recent parts".
 - search_parts(query, status?): Search for parts by name, number, or material. Use when the user isn't sure of the exact part number.
 - get_part(part_number): Look up a part's full details including revision, material, status, and dates.
 - create_part(template_part, part_number?, overrides?): Create a new part based on a template. Auto-generates the next part number (e.g. BB-001 -> BB-007).
@@ -52,13 +53,33 @@ SUPPLIER TOOLS:
 CAD TOOL:
 - get_cad(part_number): Get CAD file metadata including file formats, systems, and drawing numbers.
 
-Rules:
+EFFICIENCY RULES (IMPORTANT):
+- Be efficient: minimize tool calls. Only call tools when you lack specific information.
+- If list_parts or search_parts returns enough information to answer the user's question, ANSWER DIRECTLY. Do NOT call get_part for each result.
+- For "list latest parts" or "show recent parts", use list_parts with sort="modified_date" — do NOT search then get_part each result.
+- For "get part X" where X is a specific part number, use get_part directly — do NOT search first.
+- Think step-by-step but act efficiently: what is the MINIMUM set of tool calls needed?
+
+GENERAL RULES:
 - Answer ONLY using the data from your tool calls. If you don't have enough information, say so.
 - For part numbers, always include the full part number (e.g. BB-001, not just BB).
 - When listing costs, include currency values.
 - Be concise and factual — use bullet points when listing multiple items.
 - If the user greets you or asks a general question, answer conversationally.
-- When a user asks to create or modify something, use the appropriate tool."""
+- When a user asks to create or modify something, use the appropriate tool.
+
+EXAMPLE (efficient tool use):
+User: "list the latest 3 parts"
+→ Call list_parts(limit=3, sort="modified_date")
+→ Answer with the results directly (no get_part calls)
+
+EXAMPLE (inefficient — avoid this):
+User: "list the latest 3 parts"
+→ Call search_parts("")  ❌
+→ Call get_part("BB-001") ❌
+→ Call get_part("BB-002") ❌
+→ Call get_part("BB-003") ❌
+→ Answer (too many calls!)"""
 
 
 def _run_tool_loop(messages: list[dict]) -> str:

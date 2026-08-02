@@ -29,7 +29,7 @@ from app.routers.auth import require_user, auth_context
 from app.template_utils import render
 
 from .config import ASSISTANT_MODEL, MAX_UPLOAD_SIZE, MAX_HISTORY_TURNS, MAX_SESSIONS
-from .agent import assistant_chat, prepare_assistant_messages
+from .assistant_agent import assistant_chat, prepare_assistant_messages
 
 logger = logging.getLogger(__name__)
 
