@@ -225,10 +225,12 @@ async def assistant_send(
         reply = assistant_chat(messages=agent_messages)
     except Exception as e:
         logger.exception(f"[assistant] Agent call failed: {e}")
-        reply = (
-            "I'm sorry, I couldn't process that request. The LLM service "
-            "returned an error. Please check your configuration and try again."
-        )
+        # Extract a user-friendly error message
+        error_msg = str(e)
+        # Remove any "RuntimeError: " prefix for cleaner display
+        if error_msg.startswith("RuntimeError: "):
+            error_msg = error_msg[len("RuntimeError: "):]
+        reply = f"I'm sorry, I couldn't process that request. Error: {error_msg}"
 
     # 5. Store assistant reply
     assistant_msg: dict = {"role": "assistant", "content": reply}

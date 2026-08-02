@@ -84,14 +84,43 @@ def embed(text: str, model: Optional[str] = None, max_retries: int = 5) -> list[
     raise RuntimeError(f"Embedding API failed after {max_retries} retries")
 
 
+def _parse_error_message(resp: requests.Response) -> str:
+    """Extract a human-readable error message from an API response.
+
+    Tries to parse JSON error responses like:
+      {"error": {"message": "...", "code": 502}}
+      {"error": "..."}
+      {"message": "..."}
+
+    Falls back to the raw response text.
+    """
+    try:
+        data = resp.json()
+        # OpenRouter / Nvidia style: {"error": {"message": "...", "code": 502}}
+        if isinstance(data.get("error"), dict):
+            msg = data["error"].get("message", "")
+            code = data["error"].get("code", resp.status_code)
+            return f"{msg} (code: {code})"
+        # Simple error: {"error": "..."}
+        elif isinstance(data.get("error"), str):
+            return data["error"]
+        # Message style: {"message": "..."}
+        elif isinstance(data.get("message"), str):
+            return data["message"]
+    except Exception:
+        pass
+    return resp.text[:200]
+
+
 def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5) -> str:
     """Send a chat completion request and return the assistant's reply.
 
-    Retries with exponential backoff on 429 (rate limit) errors.
+    Retries with exponential backoff on 429 (rate limit) errors and on 502/503
+    errors that contain rate-limit messages.
 
     Args:
         messages: List of dicts with 'role' and 'content' keys.
-        model: Model name 
+        model: Model name
         max_retries: Max retries on 429 rate limit errors (default 5).
 
     Returns:
@@ -99,6 +128,7 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
 
     Raises:
         RuntimeError: If the API call fails after all retries.
+            The error message will contain a user-friendly description.
     """
     t0 = time.time()
     model = model or CHAT_MODEL
@@ -113,7 +143,8 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
             data = resp.json()
             choices = data.get("choices")
             if not choices:
-                raise RuntimeError(f"Chat API returned empty choices: {resp.text}")
+                error_msg = _parse_error_message(resp)
+                raise RuntimeError(f"Chat API returned empty choices: {error_msg}")
             reply = choices[0].get("message", {}).get("content", "")
             usage = data.get("usage", {})
             logger.info(
@@ -127,12 +158,30 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
             logger.debug(f"Chat reply: {len(reply)} chars")
             return reply
 
-        if resp.status_code == 429 and attempt < max_retries:
+        # Check if this is a rate-limit error (429 or 502/503 with rate limit message)
+        is_rate_limit = False
+        error_msg = _parse_error_message(resp)
+
+        if resp.status_code == 429:
+            is_rate_limit = True
+        elif resp.status_code in (502, 503):
+            # Some providers return 502/503 for rate limits
+            if any(keyword in error_msg.lower() for keyword in ["rate", "limit", "quota", "exhaust", "too many"]):
+                is_rate_limit = True
+                logger.warning(f"Chat: {resp.status_code} error appears to be rate-limit related: {error_msg}")
+
+        if is_rate_limit and attempt < max_retries:
             wait = min(2 ** attempt, 60)
-            logger.warning(f"Chat rate limited (429), retrying in {wait}s (attempt {attempt}/{max_retries})")
+            logger.warning(f"Chat rate limited ({resp.status_code}), retrying in {wait}s (attempt {attempt}/{max_retries})")
             time.sleep(wait)
         else:
-            raise RuntimeError(f"Chat API error {resp.status_code}: {resp.text}")
+            # Provide a user-friendly error message
+            if "rate" in error_msg.lower() and "limit" in error_msg.lower():
+                raise RuntimeError(f"Rate limit reached: {error_msg}")
+            elif resp.status_code >= 500:
+                raise RuntimeError(f"LLM service error (HTTP {resp.status_code}): {error_msg}")
+            else:
+                raise RuntimeError(f"Chat API error (HTTP {resp.status_code}): {error_msg}")
 
     raise RuntimeError(f"Chat API failed after {max_retries} retries")
 
@@ -145,7 +194,8 @@ def chat_with_tools(
 ) -> dict:
     """Send a chat completion with tool definitions and return the full response.
 
-    Retries with exponential backoff on 429 (rate limit) errors.
+    Retries with exponential backoff on 429 (rate limit) errors and on 502/503
+    errors that contain rate-limit messages (some providers return 502 for rate limits).
 
     The LLM may respond with either:
       - A text response (no tool call): {"role": "assistant", "content": "..."}
@@ -162,6 +212,7 @@ def chat_with_tools(
 
     Raises:
         RuntimeError: If the API call fails after all retries.
+            The error message will contain a user-friendly description.
     """
     t0 = time.time()
     model = model or CHAT_MODEL
@@ -176,7 +227,8 @@ def chat_with_tools(
             data = resp.json()
             choices = data.get("choices")
             if not choices:
-                raise RuntimeError(f"Chat API returned empty choices: {resp.text}")
+                error_msg = _parse_error_message(resp)
+                raise RuntimeError(f"Chat API returned empty choices: {error_msg}")
             choice = choices[0].get("message", {})
 
             result = {"role": choice.get("role", "assistant")}
@@ -200,12 +252,30 @@ def chat_with_tools(
             logger.debug(f"Chat with tools reply: content={bool(result.get('content'))}, tool_calls={len(result.get('tool_calls', []))}")
             return result
 
-        if resp.status_code == 429 and attempt < max_retries:
+        # Check if this is a rate-limit error (429 or 502/503 with rate limit message)
+        is_rate_limit = False
+        error_msg = _parse_error_message(resp)
+
+        if resp.status_code == 429:
+            is_rate_limit = True
+        elif resp.status_code in (502, 503):
+            # Some providers return 502/503 for rate limits
+            if any(keyword in error_msg.lower() for keyword in ["rate", "limit", "quota", "exhaust", "too many"]):
+                is_rate_limit = True
+                logger.warning(f"Chat with tools: {resp.status_code} error appears to be rate-limit related: {error_msg}")
+
+        if is_rate_limit and attempt < max_retries:
             wait = min(2 ** attempt, 60)
-            logger.warning(f"Chat with tools rate limited (429), retrying in {wait}s (attempt {attempt}/{max_retries})")
+            logger.warning(f"Chat with tools rate limited ({resp.status_code}), retrying in {wait}s (attempt {attempt}/{max_retries})")
             time.sleep(wait)
         else:
-            raise RuntimeError(f"Chat API error {resp.status_code}: {resp.text}")
+            # Provide a user-friendly error message
+            if "rate" in error_msg.lower() and "limit" in error_msg.lower():
+                raise RuntimeError(f"Rate limit reached: {error_msg}")
+            elif resp.status_code >= 500:
+                raise RuntimeError(f"LLM service error (HTTP {resp.status_code}): {error_msg}")
+            else:
+                raise RuntimeError(f"Chat API error (HTTP {resp.status_code}): {error_msg}")
 
     raise RuntimeError(f"Chat API failed after {max_retries} retries")
 
