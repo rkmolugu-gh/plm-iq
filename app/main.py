@@ -87,7 +87,9 @@ async def resolve_tenant_middleware(request: Request, call_next):
 
     db = SessionLocal()
     try:
-        request.state.tenant = resolve_tenant(request, db)
+        tenant = resolve_tenant(request, db)
+        request.state.tenant = tenant
+        request.state.tenant_key = tenant.tenant_key if tenant else None
     finally:
         db.close()
     return await call_next(request)

@@ -136,14 +136,21 @@ def _check_password(password: str, password_hash: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def auth_context(request: Request, db: Session) -> dict:
-    """Return dict with current_user and current_tenant for template context."""
+    """Return dict with current_user and current_tenant for template context.
+
+    The tenant_key is also stored on request.state by the tenant resolution
+    middleware so that all routes (including API routes) can access it.
+    """
     user = get_current_user(request, db)
-    tenant = None
+    tenant = getattr(request.state, "tenant", None)
+    # Fall back to a DB lookup by user.tenant_id when request.state.tenant
+    # is not set (e.g. apex-host / single-tenant local dev usage).
+    if tenant is None and user is not None:
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == user.tenant_id).first()
     inbox_count = 0
     unread_count = 0
     all_users = None
     if user:
-        tenant = db.query(Tenant).filter(Tenant.tenant_id == user.tenant_id).first()
         from app.notifications import inbox_counts
         inbox_count, unread_count = inbox_counts(db, user)
         all_users = db.query(User).order_by(User.username).all()

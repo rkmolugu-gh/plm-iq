@@ -169,6 +169,7 @@ def admin_user_view(
 def admin_tenant_create(
     request: Request,
     tenant_name: str = Form(...),
+    tenant_key: str = Form(""),
     subdomain: str = Form(""),
     description: str = Form(""),
     role: str = Form("reader"),
@@ -181,6 +182,11 @@ def admin_tenant_create(
         return _render_tree(request, db, error="Tenant name is required.")
     if db.query(Tenant).filter(Tenant.tenant_name == name).first():
         return _render_tree(request, db, error=f"Tenant '{name}' already exists.")
+    key = (tenant_key or "").strip()
+    if not key:
+        return _render_tree(request, db, error="Tenant key is required.")
+    if db.query(Tenant).filter(Tenant.tenant_key == key).first():
+        return _render_tree(request, db, error="That tenant key is already in use.")
     sub = (subdomain or "").strip().lower() or None
     if sub:
         if not re.fullmatch(r"[a-z0-9-]+", sub):
@@ -189,6 +195,7 @@ def admin_tenant_create(
             return _render_tree(request, db, error="That subdomain is already in use.")
     tenant = Tenant(
         tenant_name=name,
+        tenant_key=key,
         subdomain=sub,
         description=description or None,
         role=_valid_role(db, role),
@@ -206,6 +213,7 @@ def admin_tenant_edit(
     request: Request,
     tid: int,
     tenant_name: str = Form(...),
+    tenant_key: str = Form(""),
     subdomain: str = Form(""),
     description: str = Form(""),
     role: str = Form("reader"),
@@ -221,6 +229,11 @@ def admin_tenant_edit(
         return _render_tree(request, db, selected_tenant=tenant, error="Tenant name is required.")
     if db.query(Tenant).filter(Tenant.tenant_name == name, Tenant.tenant_id != tid).first():
         return _render_tree(request, db, selected_tenant=tenant, error="That tenant name is already in use.")
+    key = (tenant_key or "").strip()
+    if not key:
+        return _render_tree(request, db, selected_tenant=tenant, error="Tenant key is required.")
+    if db.query(Tenant).filter(Tenant.tenant_key == key, Tenant.tenant_id != tid).first():
+        return _render_tree(request, db, selected_tenant=tenant, error="That tenant key is already in use.")
     sub = (subdomain or "").strip().lower() or None
     if sub:
         if not re.fullmatch(r"[a-z0-9-]+", sub):
@@ -228,6 +241,7 @@ def admin_tenant_edit(
         if db.query(Tenant).filter(Tenant.subdomain == sub, Tenant.tenant_id != tid).first():
             return _render_tree(request, db, selected_tenant=tenant, error="That subdomain is already in use.")
     tenant.tenant_name = name
+    tenant.tenant_key = key
     tenant.subdomain = sub
     tenant.description = description or None
     tenant.role = _valid_role(db, role)
