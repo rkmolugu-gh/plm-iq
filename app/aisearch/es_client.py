@@ -110,7 +110,7 @@ BASE_MAPPINGS = {
                 "similarity": "cosine",
             },
             "entity_type": {"type": "keyword"},
-            "tenant_id": {"type": "integer"},  # For multi-tenant isolation
+            "tenant_key": {"type": "keyword"},  # For multi-tenant isolation
         },
     },
 }

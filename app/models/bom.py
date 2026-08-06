@@ -19,6 +19,7 @@ class BomItem(Base):
     material_notes = Column("material_notes", String)
     bom_type = Column("bom_type", String, nullable=False, default="DESIGN")
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"))
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     part = relationship("Part", back_populates="bom_items", foreign_keys=[part_number])
     parent = relationship("Part", foreign_keys=[parent_assembly])

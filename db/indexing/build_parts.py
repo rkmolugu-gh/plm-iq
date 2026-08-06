@@ -21,7 +21,7 @@ class PartsIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.part_number} {row.part_name} {row.material or ''} {row.spec_file or ''} {row.status or ''}",
             "entity_type": "part",
-            "tenant_id": row.tenant_id,  # Multi-tenant isolation
+            "tenant_key": row.tenant_key,  # Multi-tenant isolation
             "part_number": row.part_number,
             "part_revision": row.part_revision or "",
             "part_name": row.part_name or "",

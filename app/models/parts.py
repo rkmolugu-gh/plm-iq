@@ -21,6 +21,7 @@ class Part(Base):
     modified_owner = Column("modified_owner", Integer, ForeignKey("users.user_id"))
     created_by = Column("created_by", Integer, ForeignKey("users.user_id"))
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     tenant = relationship("Tenant", back_populates="parts")
     bom_items = relationship("BomItem", back_populates="part", foreign_keys="BomItem.part_number")

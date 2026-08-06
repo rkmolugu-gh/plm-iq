@@ -19,12 +19,12 @@ from .es_client import get_es
 logger = logging.getLogger(__name__)
 
 
-def build_knn_body(query_vector: list[float], tenant_id: Optional[int] = None) -> dict:
+def build_knn_body(query_vector: list[float], tenant_key: Optional[str] = None) -> dict:
     """Build a pure kNN vector search body for Elasticsearch.
 
     Args:
         query_vector: The query embedding vector.
-        tenant_id: Optional tenant ID to filter results (multi-tenant isolation).
+        tenant_key: Optional tenant key to filter results (multi-tenant isolation).
 
     Returns:
         An Elasticsearch query body dict for kNN search.
@@ -44,8 +44,8 @@ def build_knn_body(query_vector: list[float], tenant_id: Optional[int] = None) -
         }
     }
     # Add tenant filter for multi-tenant isolation
-    if tenant_id is not None:
-        body["query"]["bool"]["filter"] = [{"term": {"tenant_id": tenant_id}}]
+    if tenant_key is not None:
+        body["query"]["bool"]["filter"] = [{"term": {"tenant_key": tenant_key}}]
     return body
 
 
@@ -105,7 +105,7 @@ def hybrid_search(
     page: int = 1,
     size: int = SEARCH_DEFAULT_SIZE,
     search_mode: str = "rag",
-    tenant_id: Optional[int] = None,
+    tenant_key: Optional[str] = None,
 ) -> dict:
     """Run hybrid BM25 + vector search across PLM indices.
 
@@ -113,7 +113,7 @@ def hybrid_search(
     1. Embeds the query via the LLM API (Python llm_client.embed)
     2. Runs BM25 keyword search AND kNN vector search in parallel
     3. Fuses results via RRF (Reciprocal Rank Fusion)
-    4. Optionally filters by entity type and tenant_id
+    4. Optionally filters by entity type and tenant_key
 
     Args:
         query:        The user's search query string.
@@ -121,7 +121,7 @@ def hybrid_search(
         page:         Page number (1-indexed) for pagination.
         size:         Results per page (capped at SEARCH_MAX_SIZE).
         search_mode:  "rag" for hybrid BM25+vector (default).
-        tenant_id:    Optional tenant ID to filter results (multi-tenant isolation).
+        tenant_key:   Optional tenant key to filter results (multi-tenant isolation).
 
     Returns:
         dict with keys:
@@ -158,7 +158,7 @@ def hybrid_search(
 
     # Determine which indices to search
     target_indices = _resolve_indices(entity_type)
-    logger.info(f"Hybrid search query='{query}' entity={entity_type} tenant={tenant_id} indices={target_indices}")
+    logger.info(f"Hybrid search query='{query}' entity={entity_type} tenant_key={tenant_key} indices={target_indices}")
 
     # Build the query embedding (for vector search)
     query_vector = None
@@ -195,8 +195,8 @@ def hybrid_search(
     for idx_name in target_indices:
         try:
             # Run BM25 and kNN as separate queries, then fuse with RRF in Python
-            bm25_body = build_bm25_body(query, tenant_id=tenant_id)
-            knn_body = build_knn_body(query_vector, tenant_id=tenant_id)
+            bm25_body = build_bm25_body(query, tenant_key=tenant_key)
+            knn_body = build_knn_body(query_vector, tenant_key=tenant_key)
 
             bm25_resp = es.search(
                 index=idx_name, body=bm25_body, size=size * 2,

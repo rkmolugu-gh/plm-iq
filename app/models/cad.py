@@ -32,5 +32,6 @@ class CadMetadata(Base):
     source_type = Column("source_type", String)
     notes = Column("notes", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     part = relationship("Part", back_populates="cad_files")

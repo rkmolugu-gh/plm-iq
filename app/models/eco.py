@@ -25,5 +25,6 @@ class EngineeringChangeOrder(Base):
     implemented_date = Column("implemented_date", String)
     new_status = Column("new_status", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     part = relationship("Part", back_populates="eco_items")

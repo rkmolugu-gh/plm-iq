@@ -21,7 +21,7 @@ class AmlIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.part_number} {row.manufacturer_name or ''} {row.manufacturer_part_number or ''} Quality: {row.quality_rating or ''}",
             "entity_type": "aml",
-            "tenant_id": row.tenant_id,  # Multi-tenant isolation
+            "tenant_key": row.tenant_key,  # Multi-tenant isolation
             "part_number": row.part_number,
             "manufacturer_name": row.manufacturer_name or "",
             "manufacturer_part_number": row.manufacturer_part_number or "",

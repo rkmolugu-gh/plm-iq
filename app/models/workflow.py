@@ -27,6 +27,7 @@ class WorkflowTemplate(Base):
     is_active = Column("is_active", Boolean, default=True)
     created_by = Column("created_by", Integer, ForeignKey("users.user_id"))
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_key = Column("tenant_key", String, nullable=False)
     created_at = Column("created_at", String)
 
     instances = relationship("WorkflowInstance", back_populates="template")
@@ -48,6 +49,7 @@ class WorkflowInstance(Base):
     result_status = Column("result_status", String)  # target status on completion
     due_date = Column("due_date", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     template = relationship("WorkflowTemplate", back_populates="instances")
     tasks = relationship(
@@ -80,6 +82,7 @@ class WorkflowTask(Base):
     due_date = Column("due_date", String)
     completed_at = Column("completed_at", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     instance = relationship("WorkflowInstance", back_populates="tasks")
     assignee = relationship("User")
@@ -101,3 +104,4 @@ class Notification(Base):
     is_read = Column("is_read", Boolean, default=False)
     created_at = Column("created_at", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_key = Column("tenant_key", String, nullable=False)

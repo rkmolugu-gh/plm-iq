@@ -23,5 +23,6 @@ class CostingBomItem(Base):
     rolled_total = Column("rolled_total", Numeric(12, 4), nullable=False, default=0)
     cost_type = Column("cost_type", String, nullable=False)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"))
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     part = relationship("Part", back_populates="costing_items")

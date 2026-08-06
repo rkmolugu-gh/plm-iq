@@ -21,3 +21,5 @@ class SavedQuery(Base):
     created_by = Column("created_by", Integer, ForeignKey("users.user_id"), nullable=False)
     created_at = Column("created_at", String)
     is_public = Column("is_public", Boolean, default=False)
+    tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)

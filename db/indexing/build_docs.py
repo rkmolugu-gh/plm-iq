@@ -42,18 +42,18 @@ class DocsIndexBuilder(BaseIndexBuilder):
         success = 0
         errors = 0
 
-        # Look up tenant_id for each PDF from the documents table
+        # Look up tenant_key for each PDF from the documents table
         db = SessionLocal()
         try:
             for pdf_path in pdf_files:
                 try:
-                    # Look up the document in the DB to get tenant_id
+                    # Look up the document in the DB to get tenant_key
                     doc_record = db.query(DocumentModel).filter(
                         DocumentModel.name == pdf_path.name
                     ).first()
-                    tenant_id = doc_record.tenant_id if doc_record else None
-                    if tenant_id is None:
-                        logger.warning(f"  No tenant_id found for {pdf_path.name}, skipping")
+                    tenant_key = doc_record.tenant_key if doc_record else None
+                    if tenant_key is None:
+                        logger.warning(f"  No tenant_key found for {pdf_path.name}, skipping")
                         continue
 
                     pages = self._extract_pages(pdf_path)
@@ -63,7 +63,7 @@ class DocsIndexBuilder(BaseIndexBuilder):
                             doc = self._page_to_doc(
                                 pdf_path.name, page_num, chunk,
                                 chunk_index=chunk_idx, total_chunks=len(chunks),
-                                tenant_id=tenant_id,
+                                tenant_key=tenant_key,
                             )
                             doc = self._add_embedding(doc)
                             staging.stage(self.index_name, doc)
@@ -120,7 +120,7 @@ class DocsIndexBuilder(BaseIndexBuilder):
     def _page_to_doc(
         self, filename: str, page_num: int, text: str,
         chunk_index: int = 0, total_chunks: int = 1,
-        tenant_id: Optional[int] = None,
+        tenant_key: Optional[str] = None,
     ) -> dict:
         """Convert extracted (chunked) page text to a staging document."""
         # Try to extract part number from filename (e.g., "BRK-001-A.pdf" → "BRK-001")
@@ -132,7 +132,7 @@ class DocsIndexBuilder(BaseIndexBuilder):
         doc = {
             "content": text,
             "entity_type": "document",
-            "tenant_id": tenant_id,  # Multi-tenant isolation
+            "tenant_key": tenant_key,  # Multi-tenant isolation
             "filename": filename,
             "page_num": page_num,
             "chunk_index": chunk_index,

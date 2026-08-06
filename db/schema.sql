@@ -14,6 +14,7 @@
 CREATE TABLE IF NOT EXISTS tenants (
     tenant_id   INTEGER PRIMARY KEY,
     tenant_name TEXT    NOT NULL UNIQUE,
+    tenant_key  TEXT    NOT NULL UNIQUE,
     subdomain   TEXT    UNIQUE,
     description TEXT,
     created_date DATE,
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS parts (
     modified_owner  INTEGER,
     created_by      INTEGER,
     tenant_id       INTEGER NOT NULL DEFAULT 1,
+    tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (modified_owner)  REFERENCES users(user_id),
     FOREIGN KEY (created_by)      REFERENCES users(user_id),
     FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
@@ -72,6 +74,7 @@ CREATE TABLE IF NOT EXISTS parts (
 
 CREATE INDEX idx_parts_status      ON parts(status);
 CREATE INDEX idx_parts_tenant      ON parts(tenant_id);
+CREATE INDEX idx_parts_tenant_key  ON parts(tenant_key);
 CREATE INDEX idx_parts_owner       ON parts(modified_owner);
 
 -- ----------------------------------------------------------------------------
@@ -91,6 +94,7 @@ CREATE TABLE IF NOT EXISTS bom (
     bom_type        TEXT    NOT NULL DEFAULT 'DESIGN'
                             CHECK (bom_type IN ('DESIGN', 'AS_BUILT', 'AS_SHIPPED', 'AS_MAINTAINED')),
     tenant_id       INTEGER,
+    tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (parent_assembly) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
@@ -100,6 +104,7 @@ CREATE INDEX idx_bom_level          ON bom(level);
 CREATE INDEX idx_bom_part_number    ON bom(part_number);
 CREATE INDEX idx_bom_parent         ON bom(parent_assembly);
 CREATE INDEX idx_bom_tenant         ON bom(tenant_id);
+CREATE INDEX idx_bom_tenant_key     ON bom(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 3. COSTING BOM
@@ -121,6 +126,7 @@ CREATE TABLE IF NOT EXISTS costing_bom (
     rolled_total    NUMERIC(12,4) NOT NULL DEFAULT 0 CHECK (rolled_total >= 0),
     cost_type       TEXT    NOT NULL CHECK (cost_type IN ('ASSEMBLY', 'LEAF')),
     tenant_id       INTEGER,
+    tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
 );
@@ -128,6 +134,7 @@ CREATE TABLE IF NOT EXISTS costing_bom (
 CREATE INDEX idx_cost_bom_part_number ON costing_bom(part_number);
 CREATE INDEX idx_cost_bom_type        ON costing_bom(cost_type);
 CREATE INDEX idx_cost_bom_tenant      ON costing_bom(tenant_id);
+CREATE INDEX idx_cost_bom_tenant_key ON costing_bom(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 4. ENGINEERING CHANGE ORDERS (ECO)
@@ -152,6 +159,7 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     implemented_date DATE,
     new_status      TEXT    CHECK (new_status IN ('DRAFT', 'RELEASED', 'OBSOLETED')),
     tenant_id       INTEGER NOT NULL DEFAULT 1,
+    tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number)     REFERENCES parts(part_number),
     FOREIGN KEY (change_drafter)  REFERENCES users(user_id),
     FOREIGN KEY (change_approver) REFERENCES users(user_id),
@@ -162,6 +170,7 @@ CREATE INDEX idx_eco_status       ON engineering_change_orders(eco_status);
 CREATE INDEX idx_eco_part_number  ON engineering_change_orders(part_number);
 CREATE INDEX idx_eco_drafter      ON engineering_change_orders(change_drafter);
 CREATE INDEX idx_eco_tenant       ON engineering_change_orders(tenant_id);
+CREATE INDEX idx_eco_tenant_key   ON engineering_change_orders(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 5. APPROVED MANUFACTURER LIST (AML)
@@ -187,6 +196,7 @@ CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     approval_date           DATE,
     notes                   TEXT,
     tenant_id               INTEGER NOT NULL DEFAULT 1,
+    tenant_key              TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
 );
@@ -195,6 +205,7 @@ CREATE INDEX idx_aml_part_number      ON approved_manufacturer_list(part_number)
 CREATE INDEX idx_aml_preferred        ON approved_manufacturer_list(preferred_flag);
 CREATE INDEX idx_aml_manufacturer     ON approved_manufacturer_list(manufacturer_name);
 CREATE INDEX idx_aml_tenant           ON approved_manufacturer_list(tenant_id);
+CREATE INDEX idx_aml_tenant_key       ON approved_manufacturer_list(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 6. APPROVED VENDOR LIST (AVL)
@@ -226,6 +237,7 @@ CREATE TABLE IF NOT EXISTS approved_vendor_list (
     approval_date       DATE,
     notes               TEXT,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
+    tenant_key          TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
 );
@@ -234,6 +246,7 @@ CREATE INDEX idx_avl_part_number   ON approved_vendor_list(part_number);
 CREATE INDEX idx_avl_preferred     ON approved_vendor_list(preferred_flag);
 CREATE INDEX idx_avl_vendor        ON approved_vendor_list(vendor_name);
 CREATE INDEX idx_avl_tenant        ON approved_vendor_list(tenant_id);
+CREATE INDEX idx_avl_tenant_key    ON approved_vendor_list(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 7. CAD METADATA
@@ -265,6 +278,7 @@ CREATE TABLE IF NOT EXISTS cad_metadata (
     source_type         TEXT,
     notes               TEXT,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
+    tenant_key          TEXT    NOT NULL,
     FOREIGN KEY (part_number)   REFERENCES parts(part_number),
     FOREIGN KEY (modeling_author) REFERENCES users(user_id),
     FOREIGN KEY (tenant_id)      REFERENCES tenants(tenant_id)
@@ -275,6 +289,7 @@ CREATE INDEX idx_cad_format      ON cad_metadata(cad_file_format);
 CREATE INDEX idx_cad_ref_type    ON cad_metadata(file_reference_type);
 CREATE INDEX idx_cad_author      ON cad_metadata(modeling_author);
 CREATE INDEX idx_cad_tenant      ON cad_metadata(tenant_id);
+CREATE INDEX idx_cad_tenant_key  ON cad_metadata(tenant_key);
 
 -- ── Documents (standalone Document Management System) ────────────────
 CREATE TABLE IF NOT EXISTS documents (
@@ -299,11 +314,13 @@ CREATE TABLE IF NOT EXISTS documents (
     modified_by     INTEGER REFERENCES users(user_id),
     created_date    TEXT,
     modified_date   TEXT,
-    tenant_id       INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+    tenant_id       INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key      TEXT    NOT NULL
 );
 
 CREATE INDEX idx_doc_parent   ON documents(parent_id);
 CREATE INDEX idx_doc_tenant   ON documents(tenant_id);
+CREATE INDEX idx_doc_tenant_key ON documents(tenant_key);
 CREATE INDEX idx_doc_kind     ON documents(kind);
 
 -- ----------------------------------------------------------------------------
@@ -322,9 +339,11 @@ CREATE TABLE IF NOT EXISTS workflow_templates (
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_by  INTEGER REFERENCES users(user_id),
     tenant_id   INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key  TEXT    NOT NULL,
     created_at  DATE
 );
 CREATE INDEX idx_wf_tmpl_tenant ON workflow_templates(tenant_id);
+CREATE INDEX idx_wf_tmpl_tenant_key ON workflow_templates(tenant_key);
 
 CREATE TABLE IF NOT EXISTS workflow_instances (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -338,10 +357,12 @@ CREATE TABLE IF NOT EXISTS workflow_instances (
     completed_at  DATE,
     result_status TEXT,
     due_date      DATE,
-    tenant_id     INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+    tenant_id     INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key    TEXT    NOT NULL
 );
 CREATE INDEX idx_wf_inst_obj     ON workflow_instances(object_type, object_id);
 CREATE INDEX idx_wf_inst_tenant  ON workflow_instances(tenant_id);
+CREATE INDEX idx_wf_inst_tenant_key ON workflow_instances(tenant_key);
 -- At most one ACTIVE workflow per object (ignored where the engine enforces it too).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wf_inst_unique_active
     ON workflow_instances(object_type, object_id)
@@ -359,10 +380,12 @@ CREATE TABLE IF NOT EXISTS workflow_tasks (
     comment      TEXT,
     due_date     DATE,
     completed_at DATE,
-    tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+    tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key   TEXT    NOT NULL
 );
 CREATE INDEX idx_wf_task_assignee_status ON workflow_tasks(assigned_to, status);
 CREATE INDEX idx_wf_task_instance        ON workflow_tasks(instance_id);
+CREATE INDEX idx_wf_task_tenant_key      ON workflow_tasks(tenant_key);
 
 CREATE TABLE IF NOT EXISTS notifications (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -373,9 +396,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     link       TEXT,
     is_read    BOOLEAN NOT NULL DEFAULT FALSE,
     created_at DATE,
-    tenant_id  INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+    tenant_id  INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key TEXT    NOT NULL
 );
 CREATE INDEX idx_notif_user_read ON notifications(user_id, is_read);
+CREATE INDEX idx_notif_tenant_key ON notifications(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 9. FAVORITES
@@ -389,11 +414,13 @@ CREATE TABLE IF NOT EXISTS favorites (
     object_id       TEXT    NOT NULL,
     created_date    TEXT,
     tenant_id       INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key      TEXT    NOT NULL,
     UNIQUE(user_id, object_type, object_id)
 );
 
 CREATE INDEX idx_fav_user_type ON favorites(user_id, object_type);
 CREATE INDEX idx_fav_tenant     ON favorites(tenant_id);
+CREATE INDEX idx_fav_tenant_key ON favorites(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 10. SAVED QUERIES
@@ -408,10 +435,12 @@ CREATE TABLE IF NOT EXISTS saved_queries (
     created_by   INTEGER REFERENCES users(user_id),
     created_at   TEXT,
     is_public    BOOLEAN NOT NULL DEFAULT FALSE,
-    tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1
+    tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_key   TEXT    NOT NULL
 );
 
 CREATE INDEX idx_saved_query_tenant ON saved_queries(tenant_id);
+CREATE INDEX idx_saved_query_tenant_key ON saved_queries(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 11. APP SETTINGS

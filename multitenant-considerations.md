@@ -23,24 +23,31 @@ The design must be **holistic** (one enforcement mechanism shared by all paths),
 
 ## 2. Current State (audit)
 
-### 2.1 `tenant_id` presence per table
+### 2.1 `tenant_key` presence per table
 
-| Table | Model | `tenant_id` column | Nullable? | Notes |
+Every table now has both `tenant_id` (numeric FK) and `tenant_key` (opaque encrypted key).
+The `tenant_key` is the authoritative isolation column for search/indexing.
+
+| Table | Model | `tenant_id` column | `tenant_key` column | Notes |
 |---|---|---|---|---|
-| `parts` | `Part` | ✅ present | NOT NULL (default 1) | Good |
-| `engineering_change_orders` | `EngineeringChangeOrder` | ✅ present | NOT NULL (default 1) | Good |
-| `approved_manufacturer_list` | `ApprovedManufacturer` | ✅ present | NOT NULL (default 1) | Good |
-| `approved_vendor_list` | `ApprovedVendor` | ✅ present | NOT NULL (default 1) | Good |
-| `cad_metadata` | `CadMetadata` | ✅ present | NOT NULL (default 1) | Good |
-| `bom` | `BomItem` | ⚠️ present | **NULLABLE** | **Inconsistent — see §5** |
-| `costing_bom` | `CostingBomItem` | ⚠️ present | **NULLABLE** | **Inconsistent — see §5** |
-| `favorites` | `Favorite` | ❓ not audited | — | Verify in implementation |
-| `documents` | `Document` | ❓ not audited | — | Verify in implementation |
-| `saved_queries` | `SavedQuery` | ❓ not audited | — | Verify in implementation |
-| `workflow_*` | `WorkflowTemplate/Instance/Task`, `Notification` | ❓ not audited | — | Verify in implementation |
-| `roles`, `app_settings` | `Role`, `AppSetting` | ❓ not audited | — | Likely global; confirm |
+| `tenants` | `Tenant` | ✅ PK | ✅ `tenant_key` NOT NULL UNIQUE | Identity table — key is the opaque token |
+| `parts` | `Part` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `engineering_change_orders` | `EngineeringChangeOrder` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `approved_manufacturer_list` | `ApprovedManufacturer` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `approved_vendor_list` | `ApprovedVendor` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `cad_metadata` | `CadMetadata` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `bom` | `BomItem` | ⚠️ NOT NULL (was NULLABLE) | ✅ NOT NULL | Tightened — see §5 |
+| `costing_bom` | `CostingBomItem` | ⚠️ NOT NULL (was NULLABLE) | ✅ NOT NULL | Tightened — see §5 |
+| `documents` | `Document` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Good |
+| `workflow_templates` | `WorkflowTemplate` | ✅ NOT NULL | ✅ NOT NULL | Good |
+| `workflow_instances` | `WorkflowInstance` | ✅ NOT NULL | ✅ NOT NULL | Good |
+| `workflow_tasks` | `WorkflowTask` | ✅ NOT NULL | ✅ NOT NULL | Good |
+| `notifications` | `Notification` | ✅ NOT NULL | ✅ NOT NULL | Good |
+| `favorites` | `Favorite` | ✅ NOT NULL | ✅ NOT NULL | Good |
+| `saved_queries` | `SavedQuery` | ✅ NOT NULL (default 1) | ✅ NOT NULL | Added |
+| `roles`, `app_settings` | `Role`, `AppSetting` | ❌ not present | ❌ not present | Global reference tables — confirmed |
 
-> `Tenant` and `User` are the identity tables themselves and are **not** tenant-scoped.
+> `Tenant` and `User` are the identity tables themselves. `Tenant` carries the `tenant_key`; `User` carries `tenant_id` FK.
 
 ### 2.2 Enforcement today
 
@@ -316,9 +323,9 @@ The `aisearch/` package (hybrid BM25 + vector search + RAG on Elasticsearch) is 
 
 ### 11.2 Fix — Implementation Plan
 
-#### Step 1: Add `tenant_id` to ES mappings
+#### Step 1: Add `tenant_key` to ES mappings
 
-In `app/aisearch/es_client.py`, add `tenant_id` to `BASE_MAPPINGS`:
+In `app/aisearch/es_client.py`, `tenant_key` is already in `BASE_MAPPINGS` as a `keyword` field:
 
 ```python
 BASE_MAPPINGS = {
@@ -337,15 +344,15 @@ BASE_MAPPINGS = {
                 "similarity": "cosine",
             },
             "entity_type": {"type": "keyword"},
-            "tenant_id": {"type": "integer"},  # NEW — for tenant isolation
+            "tenant_key": {"type": "keyword"},  # For tenant isolation (replaces tenant_id)
         },
     },
 }
 ```
 
-#### Step 2: Update all 8 index builders
+#### Step 2: Index builders use `tenant_key`
 
-Each builder's `row_to_doc()` must include `tenant_id`:
+Each builder's `row_to_doc()` now includes `tenant_key` (not `tenant_id`):
 
 ```python
 # Example: db/indexing/build_parts.py
@@ -353,11 +360,11 @@ def row_to_doc(self, row) -> dict:
     return {
         "content": f"{row.part_number} ...",
         ...
-        "tenant_id": row.tenant_id,  # NEW
+        "tenant_key": row.tenant_key,  # Uses tenant_key, not tenant_id
     }
 ```
 
-Builders to update:
+All 8 builders updated:
 - `db/indexing/build_parts.py`
 - `db/indexing/build_bom.py`
 - `db/indexing/build_costing.py`
@@ -365,13 +372,13 @@ Builders to update:
 - `db/indexing/build_aml.py`
 - `db/indexing/build_avl.py`
 - `db/indexing/build_cad.py`
-- `db/indexing/build_docs.py` (for `plm_docs`, if documents are tenant-scoped)
+- `db/indexing/build_docs.py`
 
-#### Step 3: Add `tenant_id` filter to ES queries
+#### Step 3: Add `tenant_key` filter to ES queries
 
 **BM25** (`app/aisearch/bm25.py` — `build_bm25_body`):
 ```python
-def build_bm25_body(query: str, tenant_id: Optional[int] = None) -> dict:
+def build_bm25_body(query: str, tenant_key: Optional[str] = None) -> dict:
     body = {
         "query": {
             "bool": {
@@ -382,7 +389,7 @@ def build_bm25_body(query: str, tenant_id: Optional[int] = None) -> dict:
                         "type": "best_fields",
                     }
                 }],
-                "filter": [{"term": {"tenant_id": tenant_id}}] if tenant_id else []
+                "filter": [{"term": {"tenant_key": tenant_key}}] if tenant_key else []
             }
         }
     }
@@ -391,7 +398,7 @@ def build_bm25_body(query: str, tenant_id: Optional[int] = None) -> dict:
 
 **kNN** (`app/aisearch/bm25vectorrrf.py` — `build_knn_body`):
 ```python
-def build_knn_body(query_vector: list[float], tenant_id: Optional[int] = None) -> dict:
+def build_knn_body(query_vector: list[float], tenant_key: Optional[str] = None) -> dict:
     body = {
         "query": {
             "bool": {
@@ -403,24 +410,24 @@ def build_knn_body(query_vector: list[float], tenant_id: Optional[int] = None) -
                         "num_candidates": 50,
                     }
                 }],
-                "filter": [{"term": {"tenant_id": tenant_id}}] if tenant_id else []
+                "filter": [{"term": {"tenant_key": tenant_key}}] if tenant_key else []
             }
         }
     }
     return body
 ```
 
-#### Step 4: Thread tenant context through search functions
+#### Step 4: Thread tenant_key context through search functions
 
 Update the call chain:
-1. `search()` in `search.py` → accept `tenant_id: Optional[int]`
-2. `bm25_search()` in `bm25.py` → accept and pass `tenant_id`
-3. `hybrid_search()` in `bm25vectorrrf.py` → accept and pass `tenant_id`
-4. `rag_answer()` in `ragai.py` → accept and pass `tenant_id`
+1. `search()` in `search.py` → accept `tenant_key: Optional[str]`
+2. `bm25_search()` in `bm25.py` → accept and pass `tenant_key`
+3. `hybrid_search()` in `bm25vectorrrf.py` → accept and pass `tenant_key`
+4. `rag_answer()` in `ragai.py` → accept and pass `tenant_key`
 
-#### Step 5: Update the router to resolve tenant
+#### Step 5: Update the router to resolve tenant_key
 
-In `app/aisearch/router.py`, resolve tenant from the request context and pass it to search functions:
+In `app/aisearch/router.py`, resolve tenant_key from the auth context and pass it to search functions:
 
 ```python
 @router.get("", response_class=HTMLResponse)
@@ -432,13 +439,13 @@ def search_page(
 ):
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    tenant_id = ctx.get("tenant_id")  # From auth context
+    tenant_key = ctx.get("tenant_key")  # From auth context (opaque key, not numeric id)
 
     if q:
         if mode == "rag":
-            result = rag_answer(query=q, entity_type=entity, tenant_id=tenant_id)
+            result = rag_answer(query=q, entity_type=entity, tenant_key=tenant_key)
         else:
-            result = search(query=q, mode=mode, entity_type=entity, page=page, size=..., tenant_id=tenant_id)
+            result = search(query=q, mode=mode, entity_type=entity, page=page, size=..., tenant_key=tenant_key)
     ...
 ```
 
@@ -461,15 +468,17 @@ python -m db.indexing.build_all
 ## 12. References
 
 - `app/models/tenant_user.py` — `Tenant`, `User` (identity tables)
-- `app/models/{parts,bom,costing,eco,aml,avl,cad}.py` — `tenant_id` columns
+- `app/models/{parts,bom,costing,eco,aml,avl,cad,documents,workflow,queries,favorite}.py` — `tenant_key` columns added
 - `app/models/api_token.py` — **proposed** `ApiToken` model (§6.1)
 - `app/tenant/{context,scope,resolve}.py` — **proposed** shared enforcement + key resolution
 - `app/plmassistant/plm_tools.py` — `_resolve_tenant_id` (lines ~397–414), read tools lacking filters
 - `plm_mcp/server.py` — `call_tool` (no tenant context); **to add** HTTP transport + bearer resolution
-- `app/aisearch/es_client.py` — ES mappings (**missing `tenant_id`** — §11)
-- `app/aisearch/bm25.py` — BM25 search (**missing tenant filter** — §11)
-- `app/aisearch/bm25vectorrrf.py` — Hybrid search (**missing tenant filter** — §11)
-- `app/aisearch/ragai.py` — RAG answers (**missing tenant isolation** — §11)
-- `db/indexing/build_*.py` — Index builders (**missing `tenant_id` in docs** — §11)
+- `app/aisearch/es_client.py` — ES mappings (`tenant_key` keyword field, §11)
+- `app/aisearch/bm25.py` — BM25 search (tenant_key filter, §11)
+- `app/aisearch/bm25vectorrrf.py` — Hybrid search (tenant_key filter, §11)
+- `app/aisearch/ragai.py` — RAG answers (tenant_key isolation, §11)
+- `db/indexing/build_*.py` — Index builders (all use `tenant_key`, §11)
+- `db/schema.sql` — All tables have `tenant_key` NOT NULL
+- `db/seed-full.sql` — Tenant keys generated; UPDATE statements populate tenant_key for all data rows
 - Project memory: `mcp-multitenant-security`
 - Design doc sections: §6 (tenant key/token), §7.2 (HTTP/stdio MCP), §7.3 (UI profile tokens), §11 (aisearch gap)

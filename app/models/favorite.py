@@ -16,6 +16,7 @@ class Favorite(Base):
     object_id = Column(String, nullable=False)  # part_number, document id, or eco_number
     created_date = Column(String, default=lambda: datetime.now().strftime("%Y-%m-%d"))
     tenant_id = Column(String, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_key = Column(String, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="favorites")

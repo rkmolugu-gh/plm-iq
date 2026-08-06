@@ -31,5 +31,6 @@ class ApprovedVendor(Base):
     approval_date = Column("approval_date", String)
     notes = Column("notes", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)
 
     part = relationship("Part", back_populates="avl_items")
