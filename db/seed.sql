@@ -14,14 +14,45 @@ INSERT INTO tenants (tenant_id, tenant_name, tenant_key, tenant_secret, descript
     (5, 'PedalForce', 'tk_pedalforce_q7r8s9t0', 'ts_pedalforce_j3i2h1g0', 'Custom bicycle frames and carbon fiber components', '2021-09-20', TRUE),
     (6, 'plm-iq', 'tk_plm_iq_superadmin', 'ts_plm_iq_f9e8d7c6', 'PLM-IQ platform tenant', '2026-08-06', TRUE);
 
--- users (5 users, one per tenant)
+-- users (1 user per tenant, plus additional users for each role per tenant)
 -- Default password for all users: user1234 (bcrypt hash)
 INSERT OR IGNORE INTO users (user_id, username, full_name, email, password_hash, tenant_id, tenant_key, is_active, created_date, role) VALUES
+    -- Tenant 1: BicycleCo
     (1, 'megan', 'Megan Foster', 'megan.foster@bicycleco.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 1, 'tk_bicycleco_a1b2c3d4', TRUE, '2020-01-01', 'author'),
+    (6, 'bicycle_reader', 'John Reader', 'john.reader@bicycleco.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 1, 'tk_bicycleco_a1b2c3d4', TRUE, '2020-02-01', 'reader'),
+    (7, 'bicycle_admin', 'Sarah Admin', 'sarah.admin@bicycleco.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 1, 'tk_bicycleco_a1b2c3d4', TRUE, '2020-03-01', 'tenantadmin'),
+    (8, 'bicycle_quality', 'Mike Quality', 'mike.quality@bicycleco.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 1, 'tk_bicycleco_a1b2c3d4', TRUE, '2020-04-01', 'quality'),
+    (9, 'bicycle_mfg', 'Emma Manufacturing', 'emma.mfg@bicycleco.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 1, 'tk_bicycleco_a1b2c3d4', TRUE, '2020-05-01', 'manufacturing'),
+    -- Tenant 2: CycleWorks
     (2, 'cycleadmin', 'Carol Stevens', 'carol.stevens@cycleworks.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 2, 'tk_cycleworks_e5f6g7h8', TRUE, '2020-07-01', 'tenantadmin'),
+    (10, 'cycle_reader', 'Tom Reader', 'tom.reader@cycleworks.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 2, 'tk_cycleworks_e5f6g7h8', TRUE, '2020-08-01', 'reader'),
+    (11, 'cycle_author', 'Alice Author', 'alice.author@cycleworks.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 2, 'tk_cycleworks_e5f6g7h8', TRUE, '2020-09-01', 'author'),
+    (12, 'cycle_quality', 'Bob Quality', 'bob.quality@cycleworks.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 2, 'tk_cycleworks_e5f6g7h8', TRUE, '2020-10-01', 'quality'),
+    (13, 'cycle_mfg', 'Carol Manufacturing', 'carol.mfg@cycleworks.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 2, 'tk_cycleworks_e5f6g7h8', TRUE, '2020-11-01', 'manufacturing'),
+    -- Tenant 3: VeloParts
     (3, 'velopadmin', 'Frank Huang', 'frank.huang@veloparts.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 3, 'tk_veloparts_i9j0k1l2', TRUE, '2021-04-01', 'tenantadmin'),
+    (14, 'velop_reader', 'Diana Reader', 'diana.reader@veloparts.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 3, 'tk_veloparts_i9j0k1l2', TRUE, '2021-05-01', 'reader'),
+    (15, 'velop_author', 'George Author', 'george.author@veloparts.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 3, 'tk_veloparts_i9j0k1l2', TRUE, '2021-06-01', 'author'),
+    (16, 'velop_quality', 'Helen Quality', 'helen.quality@veloparts.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 3, 'tk_veloparts_i9j0k1l2', TRUE, '2021-07-01', 'quality'),
+    (17, 'velop_mfg', 'Ivan Manufacturing', 'ivan.mfg@veloparts.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 3, 'tk_veloparts_i9j0k1l2', TRUE, '2021-08-01', 'manufacturing'),
+    -- Tenant 4: BikeTech Industries
     (4, 'bikeadmin', 'Iris Patel', 'iris.patel@biketech.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 4, 'tk_biketech_m3n4o5p6', TRUE, '2022-02-01', 'tenantadmin'),
-    (5, 'pedaladmin', 'Liam Gallagher', 'liam.gallagher@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2021-10-01', 'tenantadmin');
+    (18, 'biketech_reader', 'Julia Reader', 'julia.reader@biketech.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 4, 'tk_biketech_m3n4o5p6', TRUE, '2022-03-01', 'reader'),
+    (19, 'biketech_author', 'Kevin Author', 'kevin.author@biketech.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 4, 'tk_biketech_m3n4o5p6', TRUE, '2022-04-01', 'author'),
+    (20, 'biketech_quality', 'Laura Quality', 'laura.quality@biketech.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 4, 'tk_biketech_m3n4o5p6', TRUE, '2022-05-01', 'quality'),
+    (21, 'biketech_mfg', 'Nick Manufacturing', 'nick.mfg@biketech.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 4, 'tk_biketech_m3n4o5p6', TRUE, '2022-06-01', 'manufacturing'),
+    -- Tenant 5: PedalForce
+    (5, 'pedaladmin', 'Liam Gallagher', 'liam.gallagher@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2021-10-01', 'tenantadmin'),
+    (22, 'pedal_reader', 'Olivia Reader', 'olivia.reader@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2021-11-01', 'reader'),
+    (23, 'pedal_author', 'Paul Author', 'paul.author@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2021-12-01', 'author'),
+    (24, 'pedal_quality', 'Quinn Quality', 'quinn.quality@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2022-01-01', 'quality'),
+    (25, 'pedal_mfg', 'Rachel Manufacturing', 'rachel.mfg@pedalforce.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 5, 'tk_pedalforce_q7r8s9t0', TRUE, '2022-02-01', 'manufacturing'),
+    -- Tenant 6: plm-iq (platform tenant)
+    (26, 'plmiq_reader', 'Sam Reader', 'sam.reader@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'reader'),
+    (27, 'plmiq_author', 'Tina Author', 'tina.author@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'author'),
+    (28, 'plmiq_admin', 'Uma Admin', 'uma.admin@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'tenantadmin'),
+    (29, 'plmiq_quality', 'Vince Quality', 'vince.quality@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'quality'),
+    (30, 'plmiq_mfg', 'Wendy Manufacturing', 'wendy.mfg@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'manufacturing');
 
 -- parts (5 rows)
 INSERT INTO parts (part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES

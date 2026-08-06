@@ -64,10 +64,15 @@ class TenantScopedSession:
         SQLAlchemy's ``Session.query()``.
         """
         # Determine the primary model for tenant-key filtering.
-        # Use the first argument that has a ``tenant_key`` column.
+        # Look for a model class (has __tablename__) that has a tenant_key column.
+        # This handles cases like:
+        #   db.query(Part)                    -> filters by Part.tenant_key
+        #   db.query(Part.status, func.count(Part.part_number)) -> filters by Part.tenant_key
+        #   db.query(func.count(Part.part_number)) -> filters by Part.tenant_key
         primary = None
         for arg in args:
-            if hasattr(arg, "tenant_key"):
+            # Check if this is a model class (has __tablename__) with tenant_key
+            if hasattr(arg, "__tablename__") and hasattr(arg, "tenant_key"):
                 primary = arg
                 break
         if primary is not None and self.tenant_key is not None:

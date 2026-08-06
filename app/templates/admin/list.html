@@ -41,8 +41,8 @@
                             <span class="badge bg-info">{{ t.role }}</span>
                             {% if t.subdomain %}<span class="badge bg-light text-dark">{{ t.subdomain }}.{{ base_domain }}</span>{% endif %}
                             <span class="ms-auto d-flex gap-1">
-                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" title="Add user"
-                                        data-bs-toggle="modal" data-bs-target="#newUserModal" onclick="setNewUserTenant({{ t.tenant_id }})">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1 add-user-btn" title="Add user"
+                                        data-bs-toggle="modal" data-bs-target="#newUserModal" data-tenant-id="{{ t.tenant_id }}">
                                     <i class="bi bi-person-add"></i>
                                 </button>
                                 {% if can_manage_tenants %}
@@ -381,8 +381,21 @@ function toggle(id) {
 }
 function setNewUserTenant(tid) {
     const sel = document.getElementById('newUserTenant');
-    if (sel && tid) sel.value = String(tid);
+    if (!sel) return;
+    if (tid !== null && tid !== undefined) {
+        sel.value = String(tid);
+    }
 }
+// Event delegation for add-user buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.add-user-btn');
+        if (btn) {
+            const tid = btn.getAttribute('data-tenant-id');
+            setNewUserTenant(tid);
+        }
+    });
+});
 function generateTenantKey() {
     const nameInput = document.querySelector('input[name="tenant_name"]');
     const keyInput = document.getElementById('newTenantKey');
