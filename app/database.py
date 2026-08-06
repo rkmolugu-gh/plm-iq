@@ -57,11 +57,22 @@ class TenantScopedSession:
     # Query scoping
     # ------------------------------------------------------------------
 
-    def query(self, model):
-        """Return a tenant-scoped Query for *model*."""
-        if hasattr(model, "tenant_key") and self.tenant_key is not None:
-            return self._db.query(model).filter(model.tenant_key == self.tenant_key)
-        return self._db.query(model)
+    def query(self, *args):
+        """Return a tenant-scoped Query for the given entities.
+
+        Accepts multiple positional arguments (entities) just like
+        SQLAlchemy's ``Session.query()``.
+        """
+        # Determine the primary model for tenant-key filtering.
+        # Use the first argument that has a ``tenant_key`` column.
+        primary = None
+        for arg in args:
+            if hasattr(arg, "tenant_key"):
+                primary = arg
+                break
+        if primary is not None and self.tenant_key is not None:
+            return self._db.query(*args).filter(primary.tenant_key == self.tenant_key)
+        return self._db.query(*args)
 
     def get(self, model, ident):
         """Fetch by primary key, scoped to the tenant."""
