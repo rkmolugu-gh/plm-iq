@@ -31,6 +31,7 @@ class User(Base):
     email = Column("email", String)
     password_hash = Column("password_hash", String, nullable=False, default="")
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
+    tenant_key = Column("tenant_key", String, nullable=False)
     is_active = Column("is_active", Boolean, default=True)
     created_date = Column("created_date", String)
     role = Column("role", String, default="reader")

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     email       TEXT,
     password_hash TEXT NOT NULL DEFAULT '',
     tenant_id   INTEGER NOT NULL DEFAULT 1,
+    tenant_key  TEXT    NOT NULL,
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_date DATE,
     role        TEXT DEFAULT 'reader',
