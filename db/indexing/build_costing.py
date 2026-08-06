@@ -21,6 +21,7 @@ class CostingIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.part_number} {row.part_name or ''} {row.cost_type or ''} Cost: material={row.material_cost} labor={row.labor_cost} overhead={row.overhead_cost} unit={row.unit_cost} total={row.rolled_total}",
             "entity_type": "costing",
+            "tenant_id": row.tenant_id,  # Multi-tenant isolation
             "part_number": row.part_number,
             "part_name": row.part_name or "",
             "qty": row.qty or 0,

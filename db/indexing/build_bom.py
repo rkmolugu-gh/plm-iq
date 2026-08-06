@@ -21,6 +21,7 @@ class BomIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.part_number} {row.part_name or ''} {row.parent_assembly or ''} {row.bom_type or ''}",
             "entity_type": "bom",
+            "tenant_id": row.tenant_id,  # Multi-tenant isolation
             "part_number": row.part_number,
             "part_revision": row.part_revision or "",
             "part_name": row.part_name or "",

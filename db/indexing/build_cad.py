@@ -21,6 +21,7 @@ class CadIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.cad_file_name or ''} {row.cad_system or ''} {row.drawing_number or ''} {row.cad_file_format or ''} {row.part_number}",
             "entity_type": "cad",
+            "tenant_id": row.tenant_id,  # Multi-tenant isolation
             "part_number": row.part_number,
             "part_revision": row.part_revision or "",
             "cad_file_name": row.cad_file_name or "",

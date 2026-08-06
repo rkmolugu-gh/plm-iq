@@ -21,6 +21,7 @@ class EcoIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.eco_number} {row.eco_title or ''} {row.eco_description or ''} {row.change_detail or ''} {row.part_number}",
             "entity_type": "eco",
+            "tenant_id": row.tenant_id,  # Multi-tenant isolation
             "eco_number": row.eco_number,
             "eco_title": row.eco_title or "",
             "eco_description": row.eco_description or "",

@@ -18,24 +18,33 @@ from .es_client import get_es
 logger = logging.getLogger(__name__)
 
 
-def build_bm25_body(query: str) -> dict:
+def build_bm25_body(query: str, tenant_id: Optional[int] = None) -> dict:
     """Build a pure BM25 keyword search body for Elasticsearch.
 
     Args:
         query: The user's search query string.
+        tenant_id: Optional tenant ID to filter results (multi-tenant isolation).
 
     Returns:
         An Elasticsearch query body dict for BM25 search.
     """
-    return {
+    body = {
         "query": {
-            "multi_match": {
-                "query": query,
-                "fields": ["content^2", "*"],
-                "type": "best_fields",
+            "bool": {
+                "must": [{
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["content^2", "*"],
+                        "type": "best_fields",
+                    }
+                }]
             }
         }
     }
+    # Add tenant filter for multi-tenant isolation
+    if tenant_id is not None:
+        body["query"]["bool"]["filter"] = [{"term": {"tenant_id": tenant_id}}]
+    return body
 
 
 def bm25_search(
@@ -43,6 +52,7 @@ def bm25_search(
     entity_type: Optional[str] = None,
     page: int = 1,
     size: int = SEARCH_DEFAULT_SIZE,
+    tenant_id: Optional[int] = None,
 ) -> dict:
     """Run pure BM25 keyword search across PLM indices.
 
@@ -54,6 +64,7 @@ def bm25_search(
         entity_type:  Optional filter — e.g. "Parts", "ECO", "Documents".
         page:         Page number (1-indexed) for pagination.
         size:         Results per page (capped at SEARCH_MAX_SIZE).
+        tenant_id:    Optional tenant ID to filter results (multi-tenant isolation).
 
     Returns:
         dict with keys:
@@ -84,14 +95,14 @@ def bm25_search(
 
     # Determine which indices to search
     target_indices = _resolve_indices(entity_type)
-    logger.info(f"BM25 search query='{query}' entity={entity_type} indices={target_indices}")
+    logger.info(f"BM25 search query='{query}' entity={entity_type} tenant={tenant_id} indices={target_indices}")
 
     # Run BM25 search against each target index
     all_results = []
     true_total = 0
     t_search_start = time.time()
 
-    body = build_bm25_body(query)
+    body = build_bm25_body(query, tenant_id=tenant_id)
 
     for idx_name in target_indices:
         try:

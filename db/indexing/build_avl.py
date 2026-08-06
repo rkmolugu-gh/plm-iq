@@ -21,6 +21,7 @@ class AvlIndexBuilder(BaseIndexBuilder):
         return {
             "content": f"{row.part_number} {row.vendor_name or ''} {row.vendor_part_number or ''}",
             "entity_type": "avl",
+            "tenant_id": row.tenant_id,  # Multi-tenant isolation
             "part_number": row.part_number,
             "vendor_name": row.vendor_name or "",
             "vendor_part_number": row.vendor_part_number or "",

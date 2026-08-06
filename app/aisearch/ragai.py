@@ -38,12 +38,13 @@ Rules:
 - For part numbers, always include the full part number."""
 
 
-def rag_answer(query: str, entity_type: Optional[str] = None) -> dict:
+def rag_answer(query: str, entity_type: Optional[str] = None, tenant_id: Optional[int] = None) -> dict:
     """Generate a RAG answer for the given query.
 
     Args:
         query: The user's natural language question.
         entity_type: Optional entity filter to narrow the search.
+        tenant_id: Optional tenant ID to filter results (multi-tenant isolation).
 
     Returns:
         dict with keys:
@@ -53,10 +54,10 @@ def rag_answer(query: str, entity_type: Optional[str] = None) -> dict:
             timing:      Timing breakdown for observability.
     """
     t_start = time.time()
-    logger.info(f"RAG query='{query}' entity={entity_type}")
+    logger.info(f"RAG query='{query}' entity={entity_type} tenant={tenant_id}")
 
     # Step 1: Retrieve relevant context via hybrid search
-    search_result, context_parts, citations, t_retrieve_elapsed = _retrieve_context(query, entity_type, t_start)
+    search_result, context_parts, citations, t_retrieve_elapsed = _retrieve_context(query, entity_type, t_start, tenant_id=tenant_id)
 
     # Early return if ES is unreachable or no results
     early = _check_early_return(search_result, t_start)
@@ -90,6 +91,7 @@ def rag_answer_multimodal(
     query: str,
     images: list[dict],
     entity_type: Optional[str] = None,
+    tenant_id: Optional[int] = None,
 ) -> dict:
     """Generate a RAG answer with image support (multimodal).
 
@@ -101,6 +103,7 @@ def rag_answer_multimodal(
         images: List of prepared image dicts from :func:`prepare_image`.
                 Each must have keys ``base64_data`` and ``mime_type``.
         entity_type: Optional entity filter to narrow the search.
+        tenant_id: Optional tenant ID to filter results (multi-tenant isolation).
 
     Returns:
         dict with keys:
@@ -110,10 +113,10 @@ def rag_answer_multimodal(
             timing:      Timing breakdown for observability.
     """
     t_start = time.time()
-    logger.info(f"RAG multimodal query='{query}' entity={entity_type} images={len(images)}")
+    logger.info(f"RAG multimodal query='{query}' entity={entity_type} tenant={tenant_id} images={len(images)}")
 
     # Step 1: Retrieve relevant context via hybrid search
-    search_result, context_parts, citations, t_retrieve_elapsed = _retrieve_context(query, entity_type, t_start)
+    search_result, context_parts, citations, t_retrieve_elapsed = _retrieve_context(query, entity_type, t_start, tenant_id=tenant_id)
 
     # Early return if ES is unreachable
     es_error = search_result.get("es_error")
@@ -179,7 +182,7 @@ def rag_answer_multimodal(
 # ── Shared helpers ──────────────────────────────────────────────
 
 
-def _retrieve_context(query: str, entity_type: Optional[str], t_start: float):
+def _retrieve_context(query: str, entity_type: Optional[str], t_start: float, tenant_id: Optional[int] = None):
     """Run hybrid search and build context parts + citations.
 
     Returns:
@@ -192,6 +195,7 @@ def _retrieve_context(query: str, entity_type: Optional[str], t_start: float):
         entity_type=entity_type,
         page=1,
         size=RAG_MAX_CONTEXT_DOCS,
+        tenant_id=tenant_id,
     )
     t_retrieve_elapsed = time.time() - t_retrieve_start
     logger.info(f"RAG retrieved {len(search_result.get('results', []))} results in {t_retrieve_elapsed:.3f}s")

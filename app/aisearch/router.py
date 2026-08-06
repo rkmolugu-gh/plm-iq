@@ -49,12 +49,13 @@ def search_page(
     """
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    logger.info(f"Search page: q='{q}' mode={mode} entity={entity} page={page}")
+    tenant_id = user.tenant_id if user else None  # Resolve tenant from current user
+    logger.info(f"Search page: q='{q}' mode={mode} entity={entity} page={page} tenant={tenant_id}")
 
     result = None
     if q:
         if mode == "rag":
-            result = rag_answer(query=q, entity_type=entity)
+            result = rag_answer(query=q, entity_type=entity, tenant_id=tenant_id)
         else:
             # BM25 or hybrid mode — use the search() function
             result = search(
@@ -63,6 +64,7 @@ def search_page(
                 entity_type=entity,
                 page=page,
                 size=SEARCH_DEFAULT_SIZE,
+                tenant_id=tenant_id,
             )
 
     return HTMLResponse(content=render(
@@ -91,7 +93,8 @@ async def search_multimodal(
     """
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    logger.info(f"Search multimodal: q='{q}' files={len(files)}")
+    tenant_id = ctx.get("tenant_id")  # Resolve tenant from auth context
+    logger.info(f"Search multimodal: q='{q}' files={len(files)} tenant={tenant_id}")
 
     # Process uploaded images
     images = []
@@ -111,9 +114,9 @@ async def search_multimodal(
                 logger.warning(f"Image processing failed for {f.filename}: {e}")
 
     if images:
-        result = rag_answer_multimodal(query=q or "", images=images, entity_type=None)
+        result = rag_answer_multimodal(query=q or "", images=images, entity_type=None, tenant_id=tenant_id)
     else:
-        result = rag_answer(query=q or "", entity_type=None)
+        result = rag_answer(query=q or "", entity_type=None, tenant_id=tenant_id)
 
     return HTMLResponse(content=render(
         "search.html",
@@ -145,10 +148,12 @@ def search_api(
     """
     # Require login for API too
     user = require_user(request, db)
-    logger.info(f"Search API: q='{q}' mode={mode} entity={entity} page={page}")
+    ctx = auth_context(request, db)
+    tenant_id = ctx.get("tenant_id")  # Resolve tenant from auth context
+    logger.info(f"Search API: q='{q}' mode={mode} entity={entity} page={page} tenant={tenant_id}")
 
     if mode == "rag":
-        result = rag_answer(query=q, entity_type=entity)
+        result = rag_answer(query=q, entity_type=entity, tenant_id=tenant_id)
     else:
         # BM25 or hybrid mode — use the search() function
         result = search(
@@ -157,6 +162,7 @@ def search_api(
             entity_type=entity,
             page=page,
             size=SEARCH_DEFAULT_SIZE,
+            tenant_id=tenant_id,
         )
 
     return JSONResponse(content=result)

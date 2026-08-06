@@ -64,6 +64,7 @@ def search(
     entity_type: Optional[str] = None,
     page: int = 1,
     size: int = SEARCH_DEFAULT_SIZE,
+    tenant_id: Optional[int] = None,
 ) -> dict:
     """Main search entry point — routes to BM25 or hybrid search based on mode.
 
@@ -73,6 +74,7 @@ def search(
         entity_type:  Optional filter — e.g. "Parts", "ECO", "Documents".
         page:         Page number (1-indexed) for pagination.
         size:         Results per page (capped at SEARCH_MAX_SIZE).
+        tenant_id:    Optional tenant ID to filter results (multi-tenant isolation).
 
     Returns:
         dict with keys:
@@ -87,10 +89,10 @@ def search(
     """
     if mode == "bm25":
         from .bm25 import bm25_search
-        raw_result = bm25_search(query, entity_type, page, size)
+        raw_result = bm25_search(query, entity_type, page, size, tenant_id=tenant_id)
     else:  # "rag" or "hybrid" mode
         from .bm25vectorrrf import hybrid_search
-        raw_result = hybrid_search(query, entity_type, page, size, search_mode=mode)
+        raw_result = hybrid_search(query, entity_type, page, size, search_mode=mode, tenant_id=tenant_id)
 
     # Format the raw ES hits into user-friendly result dicts
     formatted_results = []
