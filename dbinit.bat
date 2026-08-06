@@ -88,6 +88,6 @@ echo   Database: %DB_PATH%
 echo   Schema: schema.sql
 echo   Seed: seed.sql
 echo.
-echo   You can now run the server with: run.bat
+echo   You can now run the server
 echo.
 pause

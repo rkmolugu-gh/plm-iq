@@ -26,7 +26,7 @@
                     <label for="quickLogin" class="form-label small">Quick Login (Seed Users)</label>
                     <select class="form-select form-select-sm" id="quickLogin" onchange="fillLoginForm(this)">
                         <option value="">— Select a seed user —</option>
-                        {% set role_names = ['tenantadmin', 'author', 'reader', 'quality', 'manufacturing', 'reviewer', 'approver'] %}
+                        {% set role_names = ['tenantadmin', 'author', 'reader', 'quality', 'manufacturing', 'reviewer', 'approver', 'superadmin'] %}
                         {% set master_users = all_users|selectattr('role', 'none')|list %}
                         {% if master_users %}
                         <optgroup label="Tenant: No Tenant">
