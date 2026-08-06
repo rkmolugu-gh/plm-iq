@@ -34,7 +34,7 @@ class User(Base):
     tenant_key = Column("tenant_key", String, nullable=False)
     is_active = Column("is_active", Boolean, default=True)
     created_date = Column("created_date", String)
-    role = Column("role", String, default="reader")
+    role = Column("role", String, nullable=False, default="reader")
 
     tenant = relationship("Tenant", back_populates="users")
     favorites = relationship("Favorite", back_populates="user")

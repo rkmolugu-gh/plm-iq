@@ -73,9 +73,13 @@ def migrate_schema():
             )
             logger.info("Added column tenants.subdomain (+ unique partial index)")
 
-        # Relax users.role to nullable (for NULL-role masteradmin)
+        # Ensure users.role is NOT NULL (no user should have a NULL role).
+        # First, set any NULL roles to 'reader'.
+        conn.exec_driver_sql(
+            "UPDATE users SET role = 'reader' WHERE role IS NULL"
+        )
         role_info = [r for r in conn.exec_driver_sql("PRAGMA table_info(users)").all() if r[1] == "role"]
-        if role_info and role_info[0][3] == 1:  # notnull flag
+        if role_info and role_info[0][3] == 0:  # notnull flag is 0 = nullable
             conn.exec_driver_sql(
                 "CREATE TABLE users_new ("
                 "user_id INTEGER PRIMARY KEY, "
@@ -86,7 +90,7 @@ def migrate_schema():
                 "tenant_id INTEGER NOT NULL DEFAULT 1, "
                 "is_active BOOLEAN NOT NULL DEFAULT TRUE, "
                 "created_date DATE, "
-                "role TEXT DEFAULT 'reader',"
+                "role TEXT NOT NULL DEFAULT 'reader',"
                 "FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id))"
             )
             conn.exec_driver_sql(
@@ -98,7 +102,7 @@ def migrate_schema():
             )
             conn.exec_driver_sql("DROP TABLE users")
             conn.exec_driver_sql("ALTER TABLE users_new RENAME TO users")
-            logger.info("Relaxed users.role to nullable (for NULL-role masteradmin)")
+            logger.info("Enforced users.role NOT NULL DEFAULT 'reader'")
 
     # Create workflow indexes
     with engine.begin() as conn:
@@ -197,15 +201,15 @@ def _seed_workflow_templates_for_new_tenants():
 
 
 def _ensure_masteradmin():
-    """Ensure the masteradmin account exists and has NULL role."""
+    """Ensure the masteradmin account exists and has superadmin role."""
     sess = SessionLocal()
     try:
         existing = sess.query(User).filter(User.username == "masteradmin").first()
         if existing:
-            if existing.role is not None:
-                existing.role = None
+            if existing.role != "superadmin":
+                existing.role = "superadmin"
                 sess.commit()
-                logger.info("Ensured existing masteradmin account has NULL role.")
+                logger.info("Ensured existing masteradmin account has superadmin role.")
             return
         tenant = sess.query(Tenant).order_by(Tenant.tenant_id).first()
         if tenant is None:
@@ -222,19 +226,20 @@ def _ensure_masteradmin():
             email=None,
             password_hash=_hash_password("superadmin"),
             tenant_id=tenant.tenant_id,
-            role=None,
+            role="superadmin",
             is_active=True,
             created_date=today,
         ))
         sess.commit()
-        logger.info("Created masteradmin account (role=NULL, password='superadmin')")
+        logger.info("Created masteradmin account (role=superadmin, password='superadmin')")
     finally:
         sess.close()
 
 
 def _normalize_tenants():
-    """Bring the DB in line with the new role model.
+    """Bring the DB in line with the role model.
 
+    - Ensure no user has a NULL role (set to 'reader').
     - Ensure every tenant has exactly one `tenantadmin` (promote/demote as needed).
     - Retire the legacy `admin` role row once no users reference it.
     - Rewrite any workflow template step that assigned to the retired `admin` role.
@@ -242,6 +247,14 @@ def _normalize_tenants():
     import copy as _copy
     sess = SessionLocal()
     try:
+        # Fix any users with NULL role
+        null_role_users = sess.query(User).filter(User.role.is_(None)).all()
+        for user in null_role_users:
+            user.role = "reader"
+        if null_role_users:
+            sess.commit()
+            logger.info("Fixed %d user(s) with NULL role → 'reader'", len(null_role_users))
+
         tenants = sess.query(Tenant).order_by(Tenant.tenant_id).all()
         for tenant in tenants:
             admins = (

@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     tenant_key  TEXT    NOT NULL,
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_date DATE,
-    role        TEXT DEFAULT 'reader',
+    role        TEXT NOT NULL DEFAULT 'reader',
     FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
 );
 

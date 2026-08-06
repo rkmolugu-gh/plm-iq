@@ -45,13 +45,14 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 
 def is_superuser(user: Optional[User]) -> bool:
-    """A superuser is the global masteradmin, identified by a NULL role.
+    """A superuser is the global masteradmin, identified by a NULL role or
+    the 'superadmin' role.
 
     Only the masteradmin may add tenants, manage global roles, create workflow
     templates, and create queries/reports. `tenantadmin` is a per-tenant admin
     (scoped) and is handled separately.
     """
-    return user is not None and user.role is None
+    return user is not None and (user.role is None or user.role == "superadmin")
 
 
 def require_superuser(request: Request, db: Session = Depends(get_db)) -> User:
