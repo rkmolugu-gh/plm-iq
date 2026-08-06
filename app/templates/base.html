@@ -117,7 +117,7 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
-                            {% if current_user.role not in ('tenantadmin',) and current_user.role is not none %}
+                            {% if current_user.role not in ('tenantadmin', 'superadmin') and current_user.role is not none %}
                             <li class="px-3 py-2">
                                 <div class="small text-muted mb-1">Switch role</div>
                                 <div class="d-flex gap-2">
@@ -166,7 +166,7 @@
             <li class="nav-item">
                 <a class="nav-link" href="/queries"><i class="bi bi-sliders"></i> Queries</a>
             </li>
-            {% if current_user and (current_user.role == 'tenantadmin' or current_user.role is none) %}
+            {% if current_user and (current_user.role == 'tenantadmin' or current_user.role is none or current_user.role == 'superadmin') %}
             <li class="nav-item">
                 <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#adminSubmenu" role="button" aria-expanded="false">
                     <span><i class="bi bi-shield-lock"></i> Admin</span>

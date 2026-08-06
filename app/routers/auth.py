@@ -56,7 +56,7 @@ def is_superuser(user: Optional[User]) -> bool:
 
 
 def require_superuser(request: Request, db: Session = Depends(get_db)) -> User:
-    """Dependency that only allows the global masteradmin (NULL role)."""
+    """Dependency that only allows the global masteradmin/superadmin."""
     user = require_user(request, db)
     if not is_superuser(user):
         raise HTTPException(
@@ -69,9 +69,10 @@ def require_superuser(request: Request, db: Session = Depends(get_db)) -> User:
 def require_role(allowed_roles: List[str]):
     """Dependency that ensures the current user has one of the allowed roles.
 
-    A NULL-role superuser (masteradmin) and the `tenantadmin` role both satisfy
-    any role list: the masteradmin is global, and `tenantadmin` is the per-tenant
-    admin with full management rights within its tenant.
+    A NULL-role superuser (masteradmin), the `superadmin` role, and the
+    `tenantadmin` role all satisfy any role list: the masteradmin/superadmin
+    is global, and `tenantadmin` is the per-tenant admin with full management
+    rights within its tenant.
     """
     def role_checker(request: Request, db: Session = Depends(get_db)) -> User:
         user = require_user(request, db)
