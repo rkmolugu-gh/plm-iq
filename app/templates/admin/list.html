@@ -104,6 +104,16 @@
                         <div class="form-text text-secondary">The auth key used for multi-tenant data isolation.</div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Tenant Secret</label>
+                        <div class="input-group">
+                            <input type="text" name="tenant_secret" class="form-control" value="{{ selected_tenant.tenant_secret }}" required id="editTenantSecret">
+                            <button class="btn btn-outline-secondary" type="button" onclick="generateEditTenantSecret()" title="Generate a unique tenant secret">
+                                <i class="bi bi-key"></i> Generate
+                            </button>
+                        </div>
+                        <div class="form-text text-secondary">The shared secret used for tenant authentication and API access.</div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Description</label>
                         <textarea name="description" class="form-control" rows="2">{{ selected_tenant.description or '' }}</textarea>
                     </div>
@@ -265,6 +275,16 @@
                         <div class="form-text text-secondary">The auth key used for multi-tenant data isolation.</div>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Tenant Secret</label>
+                        <div class="input-group">
+                            <input type="text" name="tenant_secret" class="form-control" required placeholder="e.g. ts_company_x9y8z7w6" id="newTenantSecret">
+                            <button class="btn btn-outline-secondary" type="button" onclick="generateTenantSecret()" title="Generate a unique tenant secret">
+                                <i class="bi bi-key"></i> Generate
+                            </button>
+                        </div>
+                        <div class="form-text text-secondary">The shared secret used for tenant authentication and API access.</div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Description</label>
                         <textarea name="description" class="form-control" rows="2"></textarea>
                     </div>
@@ -371,6 +391,14 @@ function generateTenantKey() {
     const rand = Math.random().toString(16).substring(2, 10);
     keyInput.value = 'tk_' + (name || 'tenant') + '_' + rand;
 }
+function generateTenantSecret() {
+    const nameInput = document.querySelector('input[name="tenant_name"]');
+    const secretInput = document.getElementById('newTenantSecret');
+    if (!nameInput || !secretInput) return;
+    const name = (nameInput.value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rand = Math.random().toString(16).substring(2, 10);
+    secretInput.value = 'ts_' + (name || 'tenant') + '_' + rand;
+}
 function generateEditTenantKey() {
     const nameInput = document.querySelector('input[name="tenant_name"]');
     const keyInput = document.getElementById('editTenantKey');
@@ -378,6 +406,14 @@ function generateEditTenantKey() {
     const name = (nameInput.value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const rand = Math.random().toString(16).substring(2, 10);
     keyInput.value = 'tk_' + (name || 'tenant') + '_' + rand;
+}
+function generateEditTenantSecret() {
+    const nameInput = document.querySelector('input[name="tenant_name"]');
+    const secretInput = document.getElementById('editTenantSecret');
+    if (!nameInput || !secretInput) return;
+    const name = (nameInput.value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rand = Math.random().toString(16).substring(2, 10);
+    secretInput.value = 'ts_' + (name || 'tenant') + '_' + rand;
 }
 </script>
 

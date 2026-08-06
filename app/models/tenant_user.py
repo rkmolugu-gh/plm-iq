@@ -11,6 +11,7 @@ class Tenant(Base):
     tenant_id = Column("tenant_id", Integer, primary_key=True, autoincrement=True)
     tenant_name = Column("tenant_name", String, unique=True, nullable=False)
     tenant_key = Column("tenant_key", String, unique=True, nullable=False)
+    tenant_secret = Column("tenant_secret", String, nullable=False, default="")
     subdomain = Column("subdomain", String, unique=True, nullable=True)
     description = Column("description", String)
     created_date = Column("created_date", String)

@@ -58,6 +58,7 @@ def notify(
     notif = Notification(
         user_id=user.user_id,
         tenant_id=user.tenant_id,
+        tenant_key=getattr(user, 'tenant_key', ''),
         type=ntype,
         title=title,
         message=message,

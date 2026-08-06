@@ -108,6 +108,7 @@ def _ensure_step_tasks(
                 action="approve",
                 due_date=instance.due_date,
                 tenant_id=instance.tenant_id,
+                tenant_key=instance.tenant_key,
             )
             db.add(t)
             notify(
@@ -136,6 +137,7 @@ def _ensure_step_tasks(
             comment="Auto-approved: no users in the assigned role.",
             completed_at=_today(),
             tenant_id=instance.tenant_id,
+            tenant_key=instance.tenant_key,
         ))
         db.flush()
 

@@ -24,8 +24,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.aisearch.vision import prepare_image
-from app.database import get_db
-from app.routers.auth import require_user, auth_context
+from app.database import get_db, TenantScopedSession
+from app.routers.auth import require_user, auth_context, get_tenant_key
 from app.template_utils import render
 
 from .config import ASSISTANT_MODEL, MAX_UPLOAD_SIZE, MAX_HISTORY_TURNS, MAX_SESSIONS
@@ -196,6 +196,7 @@ async def assistant_send(
     vision-aware LLM path; text-only queries use the tool-calling ReAct loop.
     """
     user = require_user(request, db)
+    tenant_key = get_tenant_key(request)
     session_id, session_data = _get_or_create_session(request.cookies.get("assistant_session"))
     msgs = session_data["messages"]
 
@@ -222,7 +223,7 @@ async def assistant_send(
     # 4. Call the agent
     logger.info(f"[assistant] Processing: session={session_id[:8]} msg='{message[:80]}' files={len(uploaded_file_metas)}")
     try:
-        reply = assistant_chat(messages=agent_messages)
+        reply = assistant_chat(messages=agent_messages, tenant_key=tenant_key)
     except Exception as e:
         logger.exception(f"[assistant] Agent call failed: {e}")
         # Extract a user-friendly error message

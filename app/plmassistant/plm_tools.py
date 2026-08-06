@@ -13,7 +13,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from app.database import SessionLocal
+from app.database import SessionLocal, TenantScopedSession
 from app.models.parts import Part
 from app.models.bom import BomItem
 from app.models.costing import CostingBomItem
@@ -336,9 +336,9 @@ def _fmt_size(size: int) -> str:
         return f"{size / 1024:.1f} KB"
     else:
         return f"{size / (1024 * 1024):.1f} MB"
-def _next_part_number(prefix: str) -> str:
+def _next_part_number(prefix: str, tenant_key: str | None = None) -> str:
     """Find the next available part number for a given prefix (e.g. 'BB' -> 'BB-007')."""
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         pattern = f"{prefix}-%"
         parts = db.query(Part.part_number).filter(Part.part_number.like(pattern)).all()
@@ -415,20 +415,20 @@ def _resolve_tenant_id(db, candidate) -> Optional[int]:
     return None
 
 
-def execute_tool(tool_name: str, arguments: dict) -> str:
+def execute_tool(tool_name: str, arguments: dict, tenant_key: str | None = None) -> str:
     """Execute a tool by name with the given arguments and return a result string."""
     logger.info(f"[plmassistant] Executing tool: {tool_name}({arguments})")
 
     fn = TOOL_REGISTRY.get(tool_name)
     if fn is None:
         raise ValueError(f"Unknown tool: {tool_name}. Available: {list(TOOL_REGISTRY.keys())}")
-    return fn(**arguments)
+    return fn(**arguments, tenant_key=tenant_key)
 
 
 # ── Part tools ────────────────────────────────────────────────────
 
-def _execute_get_part(part_number: str) -> str:
-    db = SessionLocal()
+def _execute_get_part(part_number: str, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         part = db.query(Part).filter(Part.part_number == part_number).first()
         if not part:
@@ -452,8 +452,8 @@ def _execute_get_part(part_number: str) -> str:
         db.close()
 
 
-def _execute_search_parts(query: str, status: Optional[str] = None) -> str:
-    db = SessionLocal()
+def _execute_search_parts(query: str, status: Optional[str] = None, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(Part).filter(
             Part.part_number.ilike(f"%{query}%")
@@ -483,9 +483,10 @@ def _execute_create_part(
     template_part: str,
     overrides: Optional[dict] = None,
     part_number: Optional[str] = None,
+    tenant_key: str | None = None,
 ) -> str:
     overrides = overrides or {}
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         template = db.query(Part).filter(Part.part_number == template_part).first()
         if not template:
@@ -498,7 +499,7 @@ def _execute_create_part(
                 return f"Error: Part '{new_part_number}' already exists."
         else:
             prefix = template_part.split("-")[0]
-            new_part_number = _next_part_number(prefix)
+            new_part_number = _next_part_number(prefix, tenant_key=tenant_key)
 
         now_str = datetime.now().strftime("%d-%m-%Y")
         resolved_created_by = _resolve_user_id(db, template.created_by)
@@ -525,6 +526,7 @@ def _execute_create_part(
             modified_owner=resolved_modified_owner,
             created_by=resolved_created_by,
             tenant_id=resolved_tenant_id,
+            tenant_key=tenant_key or template.tenant_key,
         )
 
         db.add(new_part)
@@ -548,8 +550,8 @@ def _execute_create_part(
         db.close()
 
 
-def _execute_update_part_status(part_number: str, status: str) -> str:
-    db = SessionLocal()
+def _execute_update_part_status(part_number: str, status: str, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         part = db.query(Part).filter(Part.part_number == part_number).first()
         if not part:
@@ -574,9 +576,10 @@ def _execute_list_parts(
     limit: int = 10,
     status: Optional[str] = None,
     sort: Optional[str] = None,
+    tenant_key: str | None = None,
 ) -> str:
     """List parts with optional filters and sorting."""
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(Part)
 
@@ -615,8 +618,8 @@ def _execute_list_parts(
 
 # ── BOM tools ─────────────────────────────────────────────────────
 
-def _execute_get_bom(part_number: str, bom_type: Optional[str] = None) -> str:
-    db = SessionLocal()
+def _execute_get_bom(part_number: str, bom_type: Optional[str] = None, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(BomItem).filter(
             (BomItem.part_number == part_number)
@@ -643,8 +646,8 @@ def _execute_get_bom(part_number: str, bom_type: Optional[str] = None) -> str:
 
 # ── Costing tools ─────────────────────────────────────────────────
 
-def _execute_get_costing(part_number: str) -> str:
-    db = SessionLocal()
+def _execute_get_costing(part_number: str, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         items = (
             db.query(CostingBomItem)
@@ -690,8 +693,8 @@ def _execute_get_costing(part_number: str) -> str:
 
 # ── ECO tools ─────────────────────────────────────────────────────
 
-def _execute_get_eco(eco_number: str) -> str:
-    db = SessionLocal()
+def _execute_get_eco(eco_number: str, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         eco = (
             db.query(EngineeringChangeOrder)
@@ -720,8 +723,8 @@ def _execute_get_eco(eco_number: str) -> str:
         db.close()
 
 
-def _execute_search_ecos(part_number: Optional[str] = None, status: Optional[str] = None) -> str:
-    db = SessionLocal()
+def _execute_search_ecos(part_number: Optional[str] = None, status: Optional[str] = None, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(EngineeringChangeOrder)
         if part_number:
@@ -752,8 +755,8 @@ def _execute_search_ecos(part_number: Optional[str] = None, status: Optional[str
 
 # ── AML tools ─────────────────────────────────────────────────────
 
-def _execute_get_aml(part_number: str, preferred_only: bool = False) -> str:
-    db = SessionLocal()
+def _execute_get_aml(part_number: str, preferred_only: bool = False, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(ApprovedManufacturer).filter(
             ApprovedManufacturer.part_number == part_number
@@ -785,8 +788,8 @@ def _execute_get_aml(part_number: str, preferred_only: bool = False) -> str:
 
 # ── AVL tools ─────────────────────────────────────────────────────
 
-def _execute_get_avl(part_number: str, preferred_only: bool = False) -> str:
-    db = SessionLocal()
+def _execute_get_avl(part_number: str, preferred_only: bool = False, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         q = db.query(ApprovedVendor).filter(
             ApprovedVendor.part_number == part_number
@@ -821,8 +824,8 @@ def _execute_get_avl(part_number: str, preferred_only: bool = False) -> str:
 
 # ── CAD tools ─────────────────────────────────────────────────────
 
-def _execute_get_cad(part_number: str) -> str:
-    db = SessionLocal()
+def _execute_get_cad(part_number: str, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         items = (
             db.query(CadMetadata)

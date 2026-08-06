@@ -6,13 +6,13 @@
 PRAGMA foreign_keys = OFF;
 
 -- tenants (6 tenants)
-INSERT INTO tenants (tenant_id, tenant_name, tenant_key, description, created_date, is_active) VALUES
-    (1, 'BicycleCo', 'tk_bicycleco_a1b2c3d4', 'Primary bicycle manufacturing company', '2020-01-01', TRUE),
-    (2, 'CycleWorks', 'tk_cycleworks_e5f6g7h8', 'High-end bicycle components manufacturer', '2020-06-15', TRUE),
-    (3, 'VeloParts', 'tk_veloparts_i9j0k1l2', 'Aftermarket parts distributor', '2021-03-01', TRUE),
-    (4, 'BikeTech Industries', 'tk_biketech_m3n4o5p6', 'Electric bicycle systems and components', '2022-01-10', TRUE),
-    (5, 'PedalForce', 'tk_pedalforce_q7r8s9t0', 'Custom bicycle frames and carbon fiber components', '2021-09-20', TRUE),
-    (6, 'plm-iq', 'tk_plm_iq_superadmin', 'PLM-IQ platform tenant', '2026-08-06', TRUE);
+INSERT INTO tenants (tenant_id, tenant_name, tenant_key, tenant_secret, description, created_date, is_active) VALUES
+    (1, 'BicycleCo', 'tk_bicycleco_a1b2c3d4', 'ts_bicycleco_x9y8z7w6', 'Primary bicycle manufacturing company', '2020-01-01', TRUE),
+    (2, 'CycleWorks', 'tk_cycleworks_e5f6g7h8', 'ts_cycleworks_v5u4t3s2', 'High-end bicycle components manufacturer', '2020-06-15', TRUE),
+    (3, 'VeloParts', 'tk_veloparts_i9j0k1l2', 'ts_veloparts_r1q0p9o8', 'Aftermarket parts distributor', '2021-03-01', TRUE),
+    (4, 'BikeTech Industries', 'tk_biketech_m3n4o5p6', 'ts_biketech_n7m6l5k4', 'Electric bicycle systems and components', '2022-01-10', TRUE),
+    (5, 'PedalForce', 'tk_pedalforce_q7r8s9t0', 'ts_pedalforce_j3i2h1g0', 'Custom bicycle frames and carbon fiber components', '2021-09-20', TRUE),
+    (6, 'plm-iq', 'tk_plm_iq_superadmin', 'ts_plm_iq_f9e8d7c6', 'PLM-IQ platform tenant', '2026-08-06', TRUE);
 
 -- users (5 users, one per tenant)
 -- Default password for all users: user1234 (bcrypt hash)

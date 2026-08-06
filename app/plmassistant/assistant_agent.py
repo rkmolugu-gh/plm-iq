@@ -82,11 +82,15 @@ User: "list the latest 3 parts"
 → Answer (too many calls!)"""
 
 
-def _run_tool_loop(messages: list[dict]) -> str:
+def _run_tool_loop(messages: list[dict], tenant_key: str | None = None) -> str:
     """Run the ReAct tool-calling loop.
 
     Sends messages to the LLM, executes any tool calls, feeds results back,
     and repeats until the LLM produces a final text response.
+
+    Args:
+        messages: The conversation messages to process.
+        tenant_key: Optional tenant key for multi-tenant data isolation.
 
     Returns:
         The final assistant reply text.
@@ -113,7 +117,7 @@ def _run_tool_loop(messages: list[dict]) -> str:
                 arguments = {}
 
             logger.info(f"[assistant] Tool call: {tool_name}({arguments})")
-            tool_result = execute_tool(tool_name, arguments)
+            tool_result = execute_tool(tool_name, arguments, tenant_key=tenant_key)
 
             tool_messages.append({
                 "role": "tool",
@@ -131,6 +135,7 @@ def assistant_chat(
     messages: list[dict],
     system_prompt: str | None = None,
     model: str | None = None,
+    tenant_key: str | None = None,
 ) -> str:
     """Process a conversation through the PLM Assistant agent.
 
@@ -142,6 +147,7 @@ def assistant_chat(
         messages: Full conversation history including the latest user message.
         system_prompt: Optional system prompt override (defaults to the PLM assistant prompt).
         model: Optional model override (defaults to ASSISTANT_MODEL).
+        tenant_key: Optional tenant key for multi-tenant data isolation.
 
     Returns:
         The assistant's text response.
@@ -233,7 +239,7 @@ def assistant_chat(
             c = " ".join(texts)
         llm_messages.append({"role": "user", "content": c})
 
-    return _run_tool_loop(llm_messages)
+    return _run_tool_loop(llm_messages, tenant_key=tenant_key)
 
 
 def prepare_assistant_messages(

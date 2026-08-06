@@ -324,8 +324,10 @@ def run_import(
     # Build lookup maps for FK resolution (name <-> id).
     parts_set = {p[0] for p in db.query(Part.part_number).all()}
     tenant_map: Dict[str, int] = {}
-    for tid, tname in db.query(Tenant.tenant_id, Tenant.tenant_name).all():
+    tenant_key_map: Dict[int, str] = {}
+    for tid, tname, tkey in db.query(Tenant.tenant_id, Tenant.tenant_name, Tenant.tenant_key).all():
         tenant_map[str(tid)] = tid
+        tenant_key_map[tid] = tkey
         if tname:
             tenant_map[tname] = tid
     user_map: Dict[str, int] = {}
@@ -425,6 +427,9 @@ def run_import(
 
         if "tenant_id" in cols and "tenant_id" not in values and not cols["tenant_id"]["pk"]:
             values["tenant_id"] = default_tenant_id
+            # Also set tenant_key for multi-tenant data isolation
+            if "tenant_key" in cols and default_tenant_id in tenant_key_map:
+                values["tenant_key"] = tenant_key_map[default_tenant_id]
 
         to_flush.append(model(**values))
         inserted += 1

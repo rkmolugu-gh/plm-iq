@@ -23,6 +23,11 @@
           <div class="form-text text-secondary">The auth key used for multi-tenant data isolation.</div>
         </div>
         <div class="mb-3">
+          <label class="form-label">Tenant Secret</label>
+          <input type="text" class="form-control" value="{{ tenant.tenant_secret }}" readonly>
+          <div class="form-text text-secondary">The shared secret used for tenant authentication and API access.</div>
+        </div>
+        <div class="mb-3">
           <label class="form-label">Subdomain</label>
           <input type="text" name="subdomain" class="form-control"
                  value="{{ tenant.subdomain or '' }}" placeholder="e.g. tenant1">

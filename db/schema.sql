@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     tenant_id   INTEGER PRIMARY KEY,
     tenant_name TEXT    NOT NULL UNIQUE,
     tenant_key  TEXT    NOT NULL UNIQUE,
+    tenant_secret TEXT  NOT NULL DEFAULT '',
     subdomain   TEXT    UNIQUE,
     description TEXT,
     created_date DATE,

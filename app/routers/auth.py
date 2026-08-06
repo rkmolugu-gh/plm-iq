@@ -180,6 +180,7 @@ def auth_context(request: Request, db: TenantScopedSession) -> dict:
         "current_user": user,
         "current_tenant": tenant,
         "tenant_key": tenant.tenant_key if tenant else None,
+        "tenant_secret": tenant.tenant_secret if tenant else None,
         "inbox_count": inbox_count,
         "unread_count": unread_count,
         "all_users": all_users,

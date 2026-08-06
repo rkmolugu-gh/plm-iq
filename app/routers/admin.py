@@ -170,6 +170,7 @@ def admin_tenant_create(
     request: Request,
     tenant_name: str = Form(...),
     tenant_key: str = Form(""),
+    tenant_secret: str = Form(""),
     subdomain: str = Form(""),
     description: str = Form(""),
     role: str = Form("reader"),
@@ -187,6 +188,9 @@ def admin_tenant_create(
         return _render_tree(request, db, error="Tenant key is required.")
     if db.query(Tenant).filter(Tenant.tenant_key == key).first():
         return _render_tree(request, db, error="That tenant key is already in use.")
+    secret = (tenant_secret or "").strip()
+    if not secret:
+        return _render_tree(request, db, error="Tenant secret is required.")
     sub = (subdomain or "").strip().lower() or None
     if sub:
         if not re.fullmatch(r"[a-z0-9-]+", sub):
@@ -196,6 +200,7 @@ def admin_tenant_create(
     tenant = Tenant(
         tenant_name=name,
         tenant_key=key,
+        tenant_secret=secret,
         subdomain=sub,
         description=description or None,
         role=_valid_role(db, role),
@@ -214,6 +219,7 @@ def admin_tenant_edit(
     tid: int,
     tenant_name: str = Form(...),
     tenant_key: str = Form(""),
+    tenant_secret: str = Form(""),
     subdomain: str = Form(""),
     description: str = Form(""),
     role: str = Form("reader"),
@@ -234,6 +240,9 @@ def admin_tenant_edit(
         return _render_tree(request, db, selected_tenant=tenant, error="Tenant key is required.")
     if db.query(Tenant).filter(Tenant.tenant_key == key, Tenant.tenant_id != tid).first():
         return _render_tree(request, db, selected_tenant=tenant, error="That tenant key is already in use.")
+    secret = (tenant_secret or "").strip()
+    if not secret:
+        return _render_tree(request, db, selected_tenant=tenant, error="Tenant secret is required.")
     sub = (subdomain or "").strip().lower() or None
     if sub:
         if not re.fullmatch(r"[a-z0-9-]+", sub):
@@ -242,6 +251,7 @@ def admin_tenant_edit(
             return _render_tree(request, db, selected_tenant=tenant, error="That subdomain is already in use.")
     tenant.tenant_name = name
     tenant.tenant_key = key
+    tenant.tenant_secret = secret
     tenant.subdomain = sub
     tenant.description = description or None
     tenant.role = _valid_role(db, role)
