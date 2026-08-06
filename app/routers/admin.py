@@ -14,10 +14,10 @@ from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Tenant, User, Part, AppSetting
 from app.models.role import role_names, role_rows
-from app.routers.auth import require_user, require_role, require_superuser, auth_context, is_superuser, _hash_password
+from app.routers.auth import require_user, require_role, require_superuser, auth_context, is_superuser, _hash_password, get_tenant_db
 from app.template_utils import render
 from app.config import BASE_DOMAIN
 
@@ -124,7 +124,7 @@ def _get_setting(db: Session, key: str, default: str = "") -> str:
 @router.get("", response_class=HTMLResponse)
 def admin_tree(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     """Show the tenant/user tree with a welcome panel."""
@@ -135,7 +135,7 @@ def admin_tree(
 def admin_tenant_view(
     request: Request,
     tid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     tenant = _load_tenant(db, tid)
@@ -151,7 +151,7 @@ def admin_tenant_view(
 def admin_user_view(
     request: Request,
     uid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     user = _load_user(db, uid)
@@ -174,7 +174,7 @@ def admin_tenant_create(
     description: str = Form(""),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     name = (tenant_name or "").strip()
@@ -218,7 +218,7 @@ def admin_tenant_edit(
     description: str = Form(""),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     tenant = _load_tenant(db, tid)
@@ -254,7 +254,7 @@ def admin_tenant_edit(
 def admin_tenant_delete(
     request: Request,
     tid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     tenant = _load_tenant(db, tid)
@@ -280,7 +280,7 @@ def admin_tenant_delete(
 @router.get("/tenant", response_class=HTMLResponse)
 def tenant_self(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _u: User = Depends(require_role(["tenantadmin"])),
 ):
     """Manage the current tenant and its users.
@@ -308,7 +308,7 @@ def tenant_self_update(
     request: Request,
     subdomain: str = Form(""),
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _u: User = Depends(require_role(["tenantadmin"])),
 ):
     """Update the current tenant's own subdomain/description."""
@@ -345,7 +345,7 @@ def tenant_user_create(
     password: str = Form(...),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _u: User = Depends(require_role(["tenantadmin"])),
 ):
     """Create a user inside the current tenant."""
@@ -386,7 +386,7 @@ def tenant_user_edit(
     password: str = Form(""),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _u: User = Depends(require_role(["tenantadmin"])),
 ):
     """Edit a user that belongs to the current tenant."""
@@ -421,7 +421,7 @@ def tenant_user_edit(
 def tenant_user_delete(
     request: Request,
     uid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _u: User = Depends(require_role(["tenantadmin"])),
 ):
     """Delete a user in the current tenant (cannot delete yourself)."""
@@ -469,7 +469,7 @@ def admin_user_create(
     tenant_id: Optional[int] = Form(None),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     username = (username or "").strip()
@@ -516,7 +516,7 @@ def admin_user_edit(
     tenant_id: Optional[int] = Form(None),
     role: str = Form("reader"),
     is_active: str = Form("off"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     user = _load_user(db, uid)
@@ -557,7 +557,7 @@ def admin_user_edit(
 def admin_user_delete(
     request: Request,
     uid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     user = _load_user(db, uid)
@@ -596,7 +596,7 @@ def _all_settings(db: Session):
 @router.get("/settings", response_class=HTMLResponse)
 def admin_settings(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
     error: str = "",
 ):
@@ -612,7 +612,7 @@ def admin_settings(
 @router.post("/settings", response_class=HTMLResponse)
 async def admin_settings_save(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     """Save all setting key-value pairs from the form."""

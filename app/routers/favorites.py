@@ -6,9 +6,9 @@ Enforces a limit of 5 favorites per user per object type.
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Favorite, Part, Document, EngineeringChangeOrder
-from app.routers.auth import require_user, auth_context
+from app.routers.auth import require_user, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -21,7 +21,7 @@ async def add_favorite(
     request: Request,
     object_type: str = Form(...),
     object_id: str = Form(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """Add an object to the user's favorites."""
     ctx = auth_context(request, db)
@@ -78,7 +78,7 @@ async def remove_favorite(
     request: Request,
     object_type: str = Form(...),
     object_id: str = Form(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """Remove an object from the user's favorites."""
     ctx = auth_context(request, db)
@@ -105,7 +105,7 @@ async def remove_favorite(
 @router.get("", response_class=HTMLResponse)
 async def list_favorites(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List the current user's favorites (for the dashboard)."""
     ctx = auth_context(request, db)

@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, User, WorkflowTemplate, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 from app.workflow.engine import active_instance
 
@@ -22,7 +22,7 @@ def list_parts(
     q: Optional[str] = Query(None, description="Search query"),
     status: Optional[str] = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List parts with search, filter, and pagination."""
     user = require_user(request, db)
@@ -60,7 +60,7 @@ def list_parts(
 @router.get("/new", response_class=HTMLResponse)
 def part_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"]))
 ):
     """Show part creation form."""
@@ -73,7 +73,7 @@ def part_new_form(
 
 
 @router.get("/{part_number}", response_class=HTMLResponse)
-def part_detail(request: Request, part_number: str, db: Session = Depends(get_db)):
+def part_detail(request: Request, part_number: str, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show full part detail with related data."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -124,7 +124,7 @@ def part_detail(request: Request, part_number: str, db: Session = Depends(get_db
 def part_edit_form(
     request: Request,
     part_number: str,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"]))
 ):
     """Show part edit form."""
@@ -159,7 +159,7 @@ def part_edit_submit(
     qty: int = Form(1),
     status: str = Form("DRAFT"),
     spec_file: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"]))
 ):
     """Update part and redirect."""
@@ -189,7 +189,7 @@ def part_new_submit(
     uom: str = Form("EA"),
     qty: int = Form(1),
     status: str = Form("DRAFT"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"]))
 ):
     """Create new part."""
@@ -213,7 +213,7 @@ def part_new_submit(
 def part_delete(
     request: Request,
     part_number: str,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"]))
 ):
     """Delete a part and redirect to the list."""

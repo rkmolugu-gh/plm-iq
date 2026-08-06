@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import ApprovedManufacturer, User
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter(prefix="/aml")
@@ -21,7 +21,7 @@ def list_aml(
     q: Optional[str] = Query(None, description="Search"),
     preferred: Optional[str] = Query(None, description="Preferred only"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List approved manufacturers."""
     user = require_user(request, db)
@@ -57,7 +57,7 @@ def list_aml(
 @router.get("/new", response_class=HTMLResponse)
 def aml_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show AML creation form."""
@@ -67,7 +67,7 @@ def aml_new_form(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def aml_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def aml_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show AML detail."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -81,7 +81,7 @@ def aml_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
 def aml_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show AML edit form."""
@@ -105,7 +105,7 @@ def aml_edit_submit(
     compliance_status: str = Form(""),
     quality_rating: str = Form(""),
     notes: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Update AML entry."""
@@ -134,7 +134,7 @@ def aml_new_submit(
     manufacturer_part_number: str = Form(""),
     source_type: str = Form("DIRECT"),
     preferred_flag: str = Form("No"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Create new AML entry."""
@@ -156,7 +156,7 @@ def aml_new_submit(
 def aml_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete an AML entry and redirect to the list."""

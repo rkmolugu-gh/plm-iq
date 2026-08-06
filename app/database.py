@@ -1,7 +1,7 @@
 """Database engine and session configuration."""
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
 from app.config import DATABASE_URL
 
@@ -36,3 +36,83 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+class TenantScopedSession:
+    """A session wrapper that automatically scopes queries by tenant_key.
+
+    All ``query()`` and ``get()`` calls on models that have a ``tenant_key``
+    column are automatically filtered to the current tenant.  Models without
+    ``tenant_key`` (e.g. Role, AppSetting) are returned unscoped.
+
+    This is the central "gateway" for all database access — no data from
+    another tenant can leak through it.
+    """
+
+    def __init__(self, db: Session, tenant_key: str | None):
+        self._db = db
+        self.tenant_key = tenant_key
+
+    # ------------------------------------------------------------------
+    # Query scoping
+    # ------------------------------------------------------------------
+
+    def query(self, model):
+        """Return a tenant-scoped Query for *model*."""
+        if hasattr(model, "tenant_key") and self.tenant_key is not None:
+            return self._db.query(model).filter(model.tenant_key == self.tenant_key)
+        return self._db.query(model)
+
+    def get(self, model, ident):
+        """Fetch by primary key, scoped to the tenant."""
+        if hasattr(model, "tenant_key") and self.tenant_key is not None:
+            return (
+                self._db.query(model)
+                .filter(model.tenant_key == self.tenant_key)
+                .get(ident)
+            )
+        return self._db.get(model, ident)
+
+    # ------------------------------------------------------------------
+    # Delegated session methods
+    # ------------------------------------------------------------------
+
+    def add(self, obj):
+        return self._db.add(obj)
+
+    def add_all(self, objects):
+        return self._db.add_all(objects)
+
+    def delete(self, obj):
+        return self._db.delete(obj)
+
+    def commit(self):
+        return self._db.commit()
+
+    def rollback(self):
+        return self._db.rollback()
+
+    def close(self):
+        return self._db.close()
+
+    def execute(self, statement, params=None):
+        return self._db.execute(statement, params)
+
+    def bulk_save_objects(self, objects):
+        return self._db.bulk_save_objects(objects)
+
+    def bulk_insert_mappings(self, mapper, mappings):
+        return self._db.bulk_insert_mappings(mapper, mappings)
+
+    def bulk_update_mappings(self, mapper, mappings):
+        return self._db.bulk_update_mappings(mapper, mappings)
+
+    # ------------------------------------------------------------------
+    # Context manager support
+    # ------------------------------------------------------------------
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()

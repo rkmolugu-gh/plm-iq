@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import EngineeringChangeOrder, User, WorkflowTemplate, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 from app.workflow.engine import active_instance
 
@@ -22,7 +22,7 @@ def list_ecos(
     q: Optional[str] = Query(None, description="Search"),
     status: Optional[str] = Query(None, description="Filter by ECO status"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List engineering change orders."""
     user = require_user(request, db)
@@ -60,7 +60,7 @@ def list_ecos(
 @router.get("/new", response_class=HTMLResponse)
 def eco_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show ECO creation form."""
@@ -73,7 +73,7 @@ def eco_new_form(
 
 
 @router.get("/{eco_number}", response_class=HTMLResponse)
-def eco_detail(request: Request, eco_number: str, db: Session = Depends(get_db)):
+def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show ECO detail."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -109,7 +109,7 @@ def eco_detail(request: Request, eco_number: str, db: Session = Depends(get_db))
 def eco_edit_form(
     request: Request,
     eco_number: str,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show ECO edit form."""
@@ -138,7 +138,7 @@ def eco_edit_submit(
     eco_status: str = Form("DRAFT"),
     change_type: str = Form(""),
     change_detail: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Update ECO and redirect."""
@@ -165,7 +165,7 @@ def eco_new_submit(
     eco_description: str = Form(""),
     eco_status: str = Form("DRAFT"),
     change_type: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Create new ECO."""
@@ -188,7 +188,7 @@ def eco_new_submit(
 def eco_delete(
     request: Request,
     eco_number: str,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete an ECO and redirect to the list."""

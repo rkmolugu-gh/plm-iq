@@ -18,7 +18,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import CadMetadata, User
 from app.config import (
     DEFAULT_PAGE_SIZE,
@@ -31,7 +31,7 @@ from app.config import (
     GITEA_BRANCH,
     GITEA_COMMIT_EMAIL,
 )
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ def list_cad(
     q: Optional[str] = Query(None, description="Search"),
     file_format: Optional[str] = Query(None, description="Filter by format"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List CAD metadata entries."""
     user = require_user(request, db)
@@ -219,7 +219,7 @@ def list_cad(
 @router.get("/new", response_class=HTMLResponse)
 def cad_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show CAD metadata creation form."""
@@ -233,7 +233,7 @@ def cad_new_form(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def cad_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def cad_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show CAD metadata detail."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -256,7 +256,7 @@ def cad_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
 def cad_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show CAD edit form."""
@@ -280,7 +280,7 @@ def cad_edit_submit(
     drawing_number: str = Form(""),
     model_type: str = Form(""),
     notes: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Update CAD metadata."""
@@ -309,7 +309,7 @@ def cad_new_submit(
     cad_file_format: str = Form(...),
     cad_system: str = Form(""),
     file_reference_type: str = Form("LocalServer"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Create new CAD metadata entry."""
@@ -334,7 +334,7 @@ async def cad_upload(
     files: list[UploadFile] = File(...),
     file_reference_type: str = Form("LocalServer"),
     is_folder: bool = Form(False),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Upload a CAD file or an entire folder (assembly) and create one
@@ -502,7 +502,7 @@ async def cad_upload(
 
 
 @router.get("/{item_id}/view")
-def cad_view(request: Request, item_id: int, db: Session = Depends(get_db)):
+def cad_view(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     """Render a PDF inline in the browser for a CAD record.
 
     Only works for LocalServer ref type — the file must exist on disk.
@@ -545,7 +545,7 @@ def cad_view(request: Request, item_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{item_id}/download")
-def cad_download(request: Request, item_id: int, db: Session = Depends(get_db)):
+def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     """Download the uploaded file for a CAD record.
 
     For LocalServer, the file is served from disk. For Git, the user is
@@ -629,7 +629,7 @@ def cad_download(request: Request, item_id: int, db: Session = Depends(get_db)):
 def cad_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete a CAD metadata record and its stored file (if LocalServer), then redirect."""

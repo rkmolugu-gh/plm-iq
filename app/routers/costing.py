@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import CostingBomItem, User
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter(prefix="/costing")
@@ -21,7 +21,7 @@ def list_costing(
     q: Optional[str] = Query(None, description="Search by part number or name"),
     cost_type: Optional[str] = Query(None, description="Filter by cost type"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List costing BOM items."""
     user = require_user(request, db)
@@ -57,7 +57,7 @@ def list_costing(
 @router.get("/new", response_class=HTMLResponse)
 def costing_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show costing item creation form."""
@@ -67,7 +67,7 @@ def costing_new_form(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def costing_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def costing_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     item = db.query(CostingBomItem).filter(CostingBomItem.id == item_id).first()
@@ -80,7 +80,7 @@ def costing_detail(request: Request, item_id: int, db: Session = Depends(get_db)
 def costing_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -103,7 +103,7 @@ def costing_edit_submit(
     extended_cost: float = Form(0.0),
     rolled_total: float = Form(0.0),
     cost_type: str = Form("LEAF"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -136,7 +136,7 @@ def costing_new_submit(
     machining_cost: float = Form(0.0),
     unit_cost: float = Form(0.0),
     cost_type: str = Form("LEAF"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -164,7 +164,7 @@ def costing_new_submit(
 def costing_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete a costing item and redirect to the list."""

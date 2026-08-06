@@ -12,12 +12,12 @@ from fastapi import APIRouter, Depends, Form, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import (
     WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
 )
 from app.models.role import role_names
-from app.routers.auth import require_user, require_role, require_superuser, is_superuser, auth_context
+from app.routers.auth import require_user, require_role, require_superuser, is_superuser, auth_context, get_tenant_db
 from app.template_utils import render
 from app.workflow.engine import start_workflow, decide_task, active_instance, WorkflowError
 from app.notifications import inbox_counts
@@ -36,7 +36,7 @@ OBJECT_TYPES = ["part", "eco"]
 # --------------------------------------------------------------------------- #
 
 @router.get("/templates", response_class=HTMLResponse)
-def templates_list(request: Request, db: Session = Depends(get_db)):
+def templates_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     items = (
@@ -54,7 +54,7 @@ def templates_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/templates/new", response_class=HTMLResponse)
-def template_new_form(request: Request, db: Session = Depends(get_db),
+def template_new_form(request: Request, db: TenantScopedSession = Depends(get_tenant_db),
                       _role: User = Depends(require_superuser)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -73,7 +73,7 @@ def template_create(
     object_type: str = Form(...),
     description: str = Form(""),
     definition: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
@@ -106,7 +106,7 @@ def template_create(
 
 @router.get("/templates/{tid}/edit", response_class=HTMLResponse)
 def template_edit_form(
-    request: Request, tid: int, db: Session = Depends(get_db),
+    request: Request, tid: int, db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
@@ -130,7 +130,7 @@ def template_edit(
     object_type: str = Form(...),
     description: str = Form(""),
     definition: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
@@ -159,7 +159,7 @@ def template_edit(
 
 @router.post("/templates/{tid}/delete", response_class=HTMLResponse)
 def template_delete(
-    request: Request, tid: int, db: Session = Depends(get_db),
+    request: Request, tid: int, db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
@@ -182,7 +182,7 @@ def workflow_start(
     object_id: str = Form(...),
     template_id: int = Form(...),
     due_date: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -218,7 +218,7 @@ def workflow_start(
 # --------------------------------------------------------------------------- #
 
 @router.get("/inbox", response_class=HTMLResponse)
-def inbox(request: Request, error: str = "", db: Session = Depends(get_db)):
+def inbox(request: Request, error: str = "", db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     tasks = (
@@ -252,7 +252,7 @@ def task_decide(
     task_id: int,
     decision: str = Form(...),
     comment: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     user = require_user(request, db)
     task = (
@@ -278,7 +278,7 @@ def task_decide(
 # --------------------------------------------------------------------------- #
 
 @router.get("/instance/{iid}", response_class=HTMLResponse)
-def instance_view(request: Request, iid: int, db: Session = Depends(get_db)):
+def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     inst = _load_instance(db, user, iid)

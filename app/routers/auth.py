@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Form, Request, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import get_db, TenantScopedSession
 from app.models import User, Tenant
 from app.template_utils import render
 
@@ -17,11 +17,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optional[User]:
+def get_tenant_key(request: Request) -> Optional[str]:
+    """Return the tenant_key from request state (set by tenant middleware).
+
+    Returns None for apex-domain / single-tenant requests where no
+    subdomain is used.
+    """
+    return getattr(request.state, "tenant_key", None)
+
+
+def get_tenant_db(request: Request, db: Session = Depends(get_db)) -> TenantScopedSession:
+    """FastAPI dependency that returns a tenant-scoped database session.
+
+    All queries on models with a ``tenant_key`` column are automatically
+    filtered to the current tenant.  Models without ``tenant_key``
+    (e.g. Role, AppSetting) are returned unscoped.
+    """
+    tenant_key = get_tenant_key(request)
+    return TenantScopedSession(db, tenant_key)
+
+
+def get_current_user(request: Request, db: TenantScopedSession = Depends(get_tenant_db)) -> Optional[User]:
     """Fetch the logged-in User from session, scoped to the resolved tenant.
 
     If the request arrived on a tenant subdomain, a session user whose
-    tenant_id does not match that tenant is treated as unauthenticated —
+    tenant_key does not match that tenant is treated as unauthenticated —
     this prevents a cookie from one subdomain being honored on another.
     """
     user_id = request.session.get("user_id")
@@ -36,7 +56,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> Optiona
     return user
 
 
-def require_user(request: Request, db: Session = Depends(get_db)) -> User:
+def require_user(request: Request, db: TenantScopedSession = Depends(get_tenant_db)) -> User:
     """Like get_current_user but redirects to login if unauthenticated."""
     user = get_current_user(request, db)
     if user is None:
@@ -55,7 +75,7 @@ def is_superuser(user: Optional[User]) -> bool:
     return user is not None and (user.role is None or user.role == "superadmin")
 
 
-def require_superuser(request: Request, db: Session = Depends(get_db)) -> User:
+def require_superuser(request: Request, db: TenantScopedSession = Depends(get_tenant_db)) -> User:
     """Dependency that only allows the global masteradmin/superadmin."""
     user = require_user(request, db)
     if not is_superuser(user):
@@ -74,7 +94,7 @@ def require_role(allowed_roles: List[str]):
     is global, and `tenantadmin` is the per-tenant admin with full management
     rights within its tenant.
     """
-    def role_checker(request: Request, db: Session = Depends(get_db)) -> User:
+    def role_checker(request: Request, db: TenantScopedSession = Depends(get_tenant_db)) -> User:
         user = require_user(request, db)
         if is_superuser(user) or user.role == "tenantadmin" or user.role in allowed_roles:
             return user
@@ -137,7 +157,7 @@ def _check_password(password: str, password_hash: str) -> bool:
 # every render() call.  All routers should use this.
 # ---------------------------------------------------------------------------
 
-def auth_context(request: Request, db: Session) -> dict:
+def auth_context(request: Request, db: TenantScopedSession) -> dict:
     """Return dict with current_user and current_tenant for template context.
 
     The tenant_key is also stored on request.state by the tenant resolution
@@ -172,7 +192,7 @@ def auth_context(request: Request, db: Session) -> dict:
 
 
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
-def login_form(request: Request, error: str = "", db: Session = Depends(get_db)):
+def login_form(request: Request, error: str = "", db: TenantScopedSession = Depends(get_tenant_db)):
     """Render the login form with the seed-user quick-login selector."""
     all_users = (
         db.query(User)
@@ -194,7 +214,7 @@ def login_submit(
     username: str = Form(...),
     password: str = Form(...),
     next: str = Form("/"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """Authenticate user and create session."""
     # Look up user by username
@@ -236,7 +256,7 @@ def logout(request: Request):
 def change_role(
     request: Request,
     role: str = Form(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """Let the signed-in user switch their own role between 'reader' and 'author'."""
     user = require_user(request, db)
@@ -254,7 +274,7 @@ def change_role(
 def switch_user(
     request: Request,
     user_id: int = Form(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """Development helper: switch to a different user without logging out."""
     current_user = require_user(request, db)

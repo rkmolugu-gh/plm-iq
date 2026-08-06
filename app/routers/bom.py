@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import BomItem, User, Part
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter(prefix="/bom")
@@ -22,7 +22,7 @@ def list_bom(
     bom_type: Optional[str] = Query(None, description="Filter by BOM type"),
     view: Optional[str] = Query("tree", description="View mode: tree or flat"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List all BOM items with collapsible tree view (default) or flat table."""
     user = require_user(request, db)
@@ -66,7 +66,7 @@ def list_bom(
 @router.get("/new", response_class=HTMLResponse)
 def bom_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show BOM item creation form."""
@@ -90,7 +90,7 @@ def bom_new_submit(
     parent_assembly: str = Form(""),
     material_notes: str = Form(""),
     bom_type: str = Form("DESIGN"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Create new BOM item."""
@@ -190,7 +190,7 @@ def validate_indented_bom(text: str, db: Session):
 @router.get("/hierarchy", response_class=HTMLResponse)
 def bom_hierarchy_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show the indented-paste hierarchical BOM builder."""
@@ -207,7 +207,7 @@ def bom_hierarchy_submit(
     request: Request,
     bom_text: str = Form(...),
     bom_type: str = Form("DESIGN"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Parse an indented BOM and create BomItem rows in one transaction."""
@@ -260,7 +260,7 @@ def bom_hierarchy_submit(
 def bom_hierarchy_verify(
     request: Request,
     bom_text: str = Form(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Check that every part in the pasted BOM already exists; report missing ones.
@@ -274,7 +274,7 @@ def bom_hierarchy_verify(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def bom_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def bom_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show BOM item detail."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
@@ -288,7 +288,7 @@ def bom_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
 def bom_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show BOM item edit form."""
@@ -316,7 +316,7 @@ def bom_edit_submit(
     parent_assembly: str = Form(""),
     material_notes: str = Form(""),
     bom_type: str = Form("DESIGN"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Update BOM item and redirect."""
@@ -342,7 +342,7 @@ def bom_edit_submit(
 def bom_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete a BOM item and redirect to the list."""
@@ -395,7 +395,7 @@ def _build_tree(items: List[Any]) -> List[Dict]:
 
 
 @router.get("/tree/{part_number}", response_class=HTMLResponse)
-def bom_tree(request: Request, part_number: str, db: Session = Depends(get_db)):
+def bom_tree(request: Request, part_number: str, db: TenantScopedSession = Depends(get_tenant_db)):
     """Show hierarchical BOM tree for a top-level assembly (full subtree)."""
     user = require_user(request, db)
     ctx = auth_context(request, db)

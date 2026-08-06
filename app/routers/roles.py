@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Role, User, WorkflowTemplate
-from app.routers.auth import require_user, require_role, require_superuser, auth_context
+from app.routers.auth import require_user, require_role, require_superuser, auth_context, get_tenant_db
 from app.routers.admin import _render_tree
 from app.template_utils import render
 
@@ -32,7 +32,7 @@ def role_create(
     request: Request,
     name: str = Form(...),
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     name = (name or "").strip().lower()
@@ -54,7 +54,7 @@ def role_edit(
     request: Request,
     rid: int,
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     role = db.query(Role).filter(Role.id == rid).first()
@@ -70,7 +70,7 @@ def role_edit(
 def role_delete(
     request: Request,
     rid: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     role = db.query(Role).filter(Role.id == rid).first()

@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from app.database import SessionLocal
+from app.database import SessionLocal, TenantScopedSession
 from app.models.parts import Part
 
 logger = logging.getLogger(__name__)
@@ -87,12 +87,11 @@ TOOL_REGISTRY = {
 }
 
 
-def _next_part_number(prefix: str) -> str:
+def _next_part_number(prefix: str, tenant_key: str | None = None) -> str:
     """Find the next available part number for a given prefix (e.g. 'BB' → 'BB-007')."""
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         pattern = f"{prefix}-%"
-        # Fetch all part numbers with this prefix, extract the numeric suffix
         parts = db.query(Part.part_number).filter(Part.part_number.like(pattern)).all()
         max_num = 0
         for (pn,) in parts:
@@ -107,21 +106,21 @@ def _next_part_number(prefix: str) -> str:
         db.close()
 
 
-def execute_tool(tool_name: str, arguments: dict) -> str:
+def execute_tool(tool_name: str, arguments: dict, tenant_key: str | None = None) -> str:
     """Execute a tool by name with the given arguments and return a result string."""
     logger.info(f"Executing tool: {tool_name}({arguments})")
 
     if tool_name == "get_part":
-        return _execute_get_part(**arguments)
+        return _execute_get_part(**arguments, tenant_key=tenant_key)
     elif tool_name == "create_part":
-        return _execute_create_part(**arguments)
+        return _execute_create_part(**arguments, tenant_key=tenant_key)
     else:
         raise ValueError(f"Unknown tool: {tool_name}")
 
 
-def _execute_get_part(part_number: str) -> str:
+def _execute_get_part(part_number: str, tenant_key: str | None = None) -> str:
     """Look up a part and return its details as a formatted string."""
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         part = db.query(Part).filter(Part.part_number == part_number).first()
         if not part:
@@ -147,11 +146,16 @@ def _execute_get_part(part_number: str) -> str:
         db.close()
 
 
-def _execute_create_part(template_part: str, overrides: Optional[dict] = None, part_number: Optional[str] = None) -> str:
+def _execute_create_part(
+    template_part: str,
+    overrides: Optional[dict] = None,
+    part_number: Optional[str] = None,
+    tenant_key: str | None = None,
+) -> str:
     """Create a new part based on a template part with optional overrides."""
     overrides = overrides or {}
 
-    db = SessionLocal()
+    db = TenantScopedSession(SessionLocal(), tenant_key)
     try:
         # 1. Look up the template part
         template = db.query(Part).filter(Part.part_number == template_part).first()
@@ -168,7 +172,7 @@ def _execute_create_part(template_part: str, overrides: Optional[dict] = None, p
         else:
             # Auto-generate from template prefix
             prefix = template_part.split("-")[0]
-            new_part_number = _next_part_number(prefix)
+            new_part_number = _next_part_number(prefix, tenant_key=tenant_key)
 
         # 3. Build the new part from template + overrides
         now_str = datetime.now().strftime("%d-%m-%Y")
@@ -186,6 +190,7 @@ def _execute_create_part(template_part: str, overrides: Optional[dict] = None, p
             modified_owner=template.modified_owner,
             created_by=template.created_by or 1,
             tenant_id=template.tenant_id or 1,
+            tenant_key=tenant_key or template.tenant_key,
         )
 
         db.add(new_part)

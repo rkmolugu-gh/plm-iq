@@ -5,16 +5,16 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, Document, Favorite
-from app.routers.auth import require_user, auth_context
+from app.routers.auth import require_user, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-def dashboard(request: Request, db: Session = Depends(get_db)):
+def dashboard(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     """Render the dashboard with summary statistics."""
     # Require login
     user = require_user(request, db)

@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Tenant, User
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 from app.import_core import (
     ENTITY_CONFIG,
@@ -29,7 +29,7 @@ def _entities() -> List[tuple]:
 @router.get("/import", response_class=HTMLResponse)
 def import_page(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show the unified CSV import form."""
@@ -46,7 +46,7 @@ async def import_upload(
     request: Request,
     entity: str = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Parse an uploaded CSV and upsert its rows for the chosen entity."""
@@ -81,7 +81,7 @@ async def import_upload(
 def import_template(
     request: Request,
     entity: str = Query(...),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Return a starter CSV header row for the chosen entity."""

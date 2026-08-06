@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.config import GITEA_BASE_URL, GITEA_USERNAME, GITEA_PASSWORD
 from app.aisearch.config import (
     ES_HOST, ES_USER, ES_PASSWORD,
@@ -33,7 +33,7 @@ from app.aisearch.config import (
     EMBEDDING_MODEL, RERANKER_MODEL, VISION_MODEL,
 )
 from app.plmassistant.config import ASSISTANT_MODEL
-from app.routers.auth import require_user, auth_context
+from app.routers.auth import require_user, auth_context, get_tenant_db
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -229,14 +229,14 @@ def status_checks() -> list[dict]:
 
 
 @router.get("/api", response_class=JSONResponse)
-def status_api(request: Request, db: Session = Depends(get_db)):
+def status_api(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     """JSON endpoint returning the live state of each dependency."""
     require_user(request, db)
     return JSONResponse(content={"checks": status_checks()})
 
 
 @router.get("", response_class=HTMLResponse)
-def status_page(request: Request, db: Session = Depends(get_db)):
+def status_page(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     """Server-rendered status page with green ticks / red crosses."""
     require_user(request, db)
     ctx = auth_context(request, db)

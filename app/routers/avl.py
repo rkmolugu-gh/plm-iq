@@ -6,10 +6,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import ApprovedVendor, User
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 router = APIRouter(prefix="/avl")
@@ -21,7 +21,7 @@ def list_avl(
     q: Optional[str] = Query(None, description="Search"),
     preferred: Optional[str] = Query(None, description="Preferred only"),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     """List approved vendors."""
     user = require_user(request, db)
@@ -57,7 +57,7 @@ def list_avl(
 @router.get("/new", response_class=HTMLResponse)
 def avl_new_form(
     request: Request,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show AVL creation form."""
@@ -67,7 +67,7 @@ def avl_new_form(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def avl_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def avl_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     item = db.query(ApprovedVendor).filter(ApprovedVendor.id == item_id).first()
@@ -80,7 +80,7 @@ def avl_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
 def avl_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -104,7 +104,7 @@ def avl_edit_submit(
     iso_certified: str = Form(""),
     payment_terms: str = Form(""),
     notes: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -132,7 +132,7 @@ def avl_new_submit(
     vendor_name: str = Form(...),
     vendor_part_number: str = Form(""),
     preferred_flag: str = Form("No"),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -152,7 +152,7 @@ def avl_new_submit(
 def avl_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Delete an AVL entry and redirect to the list."""

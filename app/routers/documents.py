@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import TenantScopedSession
 from app.models import Document, User, Favorite
 from app.config import (
     DEFAULT_PAGE_SIZE,
@@ -40,7 +40,7 @@ from app.config import (
     GITEA_COMMIT_EMAIL,
     DOC_ALLOWED_EXTENSIONS,
 )
-from app.routers.auth import require_user, require_role, auth_context
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -315,7 +315,7 @@ def list_documents(
     parent_id: Optional[int] = Query(None),
     q: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     require_user(request, db)
     ctx = auth_context(request, db)
@@ -359,7 +359,7 @@ def create_folder(
     doc_category: str = Form("OTHER"),
     status: str = Form("DRAFT"),
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -383,7 +383,7 @@ def create_folder(
 
 
 @router.get("/{item_id}", response_class=HTMLResponse)
-def document_detail(request: Request, item_id: int, db: Session = Depends(get_db)):
+def document_detail(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     require_user(request, db)
     ctx = auth_context(request, db)
     item = db.query(Document).filter(Document.id == item_id).first()
@@ -411,7 +411,7 @@ def document_detail(request: Request, item_id: int, db: Session = Depends(get_db
 def document_edit_form(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -446,7 +446,7 @@ def document_edit_submit(
     doc_system: str = Form(""),
     status: str = Form("DRAFT"),
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
@@ -474,7 +474,7 @@ async def upload_documents(
     status: str = Form("DRAFT"),
     title: str = Form(""),
     description: str = Form(""),
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Upload files and/or a folder under `parent_id`.
@@ -580,7 +580,7 @@ async def upload_documents(
 
 
 @router.get("/{item_id}/download", response_class=HTMLResponse)
-def document_download(request: Request, item_id: int, db: Session = Depends(get_db)):
+def document_download(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     require_user(request, db)
     ctx = auth_context(request, db)
     item = db.query(Document).filter(Document.id == item_id).first()
@@ -632,7 +632,7 @@ def document_download(request: Request, item_id: int, db: Session = Depends(get_
 
 
 @router.get("/{item_id}/history", response_class=HTMLResponse)
-def document_history(request: Request, item_id: int, db: Session = Depends(get_db)):
+def document_history(request: Request, item_id: int, db: TenantScopedSession = Depends(get_tenant_db)):
     require_user(request, db)
     ctx = auth_context(request, db)
     item = db.query(Document).filter(Document.id == item_id).first()
@@ -669,7 +669,7 @@ def document_history(request: Request, item_id: int, db: Session = Depends(get_d
 def document_delete(
     request: Request,
     item_id: int,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     require_user(request, db)

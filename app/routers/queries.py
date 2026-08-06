@@ -18,8 +18,8 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.routers.auth import require_user, require_superuser, is_superuser, auth_context
+from app.database import TenantScopedSession
+from app.routers.auth import require_user, require_superuser, is_superuser, auth_context, get_tenant_db
 from app.template_utils import render
 from app.config import QUERY_MAX_ROWS
 
@@ -88,7 +88,7 @@ def _pagination(base_path: str, page: int, has_more: bool, extra: dict) -> dict:
 # ── Builder page ────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
-async def queries_page(request: Request, db: Session = Depends(get_db)):
+async def queries_page(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
 
@@ -109,7 +109,7 @@ async def queries_page(request: Request, db: Session = Depends(get_db)):
 # ── Guided run ──────────────────────────────────────────────────
 
 @router.post("/run", response_class=HTMLResponse)
-async def run_guided(request: Request, db: Session = Depends(get_db)):
+async def run_guided(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     form = await request.form()
@@ -191,7 +191,7 @@ async def run_guided(request: Request, db: Session = Depends(get_db)):
 # ── Advanced SQL run ────────────────────────────────────────────
 
 @router.post("/run-sql", response_class=HTMLResponse)
-async def run_sql(request: Request, db: Session = Depends(get_db)):
+async def run_sql(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
 
@@ -227,7 +227,7 @@ async def run_sql(request: Request, db: Session = Depends(get_db)):
 # ── Save report ─────────────────────────────────────────────────
 
 @router.post("/save", response_class=HTMLResponse)
-async def save_report(request: Request, db: Session = Depends(get_db)):
+async def save_report(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     form = await request.form()
@@ -310,7 +310,7 @@ async def save_report(request: Request, db: Session = Depends(get_db)):
 # ── List saved reports ──────────────────────────────────────────
 
 @router.get("/saved", response_class=HTMLResponse)
-async def saved_list(request: Request, db: Session = Depends(get_db)):
+async def saved_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     saved = list_reports(db, user)
@@ -324,7 +324,7 @@ async def saved_list(request: Request, db: Session = Depends(get_db)):
 # ── Run a saved report ──────────────────────────────────────────
 
 @router.get("/saved/{query_id}", response_class=HTMLResponse)
-async def saved_run(query_id: int, request: Request, db: Session = Depends(get_db)):
+async def saved_run(query_id: int, request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
 
@@ -354,7 +354,7 @@ async def saved_run(query_id: int, request: Request, db: Session = Depends(get_d
 # ── Delete a saved report ───────────────────────────────────────
 
 @router.post("/saved/{query_id}/delete", response_class=HTMLResponse)
-async def saved_delete(query_id: int, request: Request, db: Session = Depends(get_db)):
+async def saved_delete(query_id: int, request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     q = get_query(db, query_id)
     if q is None:
@@ -373,7 +373,7 @@ async def saved_export(
     query_id: int,
     format: str = "csv",
     request: Request = None,
-    db: Session = Depends(get_db),
+    db: TenantScopedSession = Depends(get_tenant_db),
 ):
     user = require_user(request, db)
     q = get_query(db, query_id)
