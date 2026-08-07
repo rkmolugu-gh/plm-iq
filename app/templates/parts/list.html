@@ -51,7 +51,16 @@
         <tbody>
             {% for p in parts %}
             <tr>
-                <td><a href="/parts/{{ p.part_number }}" class="fw-bold">{{ p.part_number }}</a></td>
+                <td>
+                    <a href="/parts/{{ p.part_number }}" class="fw-bold text-nowrap">{{ p.part_number }}</a>
+                    {% if p.status == 'RELEASED' %}
+                    <i class="bi bi-flag-fill text-success" title="Released"></i>
+                    {% elif p.status == 'OBSOLETED' %}
+                    <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+                    {% else %}
+                    <i class="bi bi-flag fs-6" title="{{ p.status or 'Draft' }}"></i>
+                    {% endif %}
+                </td>
                 <td>{{ p.part_revision }}</td>
                 <td>{{ p.part_name }}</td>
                 <td><small>{{ (p.material or '')|truncate(40) or '-' }}</small></td>

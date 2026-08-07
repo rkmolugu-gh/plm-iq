@@ -42,7 +42,7 @@
         <div class="card">
             <div class="card-header"><i class="bi bi-pencil-square"></i> Workflow Definition</div>
             <div class="card-body">
-    <form method="POST">
+    <form method="POST" action="{% if template %}/workflow/templates/{{ template.id }}/edit{% elif tid %}/workflow/templates/{{ tid }}/edit{% else %}/workflow/templates{% endif %}">
     <div class="mb-3">
         <label class="form-label">Template Name</label>
         <input type="text" name="name" class="form-control" required
@@ -53,10 +53,21 @@
         <label class="form-label">Object Type</label>
         <select name="object_type" class="form-select">
             {% for ot in object_types %}
-            <option value="{{ ot }}" {% if template and template.object_type == ot %}selected{% endif %}>{{ ot|upper }}</option>
+            <option value="{{ ot }}" {% if template and template.object_type == ot %}selected{% elif not template and ot == object_type %}selected{% endif %}>{{ ot|upper }}</option>
             {% endfor %}
         </select>
     </div>
+
+    {% if is_superuser %}
+    <div class="mb-3 form-check">
+        <input type="checkbox" name="is_global" class="form-check-input" id="is_global"
+               {% if template and template.is_global %}checked{% endif %}>
+        <label class="form-check-label" for="is_global">
+            Global template <i class="bi bi-globe"></i>
+        </label>
+        <div class="form-text">Make this template available to all tenants (unchecked = tenant-specific).</div>
+    </div>
+    {% endif %}
 
     <div class="mb-3">
         <label class="form-label">Description</label>

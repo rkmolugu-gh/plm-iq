@@ -39,9 +39,13 @@ OBJECT_TYPES = ["part", "eco"]
 def templates_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
+    # Show global templates (is_global=True or tenant_id IS NULL) plus this tenant's templates
     items = (
         db.query(WorkflowTemplate)
-        .filter(WorkflowTemplate.tenant_id == user.tenant_id)
+        .filter(
+            (WorkflowTemplate.is_global == True) |
+            (WorkflowTemplate.tenant_id == user.tenant_id)
+        )
         .order_by(WorkflowTemplate.object_type, WorkflowTemplate.name)
         .all()
     )
@@ -62,6 +66,7 @@ def template_new_form(request: Request, db: TenantScopedSession = Depends(get_te
         "workflow/template_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
         template=None,
+        is_superuser=is_superuser(user),
     ))
 
 
@@ -73,30 +78,34 @@ def template_create(
     object_type: str = Form(...),
     description: str = Form(""),
     definition: str = Form(""),
+    is_global: str = Form("off"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Template name is required.", object_type, description, definition)
+        return _template_form_error(request, db, user, "Template name is required.", name=name, object_type=object_type, description=description, definition=definition)
     if object_type not in OBJECT_TYPES:
-        return _template_form_error(request, db, user, "Invalid object type.", name, description, definition)
+        return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition)
     try:
         defn = json.loads(definition) if definition else {}
     except json.JSONDecodeError:
-        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name, description, definition)
+        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition)
     if not defn.get("stages"):
-        return _template_form_error(request, db, user, "Add at least one stage with a step.", name, description, definition)
+        return _template_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition)
 
+    is_global_flag = is_global == "on"
     tmpl = WorkflowTemplate(
         name=name,
         object_type=object_type,
         description=description or None,
         definition=defn,
         is_active=True,
+        is_global=is_global_flag,
         created_by=user.user_id,
-        tenant_id=user.tenant_id,
+        tenant_id=None if is_global_flag else user.tenant_id,
+        tenant_key=user.tenant_key,
         created_at=_today(),
     )
     db.add(tmpl)
@@ -118,6 +127,7 @@ def template_edit_form(
         "workflow/template_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
         template=tmpl,
+        is_superuser=is_superuser(user),
     ))
 
 
@@ -130,6 +140,7 @@ def template_edit(
     object_type: str = Form(...),
     description: str = Form(""),
     definition: str = Form(""),
+    is_global: str = Form("off"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
@@ -139,20 +150,23 @@ def template_edit(
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Template name is required.", object_type, description, definition, tid)
+        return _template_form_error(request, db, user, "Template name is required.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
     if object_type not in OBJECT_TYPES:
-        return _template_form_error(request, db, user, "Invalid object type.", name, description, definition, tid)
+        return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
     try:
         defn = json.loads(definition) if definition else {}
     except json.JSONDecodeError:
-        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name, description, definition, tid)
+        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
     if not defn.get("stages"):
-        return _template_form_error(request, db, user, "Add at least one stage with a step.", name, description, definition, tid)
+        return _template_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
 
+    is_global_flag = is_global == "on"
     tmpl.name = name
     tmpl.object_type = object_type
     tmpl.description = description or None
     tmpl.definition = defn
+    tmpl.is_global = is_global_flag
+    tmpl.tenant_id = None if is_global_flag else user.tenant_id
     db.commit()
     return RedirectResponse(url="/workflow/templates", status_code=303)
 
@@ -188,7 +202,11 @@ def workflow_start(
     user = require_user(request, db)
     tmpl = (
         db.query(WorkflowTemplate)
-        .filter(WorkflowTemplate.id == template_id, WorkflowTemplate.tenant_id == user.tenant_id)
+        .filter(
+            WorkflowTemplate.id == template_id,
+            (WorkflowTemplate.is_global == True) |
+            (WorkflowTemplate.tenant_id == user.tenant_id)
+        )
         .first()
     )
     if not tmpl:
@@ -296,9 +314,14 @@ def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(
 # --------------------------------------------------------------------------- #
 
 def _load_template(db: Session, user: User, tid: int) -> Optional[WorkflowTemplate]:
+    """Load a template visible to the user: global, or their tenant's."""
     return (
         db.query(WorkflowTemplate)
-        .filter(WorkflowTemplate.id == tid, WorkflowTemplate.tenant_id == user.tenant_id)
+        .filter(
+            WorkflowTemplate.id == tid,
+            (WorkflowTemplate.is_global == True) |
+            (WorkflowTemplate.tenant_id == user.tenant_id)
+        )
         .first()
     )
 
@@ -337,13 +360,15 @@ def _startable_check(db: Session, user: User, object_type: str, object_id: str) 
     return None
 
 
-def _template_form_error(request, db, user, message, name="", description="", definition="", tid=None):
+def _template_form_error(request, db, user, message, name="", object_type="", description="", definition="", tid=None):
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
         "workflow/template_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
         template=None, error=message,
-        name=name, description=description, definition=definition,
+        name=name, object_type=object_type, description=description, definition=definition,
+        is_superuser=is_superuser(user),
+        tid=tid,
     ))
 
 

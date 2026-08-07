@@ -214,21 +214,32 @@
                             <label class="form-label">New Role Name</label>
                             <input type="text" name="name" class="form-control form-control-sm mb-2" placeholder="e.g. auditor" required pattern="[a-z0-9_]+">
                             <input type="text" name="description" class="form-control form-control-sm mb-2" placeholder="description (optional)">
+                            <div class="form-check mb-2">
+                                <input type="checkbox" name="is_global" class="form-check-input" id="newRoleGlobal">
+                                <label class="form-check-label" for="newRoleGlobal">Global <i class="bi bi-globe"></i></label>
+                                <div class="form-text">Available to all tenants.</div>
+                            </div>
                             <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Add Role</button>
                         </form>
                     </div>
                     <div class="col-lg-8">
                         <table class="table table-sm mb-0">
-                            <thead><tr><th>Name</th><th>Description</th><th>Users</th><th></th></tr></thead>
+                            <thead><tr><th>Name</th><th>Description</th><th>Global</th><th>Users</th><th></th></tr></thead>
                             <tbody>
                                 {% for r in roles %}
                                 <tr>
                                     <td><code>{{ r.name }}</code></td>
                                     <td>{{ r.description or '-' }}</td>
+                                    <td class="text-center">
+                                        {% if r.is_global %}<i class="bi bi-globe text-primary" title="Global role"></i>{% endif %}
+                                    </td>
                                     <td>{{ r.user_count }}</td>
                                     <td class="text-end">
                                         <form method="POST" action="/admin/roles/{{ r.id }}/edit" class="d-inline-block me-1">
                                             <input type="text" name="description" value="{{ r.description or '' }}" class="form-control form-control-sm d-inline-block" style="width:auto" placeholder="desc">
+                                            <div class="form-check d-inline-block ms-1" style="padding: 0.25rem 0;">
+                                                <input type="checkbox" name="is_global" value="on" class="form-check-input form-check-input-sm" {% if r.is_global %}checked{% endif %} title="Global">
+                                            </div>
                                             <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-save"></i></button>
                                         </form>
                                         <form method="POST" action="/admin/roles/{{ r.id }}/delete" class="d-inline-block" onsubmit="return confirm('Delete role {{ r.name }}?');">
@@ -237,7 +248,7 @@
                                     </td>
                                 </tr>
                                 {% else %}
-                                <tr><td colspan="4" class="text-center text-muted py-2">No roles defined.</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-2">No roles defined.</td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>

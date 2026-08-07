@@ -25,8 +25,9 @@ class WorkflowTemplate(Base):
     #   "assignee_type":"role","assignee":"<role>"}]}]}
     definition = Column("definition", JSON)
     is_active = Column("is_active", Boolean, default=True)
+    is_global = Column("is_global", Boolean, default=False, nullable=False)
     created_by = Column("created_by", Integer, ForeignKey("users.user_id"))
-    tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
+    tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"))  # NULL for global
     tenant_key = Column("tenant_key", String, nullable=False)
     created_at = Column("created_at", String)
 

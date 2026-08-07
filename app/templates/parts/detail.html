@@ -11,7 +11,16 @@
 
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-box-seam"></i> {{ part.part_number }}-{{ part.part_revision }}</h5>
+        <h5 class="mb-0">
+            <i class="bi bi-box-seam"></i> {{ part.part_number }}-{{ part.part_revision }}
+            {% if part.status == 'RELEASED' %}
+            <i class="bi bi-flag-fill text-success" title="Released"></i>
+            {% elif part.status == 'OBSOLETED' %}
+            <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+            {% else %}
+            <i class="bi bi-flag fs-6" title="{{ part.status or 'Draft' }}"></i>
+            {% endif %}
+        </h5>
         <div class="d-flex align-items-center gap-2">
             {% if current_user and current_user.role == 'author' %}
             {% if active_release is none and part.status == 'DRAFT' %}

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS roles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL UNIQUE,
     description TEXT,
+    is_global   BOOLEAN NOT NULL DEFAULT FALSE,
     created_at  DATE
 );
 
@@ -373,8 +374,9 @@ CREATE TABLE IF NOT EXISTS workflow_templates (
     description TEXT,
     definition  TEXT,                       -- JSON: {"stages":[{name,parallel,steps:[...]}]}
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    is_global   BOOLEAN NOT NULL DEFAULT FALSE,
     created_by  INTEGER REFERENCES users(user_id),
-    tenant_id   INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
+    tenant_id   INTEGER REFERENCES tenants(tenant_id),  -- NULL for global templates
     tenant_key  TEXT    NOT NULL,
     created_at  DATE
 );

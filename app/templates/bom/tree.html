@@ -11,6 +11,16 @@
         {% endif %}
         <a href="/parts/{{ node.item.part_number }}" class="fw-bold">{{ node.item.part_number }}</a>
         {% if node.item.part_revision %}<span class="badge bg-dark badge-status ms-1">{{ node.item.part_revision }}</span>{% endif %}
+        {% set node_status = node.item.part.status if node.item.part else 'DRAFT' %}
+        {% if node_status == 'RELEASED' %}
+        <i class="bi bi-flag-fill text-success" title="Released"></i>
+        {% elif node_status == 'OBSOLETED' %}
+        <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+        {% elif node_status == 'IN_DEVELOPMENT' %}
+        <i class="bi bi-flag-fill text-info" title="In Development"></i>
+        {% else %}
+        <i class="bi bi-flag fs-6" title="{{ node_status or 'Draft' }}"></i>
+        {% endif %}
         <small class="text-muted ms-1">{{ node.item.part_name }}</small>
     </div>
     <div class="d-flex align-items-center gap-2">

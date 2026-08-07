@@ -32,6 +32,7 @@ def role_create(
     request: Request,
     name: str = Form(...),
     description: str = Form(""),
+    is_global: str = Form("off"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
@@ -44,7 +45,7 @@ def role_create(
         return _render_tree(request, db, error=f"'{name}' is a reserved default role.")
     if db.query(Role).filter(Role.name == name).first():
         return _render_tree(request, db, error=f"Role '{name}' already exists.")
-    db.add(Role(name=name, description=(description or None)))
+    db.add(Role(name=name, description=(description or None), is_global=(is_global == "on")))
     db.commit()
     return RedirectResponse(url="/admin", status_code=303)
 
@@ -54,6 +55,7 @@ def role_edit(
     request: Request,
     rid: int,
     description: str = Form(""),
+    is_global: str = Form("off"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
@@ -62,6 +64,7 @@ def role_edit(
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
     # Name is immutable so existing User.role strings never orphan.
     role.description = (description or None)
+    role.is_global = is_global == "on"
     db.commit()
     return RedirectResponse(url="/admin", status_code=303)
 

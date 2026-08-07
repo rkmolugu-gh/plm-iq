@@ -132,6 +132,27 @@ def migrate_schema():
             conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN modified_date TEXT")
             logger.info("Added column documents.modified_date")
 
+        # Add is_global column to roles table
+        role_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(roles)").all()}
+        if "is_global" not in role_cols:
+            conn.exec_driver_sql("ALTER TABLE roles ADD COLUMN is_global BOOLEAN NOT NULL DEFAULT FALSE")
+            logger.info("Added column roles.is_global")
+
+        # Backfill: mark default system roles as global so they're available to all tenants
+        default_role_names = ["reader", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver", "superadmin"]
+        for rn in default_role_names:
+            conn.exec_driver_sql(
+                "UPDATE roles SET is_global = TRUE WHERE name = ? AND is_global = FALSE",
+                [rn],
+            )
+        logger.info("Backfilled is_global=TRUE for default roles")
+
+        # Add is_global and make tenant_id nullable for workflow_templates
+        wf_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(workflow_templates)").all()}
+        if "is_global" not in wf_cols:
+            conn.exec_driver_sql("ALTER TABLE workflow_templates ADD COLUMN is_global BOOLEAN NOT NULL DEFAULT FALSE")
+            logger.info("Added column workflow_templates.is_global")
+
     # Create workflow indexes
     with engine.begin() as conn:
         conn.exec_driver_sql(

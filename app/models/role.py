@@ -6,7 +6,7 @@ step assignees by matching `User.role == step.assignee`, so the catalog is what 
 names discoverable in the user/tenant/template dropdowns.
 """
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 
 
@@ -16,6 +16,7 @@ class Role(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)  # lowercase identifier
     description = Column(String)
+    is_global = Column(Boolean, default=False, nullable=False)
     created_at = Column(String)
 
 
@@ -25,7 +26,7 @@ def role_names(db) -> list:
 
 
 def role_rows(db) -> list:
-    """Return roles as dicts with their current user count (for admin UIs)."""
+    """Return roles as dicts with their current user count and global flag (for admin UIs)."""
     from app.models.tenant_user import User
     rows = []
     for r in db.query(Role).order_by(Role.name).all():
@@ -34,6 +35,7 @@ def role_rows(db) -> list:
             "id": r.id,
             "name": r.name,
             "description": r.description,
+            "is_global": r.is_global,
             "user_count": user_count,
         })
     return rows

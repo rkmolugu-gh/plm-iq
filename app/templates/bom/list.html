@@ -51,8 +51,18 @@
                 {% for item in items %}
                 <tr>
                     <td>{{ item.level }}</td>
-                    <td><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></td>
-                    <td>{{ item.part_revision or '-' }}</td>
+                    <td><a href="/parts/{{ item.part_number }}" class="fw-bold">{{ item.part_number }}</a></td>
+                    <td>
+                        {{ item.part_revision or '-' }}
+                        {% set p_status = item.part.status if item.part else 'DRAFT' %}
+                        {% if p_status == 'RELEASED' %}
+                        <i class="bi bi-flag-fill text-success" title="Released"></i>
+                        {% elif p_status == 'OBSOLETED' %}
+                        <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+                        {% else %}
+                        <i class="bi bi-flag fs-6" title="{{ p_status or 'Draft' }}"></i>
+                        {% endif %}
+                    </td>
                     <td>{{ item.part_name or '-' }}</td>
                     <td>{{ item.qty }}</td>
                     <td>{{ item.uom or '-' }}</td>
@@ -108,6 +118,16 @@
                         <i class="bi {% if has_children %}bi-folder2-open text-warning{% else %}bi-file-earmark text-muted{% endif %} small"></i>
                         <a href="/parts/{{ node.item.part_number }}" class="fw-bold text-nowrap">{{ node.item.part_number }}</a>
                         {% if node.item.part_revision %}<span class="badge bg-dark badge-status ms-1">{{ node.item.part_revision }}</span>{% endif %}
+                        {% set node_status = node.item.part.status if node.item.part else 'DRAFT' %}
+                        {% if node_status == 'RELEASED' %}
+                        <i class="bi bi-flag-fill text-success" title="Released"></i>
+                        {% elif node_status == 'OBSOLETED' %}
+                        <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+                        {% elif node_status == 'IN_DEVELOPMENT' %}
+                        <i class="bi bi-flag-fill text-info" title="In Development"></i>
+                        {% else %}
+                        <i class="bi bi-flag fs-6" title="{{ node_status or 'Draft' }}"></i>
+                        {% endif %}
                         <small class="text-muted text-truncate ms-1">{{ node.item.part_name }}</small>
                         <span class="badge bg-info badge-status ms-auto">{{ node.item.bom_type }}</span>
                         <span class="text-muted small text-nowrap">Qty: {{ node.item.qty }} {{ node.item.uom }}</span>

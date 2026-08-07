@@ -3,6 +3,7 @@
 from typing import Optional, Dict
 from fastapi import APIRouter, Depends, Query, Form, Request
 from sqlalchemy import or_
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -26,7 +27,7 @@ def list_costing(
     """List costing BOM items."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    query = db.query(CostingBomItem)
+    query = db.query(CostingBomItem).options(selectinload(CostingBomItem.part))
 
     if q:
         query = query.filter(
