@@ -41,7 +41,9 @@
                 <td><strong>{{ item.eco_number }}</strong></td>
                 <td class="text-center">
                     {% if item.in_workflow %}
-                    <i class="bi bi-play-circle-fill text-info" title="In active workflow"></i>
+                    <a href="/workflow/instance/{{ item.active_workflow_instance_id }}" class="text-info">
+                        <i class="bi bi-play-circle-fill" title="In active workflow"></i>
+                    </a>
                     {% endif %}
                 </td>
                 <td><small>{{ (item.eco_title or '')|truncate(50) }}</small></td>

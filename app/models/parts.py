@@ -17,6 +17,7 @@ class Part(Base):
     qty = Column("qty", Integer, nullable=False, default=1)
     status = Column("status", String, nullable=False, default="DRAFT")
     in_workflow = Column("in_workflow", Boolean, nullable=False, default=False)
+    active_workflow_instance_id = Column("active_workflow_instance_id", Integer, ForeignKey("workflow_instances.id"))
     created_date = Column("created_date", String)
     modified_date = Column("modified_date", String)
     modified_owner = Column("modified_owner", Integer, ForeignKey("users.user_id"))

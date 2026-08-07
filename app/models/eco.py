@@ -13,6 +13,7 @@ class EngineeringChangeOrder(Base):
     eco_description = Column("eco_description", String)
     eco_status = Column("eco_status", String, nullable=False, default="DRAFT")
     in_workflow = Column("in_workflow", Boolean, nullable=False, default=False)
+    active_workflow_instance_id = Column("active_workflow_instance_id", Integer, ForeignKey("workflow_instances.id"))
     part_number = Column("part_number", String, ForeignKey("parts.part_number"), nullable=False)
     current_revision = Column("current_revision", String)
     new_revision = Column("new_revision", String)

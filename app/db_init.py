@@ -161,18 +161,21 @@ def migrate_schema():
             )
         logger.info("Backfilled is_global=TRUE for standard workflow templates")
 
-        # Add in_workflow flag to parts and engineering_change_orders
+        # Add in_workflow flag and active_workflow_instance_id to parts and engineering_change_orders
         for table in ["parts", "engineering_change_orders"]:
             cols = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})").all()}
             if "in_workflow" not in cols:
                 conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN in_workflow BOOLEAN NOT NULL DEFAULT FALSE")
                 logger.info("Added column %s.in_workflow", table)
+            if "active_workflow_instance_id" not in cols:
+                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN active_workflow_instance_id INTEGER")
+                logger.info("Added column %s.active_workflow_instance_id", table)
 
-        # Backfill: set in_workflow=FALSE for any objects that don't have an active workflow.
+        # Backfill: set in_workflow=FALSE and clear active_workflow_instance_id for all objects.
         # (The default is already FALSE, so this is a no-op for new rows; ensures existing
         # rows are consistent after the column is added.)
-        conn.exec_driver_sql("UPDATE parts SET in_workflow = FALSE WHERE in_workflow IS NULL")
-        conn.exec_driver_sql("UPDATE engineering_change_orders SET in_workflow = FALSE WHERE in_workflow IS NULL")
+        conn.exec_driver_sql("UPDATE parts SET in_workflow = FALSE, active_workflow_instance_id = NULL WHERE in_workflow IS NULL")
+        conn.exec_driver_sql("UPDATE engineering_change_orders SET in_workflow = FALSE, active_workflow_instance_id = NULL WHERE in_workflow IS NULL")
         logger.info("Backfilled in_workflow=FALSE for all parts and ECOs")
 
     # Create workflow indexes

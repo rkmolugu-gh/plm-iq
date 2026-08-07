@@ -276,6 +276,14 @@ def start_workflow(
     db.add(instance)
     db.flush()
 
+    # Set active_workflow_instance_id on the object (after instance has its ID)
+    if object_type == "part":
+        if part:
+            part.active_workflow_instance_id = instance.id
+    elif object_type == "eco":
+        if eco:
+            eco.active_workflow_instance_id = instance.id
+
     stages = _stages(template)
     if not stages:
         raise WorkflowError("Workflow template has no stages.")
@@ -392,10 +400,12 @@ def _reject_workflow(db, instance: WorkflowInstance, user: User, comment, backgr
         part = db.query(Part).filter(Part.part_number == instance.object_id).first()
         if part:
             part.in_workflow = False
+            part.active_workflow_instance_id = None
     elif instance.object_type == "eco":
         eco = db.query(EngineeringChangeOrder).filter(EngineeringChangeOrder.eco_number == instance.object_id).first()
         if eco:
             eco.in_workflow = False
+            eco.active_workflow_instance_id = None
     db.flush()
     _notify_participants(
         db, instance, "workflow_rejected",
@@ -418,6 +428,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
         if part:
             part.status = instance.result_status or "RELEASED"
             part.in_workflow = False
+            part.active_workflow_instance_id = None
             part.modified_date = today
             part.modified_owner = instance.started_by
     elif instance.object_type == "eco":
@@ -432,6 +443,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
         if eco:
             eco.eco_status = "APPROVED"
             eco.in_workflow = False
+            eco.active_workflow_instance_id = None
             eco.approved_date = today
             # Apply the change to the linked part.
             if eco.new_status or eco.new_revision:

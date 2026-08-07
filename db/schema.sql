@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS parts (
     qty             INTEGER NOT NULL DEFAULT 1 CHECK (qty >= 0),
     status          TEXT    NOT NULL DEFAULT 'DRAFT'
                             CHECK (status IN ('DRAFT', 'RELEASED', 'OBSOLETED')),
-    in_workflow     BOOLEAN NOT NULL DEFAULT FALSE,
+    in_workflow              BOOLEAN NOT NULL DEFAULT FALSE,
+    active_workflow_instance_id INTEGER,
     created_date    DATE,
     modified_date   DATE,
     modified_owner  INTEGER,
@@ -158,7 +159,8 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     eco_description TEXT,
     eco_status      TEXT    NOT NULL DEFAULT 'DRAFT'
                             CHECK (eco_status IN ('DRAFT', 'REVIEW', 'APPROVED')),
-    in_workflow     BOOLEAN NOT NULL DEFAULT FALSE,
+    in_workflow              BOOLEAN NOT NULL DEFAULT FALSE,
+    active_workflow_instance_id INTEGER,
     part_number     TEXT    NOT NULL,
     current_revision TEXT,
     new_revision    TEXT,
