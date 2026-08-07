@@ -142,6 +142,9 @@ class TenantScopedSession:
     def bulk_update_mappings(self, mapper, mappings):
         return self._db.bulk_update_mappings(mapper, mappings)
 
+    def flush(self):
+        return self._db.flush()
+
     # ------------------------------------------------------------------
     # Context manager support
     # ------------------------------------------------------------------

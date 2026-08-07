@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import TenantScopedSession
@@ -39,16 +40,12 @@ OBJECT_TYPES = ["part", "eco"]
 def templates_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    # Show global templates (is_global=True or tenant_id IS NULL) plus this tenant's templates
-    items = (
-        db.query(WorkflowTemplate)
-        .filter(
-            (WorkflowTemplate.is_global == True) |
-            (WorkflowTemplate.tenant_id == user.tenant_id)
-        )
-        .order_by(WorkflowTemplate.object_type, WorkflowTemplate.name)
-        .all()
-    )
+    # Show global templates (is_global=True) plus this tenant's templates
+    # Uses db.execute() to bypass tenant_key auto-filtering (global templates have different tenant_key)
+    items = db.execute(select(WorkflowTemplate).where(
+        (WorkflowTemplate.is_global == True) |
+        (WorkflowTemplate.tenant_id == user.tenant_id)
+    ).order_by(WorkflowTemplate.object_type, WorkflowTemplate.name)).scalars().all()
     return HTMLResponse(content=render(
         "workflow/templates.html", **ctx,
         templates=items,
@@ -200,15 +197,11 @@ def workflow_start(
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
-    tmpl = (
-        db.query(WorkflowTemplate)
-        .filter(
-            WorkflowTemplate.id == template_id,
-            (WorkflowTemplate.is_global == True) |
-            (WorkflowTemplate.tenant_id == user.tenant_id)
-        )
-        .first()
-    )
+    tmpl = db.execute(select(WorkflowTemplate).where(
+        WorkflowTemplate.id == template_id,
+        (WorkflowTemplate.is_global == True) |
+        (WorkflowTemplate.tenant_id == user.tenant_id)
+    )).scalars().first()
     if not tmpl:
         return RedirectResponse(url=_obj_url(object_type, object_id), status_code=303)
 
@@ -313,17 +306,15 @@ def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(
 # Helpers
 # --------------------------------------------------------------------------- #
 
-def _load_template(db: Session, user: User, tid: int) -> Optional[WorkflowTemplate]:
-    """Load a template visible to the user: global, or their tenant's."""
-    return (
-        db.query(WorkflowTemplate)
-        .filter(
-            WorkflowTemplate.id == tid,
-            (WorkflowTemplate.is_global == True) |
-            (WorkflowTemplate.tenant_id == user.tenant_id)
-        )
-        .first()
-    )
+def _load_template(db: TenantScopedSession, user: User, tid: int) -> Optional[WorkflowTemplate]:
+    """Load a template visible to the user: global, or their tenant's.
+    Uses db.execute() to bypass tenant_key auto-filtering for global templates.
+    """
+    return db.execute(select(WorkflowTemplate).where(
+        WorkflowTemplate.id == tid,
+        (WorkflowTemplate.is_global == True) |
+        (WorkflowTemplate.tenant_id == user.tenant_id)
+    )).scalars().first()
 
 
 def _load_instance(db: Session, user: User, iid: int) -> Optional[WorkflowInstance]:

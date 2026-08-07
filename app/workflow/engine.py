@@ -62,8 +62,8 @@ def _link_for(object_type: str, object_id: str) -> str:
 
 def _resolve_assignees(db: Session, instance: WorkflowInstance, step: dict) -> List[User]:
     """Resolve the users a step is assigned to (role-based fan-out)."""
-    # assignee_type is 'role' for now; fall back to treating assignee as a role.
-    role = step.get("assignee")
+    # Template steps use either "assignee" or "role" as the key for the role name.
+    role = step.get("assignee") or step.get("role")
     if not role:
         return []
     return (
@@ -125,7 +125,7 @@ def _ensure_step_tasks(
         # Vacuous approval: nobody in the role — record so the stage can progress.
         logger.warning(
             "Workflow %s step '%s' has no assignees (role=%s); auto-approved.",
-            instance.id, step_name, step.get("assignee"),
+            instance.id, step_name, step.get("assignee") or step.get("role"),
         )
         db.add(WorkflowTask(
             instance_id=instance.id,
@@ -259,6 +259,7 @@ def start_workflow(
         started_at=_today(),
         result_status=result_status,
         tenant_id=user.tenant_id,
+        tenant_key=user.tenant_key,
     )
     # store due_date on the instance for task inheritance
     instance.due_date = due_date

@@ -2,7 +2,7 @@
 
 from typing import Optional, Dict
 from fastapi import APIRouter, Depends, Query, Form, Request
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -81,13 +81,13 @@ def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depe
     if not item:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
-    release_templates = (
-        db.query(WorkflowTemplate).filter(
-            WorkflowTemplate.object_type == "eco",
-            WorkflowTemplate.tenant_id == user.tenant_id,
-            WorkflowTemplate.is_active == True,  # noqa: E712
-        ).order_by(WorkflowTemplate.name).all()
-    )
+    # Query global templates + this tenant's templates (bypass tenant_key scoping)
+    release_templates = db.execute(select(WorkflowTemplate).where(
+        WorkflowTemplate.object_type == "eco",
+        (WorkflowTemplate.is_global == True) |
+        (WorkflowTemplate.tenant_id == user.tenant_id),
+        WorkflowTemplate.is_active == True,  # noqa: E712
+    ).order_by(WorkflowTemplate.name)).scalars().all()
     active_release = active_instance(db, "eco", eco_number)
     release_instance = (
         db.query(WorkflowInstance).filter(

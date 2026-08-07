@@ -88,12 +88,15 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
     avls = db.query(ApprovedVendor).filter(ApprovedVendor.part_number == part_number).all()
     cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
 
+    # Query global templates + this tenant's templates (bypass tenant_key scoping)
+    from sqlalchemy import select
     release_templates = (
-        db.query(WorkflowTemplate).filter(
+        db.execute(select(WorkflowTemplate).where(
             WorkflowTemplate.object_type == "part",
-            WorkflowTemplate.tenant_id == user.tenant_id,
+            (WorkflowTemplate.is_global == True) |
+            (WorkflowTemplate.tenant_id == user.tenant_id),
             WorkflowTemplate.is_active == True,  # noqa: E712
-        ).order_by(WorkflowTemplate.name).all()
+        ).order_by(WorkflowTemplate.name)).scalars().all()
     )
     active_release = active_instance(db, "part", part_number)
     release_instance = (
