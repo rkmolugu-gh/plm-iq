@@ -153,6 +153,14 @@ def migrate_schema():
             conn.exec_driver_sql("ALTER TABLE workflow_templates ADD COLUMN is_global BOOLEAN NOT NULL DEFAULT FALSE")
             logger.info("Added column workflow_templates.is_global")
 
+        # Backfill: mark the standard release templates as global
+        for tmpl_name in ["Standard Part Release", "ECO Approval"]:
+            conn.exec_driver_sql(
+                "UPDATE workflow_templates SET is_global = TRUE, tenant_id = NULL WHERE name = ? AND is_global = FALSE",
+                [tmpl_name],
+            )
+        logger.info("Backfilled is_global=TRUE for standard workflow templates")
+
     # Create workflow indexes
     with engine.begin() as conn:
         conn.exec_driver_sql(

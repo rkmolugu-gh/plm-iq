@@ -332,14 +332,14 @@ INSERT INTO cad_metadata (id, part_number, part_revision, part_name, status, cad
     (30, 'PLM-005', 'A', 'MCP Server Plugin', 'RELEASED', 'PLM-005_A.py', 'PY', 'Python', '3.11', 'Git', 'https://git.plm-iq.com/mcp/server-plugin.py', 23456, 'Y3U0AX56X9508B12', 27, '2026-08-04', '2026-08-06', 'DOC-PLM-005-A', 'SOURCE_CODE', 'SOFTWARE', 'MCP plugin source code.', 6, 'tk_plm_iq_superadmin');
 
 -- ============================================================
--- Default Roles Seed Data (5 rows)
+-- Default Roles Seed Data (6 rows, all global so available across tenants)
 -- ============================================================
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('reader', 'Standard user with read access', date('now'));
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('author', 'Can create and edit parts/ECOs', date('now'));
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('tenantadmin', 'Full administrative access for a tenant', date('now'));
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('quality', 'QA approval authority', date('now'));
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('manufacturing', 'Manufacturing approval authority', date('now'));
-INSERT OR IGNORE INTO roles (name, description, created_at) VALUES ('superadmin', 'Global super administrator with full platform access', date('now'));
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('reader', 'Standard user with read access', date('now'), TRUE);
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('author', 'Can create and edit parts/ECOs', date('now'), TRUE);
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('tenantadmin', 'Full administrative access for a tenant', date('now'), TRUE);
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('quality', 'QA approval authority', date('now'), TRUE);
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('manufacturing', 'Manufacturing approval authority', date('now'), TRUE);
+INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('superadmin', 'Global super administrator with full platform access', date('now'), TRUE);
 
 -- ============================================================
 -- Master Admin Seed Data
@@ -365,9 +365,9 @@ INSERT OR IGNORE INTO app_settings (key, value) VALUES
     ('maintenance_mode', 'false');
 
 -- workflow_templates (sample workflow templates)
-INSERT OR IGNORE INTO workflow_templates (id, name, object_type, description, definition, is_active, created_by, tenant_id, tenant_key, created_at) VALUES
-    (1, 'Standard Part Release', 'part', 'Standard workflow for releasing a new part', '{"stages": [{"name": "Draft Review", "steps": [{"name": "Review Design", "role": "author"}]}, {"name": "Approval", "steps": [{"name": "Approve Design", "role": "approver"}]}]}', TRUE, 1, 1, 'tk_bicycleco_a1b2c3d4', '2024-01-01'),
-    (2, 'ECO Approval', 'eco', 'Workflow for approving engineering change orders', '{"stages": [{"name": "Technical Review", "steps": [{"name": "Review Change", "role": "author"}]}, {"name": "Final Approval", "steps": [{"name": "Approve ECO", "role": "approver"}]}]}', TRUE, 1, 1, 'tk_bicycleco_a1b2c3d4', '2024-01-01');
+INSERT OR IGNORE INTO workflow_templates (id, name, object_type, description, definition, is_active, is_global, created_by, tenant_key, created_at) VALUES
+    (1, 'Standard Part Release', 'part', 'Standard workflow for releasing a new part', '{"stages": [{"name": "Draft Review", "steps": [{"name": "Review Design", "role": "author"}]}, {"name": "Approval", "steps": [{"name": "Approve Design", "role": "approver"}]}]}', TRUE, TRUE, 1, 'tk_plm_iq_superadmin', '2024-01-01'),
+    (2, 'ECO Approval', 'eco', 'Workflow for approving engineering change orders', '{"stages": [{"name": "Technical Review", "steps": [{"name": "Review Change", "role": "author"}]}, {"name": "Final Approval", "steps": [{"name": "Approve ECO", "role": "approver"}]}]}', TRUE, TRUE, 1, 'tk_plm_iq_superadmin', '2024-01-01');
 
 -- notifications (3 rows)
 INSERT OR IGNORE INTO notifications (id, user_id, type, title, message, link, is_read, created_at, tenant_id, tenant_key) VALUES
