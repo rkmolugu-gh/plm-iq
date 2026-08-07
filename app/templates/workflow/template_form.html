@@ -10,27 +10,29 @@
 
 {% set default_def %}
 {
+  "version": 2,
   "stages": [
     {
       "name": "Engineering",
       "parallel": false,
       "steps": [
-        {"name": "Engineering Review", "assignee": "author"}
+        {"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author", "description": "Review CAD data and BOM for manufacturability", "due_days": 3}
       ]
     },
     {
       "name": "Approvals",
       "parallel": true,
+      "threshold": 2,
       "steps": [
-        {"name": "QA Approval", "assignee": "quality"},
-        {"name": "Mfg Approval", "assignee": "manufacturing"}
+        {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality", "description": "Verify quality standards compliance", "due_days": 5},
+        {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing", "description": "Verify manufacturability and cost", "due_days": 5}
       ]
     },
     {
       "name": "Release",
       "parallel": false,
       "steps": [
-        {"name": "Release", "assignee": "admin"}
+        {"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin", "description": "Final release authorization", "due_days": 2}
       ]
     }
   ]

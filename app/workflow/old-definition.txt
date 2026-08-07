@@ -1,0 +1,38 @@
+# Old Workflow Definition Format (v1)
+# ------------------------------------------
+# This documents the original JSON schema used by WorkflowTemplate.definition.
+# The engine parses it directly without normalization.
+
+{
+  "stages": [
+    {
+      "name": "Engineering",
+      "parallel": false,
+      "steps": [
+        {"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author"}
+      ]
+    },
+    {
+      "name": "Approvals",
+      "parallel": true,
+      "steps": [
+        {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality"},
+        {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing"}
+      ]
+    },
+    {
+      "name": "Release",
+      "parallel": false,
+      "steps": [
+        {"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin"}
+      ]
+    }
+  ]
+}
+
+# Key characteristics of v1:
+# - No "version" field; format version inferred from presence of certain keys.
+# - Steps use inconsistent keys: "assignee" (role name), "role" (alternate key), or "assignee_type" + "assignee".
+# - No per-step metadata (description, due_days).
+# - Parallel stages require ALL assignees to approve (no threshold).
+# - Due dates are set at the instance level only, not per-step.

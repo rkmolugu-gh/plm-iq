@@ -244,29 +244,39 @@ def _seed_workflow_templates_for_new_tenants():
             continue
         today = datetime.date.today().isoformat()
         part_def = {
+            "version": 2,
             "stages": [
                 {"name": "Engineering", "parallel": False,
-                 "steps": [{"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author"}]},
-                {"name": "Approvals", "parallel": True,
+                 "steps": [{"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author",
+                            "description": "Review CAD data and BOM for manufacturability", "due_days": 3}]},
+                {"name": "Approvals", "parallel": True, "threshold": 2,
                  "steps": [
-                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality"},
-                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing"},
+                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality",
+                      "description": "Verify quality standards compliance", "due_days": 5},
+                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing",
+                      "description": "Verify manufacturability and cost", "due_days": 5},
                  ]},
                 {"name": "Release", "parallel": False,
-                 "steps": [{"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin"}]},
+                 "steps": [{"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin",
+                            "description": "Final release authorization", "due_days": 2}]},
             ]
         }
         eco_def = {
+            "version": 2,
             "stages": [
                 {"name": "Review", "parallel": False,
-                 "steps": [{"key": "rev", "name": "Change Review", "assignee_type": "role", "assignee": "author"}]},
-                {"name": "Approvals", "parallel": True,
+                 "steps": [{"key": "rev", "name": "Change Review", "assignee_type": "role", "assignee": "author",
+                            "description": "Review the change description and impact", "due_days": 3}]},
+                {"name": "Approvals", "parallel": True, "threshold": 2,
                  "steps": [
-                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality"},
-                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing"},
+                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality",
+                      "description": "Verify quality standards compliance", "due_days": 5},
+                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing",
+                      "description": "Verify manufacturability and cost", "due_days": 5},
                  ]},
                 {"name": "Release", "parallel": False,
-                 "steps": [{"key": "rel", "name": "Release Change", "assignee_type": "role", "assignee": "tenantadmin"}]},
+                 "steps": [{"key": "rel", "name": "Release Change", "assignee_type": "role", "assignee": "tenantadmin",
+                            "description": "Final release authorization", "due_days": 2}]},
             ]
         }
         sess = SessionLocal()

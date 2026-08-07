@@ -1,0 +1,81 @@
+# New Workflow Definition Format (v2)
+# ------------------------------------------
+# Enhanced schema with version field, per-step metadata, approval thresholds,
+# and normalized assignee syntax.
+
+{
+  "version": 2,
+  "stages": [
+    {
+      "name": "Engineering",
+      "parallel": false,
+      "steps": [
+        {
+          "key": "eng",
+          "name": "Engineering Review",
+          "assignee_type": "role",        // "role" | "user"
+          "assignee": "author",            // role name or user_id
+          "description": "Review CAD data and BOM for manufacturability",
+          "due_days": 3                    // optional: days from stage start
+        }
+      ]
+    },
+    {
+      "name": "Approvals",
+      "parallel": true,
+      "threshold": 2,                      // optional: require N of M approvers (default: all)
+      "steps": [
+        {
+          "key": "qa",
+          "name": "QA Approval",
+          "assignee_type": "role",
+          "assignee": "quality",
+          "description": "Verify quality standards compliance",
+          "due_days": 5
+        },
+        {
+          "key": "mfg",
+          "name": "Mfg Approval",
+          "assignee_type": "role",
+          "assignee": "manufacturing",
+          "description": "Verify manufacturability and cost",
+          "due_days": 5
+        }
+      ]
+    },
+    {
+      "name": "Release",
+      "parallel": false,
+      "steps": [
+        {
+          "key": "rel",
+          "name": "Release",
+          "assignee_type": "role",
+          "assignee": "tenantadmin",
+          "description": "Final release authorization",
+          "due_days": 2
+        }
+      ]
+    }
+  ]
+}
+
+# New fields introduced in v2:
+#   version (int, optional)
+#       Format version. v2 or absent = v1 compatibility mode.
+#
+#   Per-step:
+#     description (str, optional)
+#         Human-readable description shown in visualization and instance panel.
+#     due_days (int, optional)
+#         Days from the stage's start date. Computed to an absolute due_date
+#         when tasks are created (falls back to instance-level due_date).
+#
+#   Per-parallel-stage:
+#     threshold (int, optional, default = all)
+#         Number of approvals required for the stage to complete.
+#         When reached, remaining pending peer tasks are SUPERSEDED.
+#
+#   Normalized assignee syntax:
+#     assignee_type: "role" | "user"   (always present)
+#     assignee:      role name | user_id

@@ -24,17 +24,20 @@
     var stageEntries = []; // entry node ids per stage
     var stageExits = [];   // exit node ids per stage
     stages.forEach(function (stage, si) {
-      var sLabel = plmEscapeMermaid(stage.name || ("Stage " + (si + 1)));
-      if (stage.parallel) sLabel += " · parallel";
-      lines.push('subgraph S' + si + '["' + sLabel + '"]');
-
       var steps = stage.steps || [];
+      var sLabel = plmEscapeMermaid(stage.name || ("Stage " + (si + 1)));
+      if (stage.parallel) {
+        sLabel += " · parallel";
+        if (stage.threshold) sLabel += " (" + stage.threshold + " of " + steps.length + ")";
+      }
+      lines.push('subgraph S' + si + '["' + sLabel + '"]');
       var nodeIds = [];
       steps.forEach(function (step, ti) {
         var nid = "n" + si + "_" + ti;
         var role = step.assignee ||
           (step.assignee_type ? (step.assignee_type + ":" + (step.assignee || "")) : "");
         var label = plmEscapeMermaid(step.name || ("Step " + (ti + 1)));
+        if (step.description) label += "<br/><small><em>" + plmEscapeMermaid(step.description) + "</em></small>";
         if (role) label += "<br/><small>@" + plmEscapeMermaid(role) + "</small>";
         var cls = "";
         if (statusByStepKey && step.key && statusByStepKey[step.key]) {

@@ -52,8 +52,8 @@ def _today() -> str:
 
 
 def _stages(template: WorkflowTemplate) -> List[dict]:
-    defn = template.definition or {}
-    return defn.get("stages", []) or []
+    """Extract stages from a template's v2 definition."""
+    return (template.definition or {}).get("stages", []) or []
 
 
 def _link_for(object_type: str, object_id: str) -> str:
@@ -61,15 +61,26 @@ def _link_for(object_type: str, object_id: str) -> str:
 
 
 def _resolve_assignees(db: Session, instance: WorkflowInstance, step: dict) -> List[User]:
-    """Resolve the users a step is assigned to (role-based fan-out)."""
-    # Template steps use either "assignee" or "role" as the key for the role name.
-    role = step.get("assignee") or step.get("role")
-    if not role:
+    """Resolve the users a step is assigned to (role-based fan-out).
+
+    v2 syntax: ``assignee_type`` ("role" | "user") + ``assignee`` (role name or user_id).
+    """
+    assignee_type = step.get("assignee_type", "role")
+    assignee = step.get("assignee")
+    if not assignee:
         return []
+    if assignee_type == "user":
+        # Direct user assignment
+        return db.query(User).filter(
+            User.user_id == int(assignee),
+            User.tenant_id == instance.tenant_id,
+            User.is_active == True,  # noqa: E712
+        ).all()
+    # Role-based assignment (default)
     return (
         db.query(User)
         .filter(
-            User.role == role,
+            User.role == assignee,
             User.tenant_id == instance.tenant_id,
             User.is_active == True,  # noqa: E712
         )
@@ -85,16 +96,36 @@ def _tasks_for_step(db: Session, instance: WorkflowInstance, stage_index: int, s
     )
 
 
+def _compute_step_due_date(instance: WorkflowInstance, step: dict) -> Optional[str]:
+    """Compute the absolute due date for a step, honoring v2 ``due_days``.
+
+    v2 steps may specify ``due_days`` (days from instance start). If absent,
+    falls back to the instance-level ``due_date``.
+    """
+    due_days = step.get("due_days")
+    if due_days is not None and instance.started_at:
+        try:
+            from datetime import datetime, timedelta
+            start = datetime.strptime(instance.started_at, "%Y-%m-%d")
+            return (start + timedelta(days=int(due_days))).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+    return instance.due_date
+
+
 def _ensure_step_tasks(
     db: Session, instance: WorkflowInstance, stage_index: int, step: dict, background=None
 ) -> None:
     """Create the WorkflowTasks for one step (idempotent). No assignees => vacuous APPROVED."""
     step_key = step.get("key") or step.get("name")
     step_name = step.get("name", step_key)
+    step_desc = step.get("description", "")
     existing = _tasks_for_step(db, instance, stage_index, step_key).count()
     if existing > 0:
         return
 
+    assignee_label = step.get("assignee", "")
+    step_due_date = _compute_step_due_date(instance, step)
     assignees = _resolve_assignees(db, instance, step)
     if assignees:
         for u in assignees:
@@ -106,7 +137,7 @@ def _ensure_step_tasks(
                 assigned_to=u.user_id,
                 status="PENDING",
                 action="approve",
-                due_date=instance.due_date,
+                due_date=step_due_date or instance.due_date,
                 tenant_id=instance.tenant_id,
                 tenant_key=instance.tenant_key,
             )
@@ -114,7 +145,8 @@ def _ensure_step_tasks(
             notify(
                 db, u, "task_assigned",
                 f"Approval needed: {step_name}",
-                f"You have a pending '{step_name}' for {instance.object_id}.",
+                f"You have a pending '{step_name}' for {instance.object_id}."
+                + (f" {step_desc}" if step_desc else ""),
                 link="/inbox",
                 background=background,
             )
@@ -125,7 +157,7 @@ def _ensure_step_tasks(
         # Vacuous approval: nobody in the role — record so the stage can progress.
         logger.warning(
             "Workflow %s step '%s' has no assignees (role=%s); auto-approved.",
-            instance.id, step_name, step.get("assignee") or step.get("role"),
+            instance.id, step_name, step.get("assignee"),
         )
         db.add(WorkflowTask(
             instance_id=instance.id,
@@ -179,7 +211,25 @@ def _progress_stage(db: Session, instance: WorkflowInstance, stage: dict, backgr
         all_tasks = _stage_tasks(db, instance, stage_index).all()
         if not all_tasks:
             return True
-        # Stage complete if all tasks are in a terminal state (not PENDING)
+        # v2 threshold: stage completes when N distinct steps have been approved
+        threshold = stage.get("threshold")
+        if threshold is not None:
+            approved_steps = set()
+            for t in all_tasks:
+                if t.status == "APPROVED":
+                    approved_steps.add(t.step_key)
+            if len(approved_steps) >= int(threshold):
+                # Threshold reached: supersede remaining PENDING tasks
+                for t in all_tasks:
+                    if t.status == "PENDING":
+                        t.status = "SUPERSEDED"
+                        t.completed_at = _today()
+                        t.comment = "Superseded: approval threshold reached."
+                db.flush()
+                return True
+            # Not enough approvals yet — stage still in progress
+            return False
+        # v1 behavior: stage complete if all tasks are in a terminal state (not PENDING)
         return all(t.status != "PENDING" for t in all_tasks)
 
     # sequential: advance through steps until one has pending tasks or all done
