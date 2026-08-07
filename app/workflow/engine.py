@@ -286,7 +286,7 @@ def start_workflow(
 
     stages = _stages(template)
     if not stages:
-        raise WorkflowError("Workflow template has no stages.")
+        raise WorkflowError("Workflow definition has no stages.")
 
     notify(
         db, user, "workflow_started",

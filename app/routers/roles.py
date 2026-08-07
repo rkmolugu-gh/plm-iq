@@ -90,7 +90,7 @@ def role_delete(
     if used_by:
         return _render_tree(
             request, db,
-            error=f"Cannot delete role '{role.name}': it is used by workflow template '{used_by}'.",
+            error=f"Cannot delete role '{role.name}': it is used by workflow definition '{used_by}'.",
         )
     db.delete(role)
     db.commit()

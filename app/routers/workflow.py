@@ -82,7 +82,7 @@ def template_create(
     user = require_user(request, db)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Template name is required.", name=name, object_type=object_type, description=description, definition=definition)
+        return _template_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition)
     if object_type not in OBJECT_TYPES:
         return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition)
     try:
@@ -147,7 +147,7 @@ def template_edit(
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Template name is required.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
+        return _template_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
     if object_type not in OBJECT_TYPES:
         return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
     try:

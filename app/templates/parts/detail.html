@@ -244,14 +244,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Workflow Template</label>
+                        <label class="form-label">Workflow Definition</label>
                         <select class="form-select" name="template_id" required>
                             {% for t in release_templates %}
                             <option value="{{ t.id }}">{{ t.name }}</option>
                             {% endfor %}
                         </select>
                         {% if not release_templates %}
-                        <div class="form-text text-warning">No release templates exist. Ask an admin to create one.</div>
+                        <div class="form-text text-warning">No release definitions exist. Ask an admin to create one.</div>
                         {% endif %}
                     </div>
                     <div class="mb-3">
