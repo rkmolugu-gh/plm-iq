@@ -8,7 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { padding-top: 60px; }
-        .sidebar { position: fixed; top: 56px; bottom: 0; left: 0; width: 220px; overflow-y: auto; }
+        .sidebar { position: fixed; top: 56px; bottom: 0; left: 0; width: 220px; overflow-y: auto; display: flex; flex-direction: column; }
         .main-content { margin-left: 220px; padding: 20px; }
         .navbar-brand small { font-size: 0.75rem; opacity: 0.6; }
         .badge-status { font-size: 0.75rem; }
@@ -154,7 +154,7 @@
 
     <!-- Sidebar -->
     <div class="sidebar bg-dark border-end border-secondary pt-3">
-        <ul class="nav nav-pills flex-column">
+        <ul class="nav nav-pills flex-column flex-grow-1 overflow-auto">
             <li class="nav-item">
                 <a class="nav-link" href="/"><i class="bi bi-speedometer2"></i> Dashboard</a>
             </li>
@@ -195,6 +195,12 @@
             </li>
             {% endif %}
         </ul>
+        {% if current_tenant %}
+        <div class="px-3 py-2 border-top border-secondary mt-auto">
+            <div class="small text-muted mb-1">Tenant</div>
+            <div class="fw-bold">{{ current_tenant.tenant_name }}</div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Main Content -->

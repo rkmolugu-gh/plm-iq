@@ -49,6 +49,8 @@
                 <th>Version</th>
                 <th>Size</th>
                 <th>Status</th>
+                <th>Created By</th>
+                <th>Modified By</th>
                 <th>Modified</th>
                 <th style="width: 160px;">Actions</th>
             </tr>
@@ -78,6 +80,8 @@
                 <td>
                     <span class="badge {% if item.status == 'APPROVED' %}bg-success{% elif item.status == 'OBSOLETE' %}bg-danger{% elif item.status == 'REVIEW' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ item.status }}</span>
                 </td>
+                <td><small>{{ user_map.get(item.created_by, '—') if user_map else (item.created_by or '—') }}</small></td>
+                <td><small>{{ user_map.get(item.modified_by, '—') if user_map else (item.modified_by or '—') }}</small></td>
                 <td><small class="text-muted">{{ item.modified_date or '-' }}</small></td>
                 <td>
                     <div class="d-flex gap-1">
@@ -97,7 +101,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="10" class="text-center text-muted py-4">This folder is empty. Upload a file or folder to get started.</td></tr>
+            <tr><td colspan="12" class="text-center text-muted py-4">This folder is empty. Upload a file or folder to get started.</td></tr>
             {% endfor %}
         </tbody>
     </table>

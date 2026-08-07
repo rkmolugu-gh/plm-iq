@@ -104,6 +104,34 @@ def migrate_schema():
             conn.exec_driver_sql("ALTER TABLE users_new RENAME TO users")
             logger.info("Enforced users.role NOT NULL DEFAULT 'reader'")
 
+        # Add audit columns (created_by, modified_by, created_date, modified_date)
+        # to business-object tables that predate the schema update.
+        _audit_tables = {
+            "bom": "level",
+            "costing_bom": "level",
+            "engineering_change_orders": "eco_number",
+            "approved_manufacturer_list": "id",
+            "approved_vendor_list": "id",
+            "cad_metadata": "id",
+        }
+        for table, _pk in _audit_tables.items():
+            cols = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})").all()}
+            for col, coltype in [
+                ("created_by", "INTEGER REFERENCES users(user_id)"),
+                ("modified_by", "INTEGER REFERENCES users(user_id)"),
+                ("created_date", "DATE"),
+                ("modified_date", "DATE"),
+            ]:
+                if col not in cols:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+                    logger.info("Added column %s.%s", table, col)
+
+        # Documents already has created_by / modified_by; ensure modified_date exists
+        doc_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(documents)").all()}
+        if "modified_date" not in doc_cols:
+            conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN modified_date TEXT")
+            logger.info("Added column documents.modified_date")
+
     # Create workflow indexes
     with engine.begin() as conn:
         conn.exec_driver_sql(
@@ -126,8 +154,15 @@ def seed_database():
         with engine.begin() as conn:
             sql = seed_file.read_text(encoding="utf-8")
             for stmt in sql.split(";"):
-                stmt = stmt.strip()
-                if stmt and not stmt.startswith("--"):
+                # Strip leading SQL comment lines (-- ...) so that INSERT
+                # statements preceded by a comment are not silently skipped.
+                while True:
+                    stmt = stmt.strip()
+                    if not stmt or not stmt.startswith("--"):
+                        break
+                    nl = stmt.find("\n")
+                    stmt = "" if nl == -1 else stmt[nl + 1:]
+                if stmt:
                     try:
                         conn.exec_driver_sql(stmt)
                     except Exception as e:

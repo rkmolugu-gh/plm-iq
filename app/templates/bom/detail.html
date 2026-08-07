@@ -41,6 +41,14 @@
             <dd class="col-sm-9"><span class="badge bg-info badge-status">{{ item.bom_type }}</span></dd>
             <dt class="col-sm-3">Material Notes</dt>
             <dd class="col-sm-9">{{ item.material_notes or '-' }}</dd>
+            <dt class="col-sm-3">Created By</dt>
+            <dd class="col-sm-9">{{ user_map.get(item.created_by, '—') if user_map else (item.created_by or '—') }}</dd>
+            <dt class="col-sm-3">Created Date</dt>
+            <dd class="col-sm-9">{{ item.created_date or '-' }}</dd>
+            <dt class="col-sm-3">Modified By</dt>
+            <dd class="col-sm-9">{{ user_map.get(item.modified_by, '—') if user_map else (item.modified_by or '—') }}</dd>
+            <dt class="col-sm-3">Modified Date</dt>
+            <dd class="col-sm-9">{{ item.modified_date or '-' }}</dd>
         </dl>
     </div>
 </div>

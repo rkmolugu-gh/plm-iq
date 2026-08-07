@@ -185,10 +185,12 @@ def auth_context(request: Request, db: TenantScopedSession) -> dict:
     inbox_count = 0
     unread_count = 0
     all_users = None
+    user_map = {}
     if user:
         from app.notifications import inbox_counts
         inbox_count, unread_count = inbox_counts(db, user)
         all_users = db.query(User).order_by(User.username).all()
+        user_map = {u.user_id: u.full_name for u in all_users}
     return {
         "current_user": user,
         "current_tenant": tenant,
@@ -197,6 +199,7 @@ def auth_context(request: Request, db: TenantScopedSession) -> dict:
         "inbox_count": inbox_count,
         "unread_count": unread_count,
         "all_users": all_users,
+        "user_map": user_map,
     }
 
 

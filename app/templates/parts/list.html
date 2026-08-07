@@ -43,6 +43,8 @@
                 <th>UOM</th>
                 <th>Qty</th>
                 <th>Status</th>
+                <th>Created By</th>
+                <th>Modified By</th>
                 <th>Modified</th>
             </tr>
         </thead>
@@ -60,10 +62,12 @@
                         {{ p.status }}
                     </span>
                 </td>
+                <td><small>{{ user_map.get(p.created_by, '—') if user_map else (p.created_by or '—') }}</small></td>
+                <td><small>{{ user_map.get(p.modified_owner, '—') if user_map else (p.modified_owner or '—') }}</small></td>
                 <td><small class="text-muted">{{ p.modified_date or '-' }}</small></td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="text-center text-muted py-4">No parts found.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-4">No parts found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

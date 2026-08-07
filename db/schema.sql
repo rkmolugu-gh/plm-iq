@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS bom (
     material_notes  TEXT,
     bom_type        TEXT    NOT NULL DEFAULT 'DESIGN'
                             CHECK (bom_type IN ('DESIGN', 'AS_BUILT', 'AS_SHIPPED', 'AS_MAINTAINED')),
+    created_by      INTEGER REFERENCES users(user_id),
+    modified_by     INTEGER REFERENCES users(user_id),
+    created_date    DATE,
+    modified_date   DATE,
     tenant_id       INTEGER,
     tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
@@ -127,6 +131,10 @@ CREATE TABLE IF NOT EXISTS costing_bom (
     extended_cost   NUMERIC(12,4) NOT NULL DEFAULT 0 CHECK (extended_cost >= 0),
     rolled_total    NUMERIC(12,4) NOT NULL DEFAULT 0 CHECK (rolled_total >= 0),
     cost_type       TEXT    NOT NULL CHECK (cost_type IN ('ASSEMBLY', 'LEAF')),
+    created_by      INTEGER REFERENCES users(user_id),
+    modified_by     INTEGER REFERENCES users(user_id),
+    created_date    DATE,
+    modified_date   DATE,
     tenant_id       INTEGER,
     tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
@@ -160,11 +168,17 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     approved_date   DATE,
     implemented_date DATE,
     new_status      TEXT    CHECK (new_status IN ('DRAFT', 'RELEASED', 'OBSOLETED')),
+    created_by      INTEGER REFERENCES users(user_id),
+    modified_by     INTEGER REFERENCES users(user_id),
+    created_date    DATE,
+    modified_date   DATE,
     tenant_id       INTEGER NOT NULL DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
     FOREIGN KEY (part_number)     REFERENCES parts(part_number),
     FOREIGN KEY (change_drafter)  REFERENCES users(user_id),
     FOREIGN KEY (change_approver) REFERENCES users(user_id),
+    FOREIGN KEY (created_by)      REFERENCES users(user_id),
+    FOREIGN KEY (modified_by)     REFERENCES users(user_id),
     FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
 );
 
@@ -197,10 +211,16 @@ CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     quality_rating          TEXT    CHECK (quality_rating IN ('A', 'B', 'C', 'D')),
     approval_date           DATE,
     notes                   TEXT,
+    created_by              INTEGER REFERENCES users(user_id),
+    modified_by             INTEGER REFERENCES users(user_id),
+    created_date            DATE,
+    modified_date           DATE,
     tenant_id               INTEGER NOT NULL DEFAULT 1,
     tenant_key              TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
-    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
+    FOREIGN KEY (created_by)  REFERENCES users(user_id),
+    FOREIGN KEY (modified_by) REFERENCES users(user_id)
 );
 
 CREATE INDEX idx_aml_part_number      ON approved_manufacturer_list(part_number);
@@ -238,10 +258,16 @@ CREATE TABLE IF NOT EXISTS approved_vendor_list (
     compliance_status   TEXT,
     approval_date       DATE,
     notes               TEXT,
+    created_by          INTEGER REFERENCES users(user_id),
+    modified_by         INTEGER REFERENCES users(user_id),
+    created_date        DATE,
+    modified_date       DATE,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
-    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
+    FOREIGN KEY (created_by)  REFERENCES users(user_id),
+    FOREIGN KEY (modified_by) REFERENCES users(user_id)
 );
 
 CREATE INDEX idx_avl_part_number   ON approved_vendor_list(part_number);
@@ -279,11 +305,17 @@ CREATE TABLE IF NOT EXISTS cad_metadata (
     model_type          TEXT,
     source_type         TEXT,
     notes               TEXT,
+    created_by          INTEGER REFERENCES users(user_id),
+    modified_by         INTEGER REFERENCES users(user_id),
+    created_date        DATE,
+    modified_date       DATE,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
     FOREIGN KEY (part_number)   REFERENCES parts(part_number),
     FOREIGN KEY (modeling_author) REFERENCES users(user_id),
-    FOREIGN KEY (tenant_id)      REFERENCES tenants(tenant_id)
+    FOREIGN KEY (created_by)    REFERENCES users(user_id),
+    FOREIGN KEY (modified_by)   REFERENCES users(user_id),
+    FOREIGN KEY (tenant_id)     REFERENCES tenants(tenant_id)
 );
 
 CREATE INDEX idx_cad_part_number ON cad_metadata(part_number);
@@ -317,7 +349,9 @@ CREATE TABLE IF NOT EXISTS documents (
     created_date    TEXT,
     modified_date   TEXT,
     tenant_id       INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
-    tenant_key      TEXT    NOT NULL
+    tenant_key      TEXT    NOT NULL,
+    FOREIGN KEY (created_by)  REFERENCES users(user_id),
+    FOREIGN KEY (modified_by) REFERENCES users(user_id)
 );
 
 CREATE INDEX idx_doc_parent   ON documents(parent_id);

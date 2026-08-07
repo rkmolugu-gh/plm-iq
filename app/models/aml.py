@@ -24,6 +24,10 @@ class ApprovedManufacturer(Base):
     quality_rating = Column("quality_rating", String)
     approval_date = Column("approval_date", String)
     notes = Column("notes", String)
+    created_by = Column("created_by", Integer, ForeignKey("users.user_id"))
+    modified_by = Column("modified_by", Integer, ForeignKey("users.user_id"))
+    created_date = Column("created_date", String)
+    modified_date = Column("modified_date", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
     tenant_key = Column("tenant_key", String, nullable=False)
 

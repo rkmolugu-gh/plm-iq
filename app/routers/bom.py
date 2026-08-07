@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, Form, Query, Request
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
 from app.database import TenantScopedSession
@@ -27,7 +27,7 @@ def list_bom(
     """List all BOM items with collapsible tree view (default) or flat table."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    query = db.query(BomItem)
+    query = db.query(BomItem).options(selectinload(BomItem.part))
 
     if q:
         query = query.filter(
@@ -413,6 +413,7 @@ def bom_tree(request: Request, part_number: str, db: TenantScopedSession = Depen
         visited_parts.add(current)
         rows = (
             db.query(BomItem)
+            .options(selectinload(BomItem.part))
             .filter((BomItem.part_number == current) | (BomItem.parent_assembly == current))
             .order_by(BomItem.level, BomItem.part_number)
             .all()

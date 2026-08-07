@@ -56,6 +56,8 @@
                 <th>Size</th>
                 <th>Model Type</th>
                 <th>Drawing#</th>
+                <th>Created By</th>
+                <th>Modified By</th>
             </tr>
         </thead>
         <tbody>
@@ -81,9 +83,11 @@
                 <td>{% if item.file_size_bytes %}{{ (item.file_size_bytes / 1024)|round(1) }} KB{% else %}-{% endif %}</td>
                 <td><small>{{ item.model_type or '-' }}</small></td>
                 <td><small><code>{{ item.drawing_number or '-' }}</code></small></td>
+                <td><small>{{ user_map.get(item.created_by, '—') if user_map else (item.created_by or '—') }}</small></td>
+                <td><small>{{ user_map.get(item.modified_by, '—') if user_map else (item.modified_by or '—') }}</small></td>
             </tr>
             {% else %}
-            <tr><td colspan="9" class="text-center text-muted py-4">No CAD files found.</td></tr>
+            <tr><td colspan="11" class="text-center text-muted py-4">No CAD files found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

@@ -50,8 +50,12 @@
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Spec File</dt>
                     <dd class="col-sm-8"><code>{{ part.spec_file or '-' }}</code></dd>
+                    <dt class="col-sm-4">Created By</dt>
+                    <dd class="col-sm-8">{{ user_map.get(part.created_by, '—') if user_map else (part.created_by or '—') }}</dd>
                     <dt class="col-sm-4">Created</dt>
                     <dd class="col-sm-8">{{ part.created_date or '-' }}</dd>
+                    <dt class="col-sm-4">Modified By</dt>
+                    <dd class="col-sm-8">{{ user_map.get(part.modified_owner, '—') if user_map else (part.modified_owner or '—') }}</dd>
                     <dt class="col-sm-4">Modified</dt>
                     <dd class="col-sm-8">{{ part.modified_date or '-' }}</dd>
                 </dl>

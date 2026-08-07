@@ -18,6 +18,10 @@ class BomItem(Base):
     parent_assembly = Column("parent_assembly", String, ForeignKey("parts.part_number"))
     material_notes = Column("material_notes", String)
     bom_type = Column("bom_type", String, nullable=False, default="DESIGN")
+    created_by = Column("created_by", Integer, ForeignKey("users.user_id"))
+    modified_by = Column("modified_by", Integer, ForeignKey("users.user_id"))
+    created_date = Column("created_date", String)
+    modified_date = Column("modified_date", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"))
     tenant_key = Column("tenant_key", String, nullable=False)
 
