@@ -143,7 +143,7 @@ def migrate_schema():
         for rn in default_role_names:
             conn.exec_driver_sql(
                 "UPDATE roles SET is_global = TRUE WHERE name = ? AND is_global = FALSE",
-                [rn],
+                (rn,),
             )
         logger.info("Backfilled is_global=TRUE for default roles")
 
@@ -157,9 +157,23 @@ def migrate_schema():
         for tmpl_name in ["Standard Part Release", "ECO Approval"]:
             conn.exec_driver_sql(
                 "UPDATE workflow_templates SET is_global = TRUE, tenant_id = NULL WHERE name = ? AND is_global = FALSE",
-                [tmpl_name],
+                (tmpl_name,),
             )
         logger.info("Backfilled is_global=TRUE for standard workflow templates")
+
+        # Add in_workflow flag to parts and engineering_change_orders
+        for table in ["parts", "engineering_change_orders"]:
+            cols = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})").all()}
+            if "in_workflow" not in cols:
+                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN in_workflow BOOLEAN NOT NULL DEFAULT FALSE")
+                logger.info("Added column %s.in_workflow", table)
+
+        # Backfill: set in_workflow=FALSE for any objects that don't have an active workflow.
+        # (The default is already FALSE, so this is a no-op for new rows; ensures existing
+        # rows are consistent after the column is added.)
+        conn.exec_driver_sql("UPDATE parts SET in_workflow = FALSE WHERE in_workflow IS NULL")
+        conn.exec_driver_sql("UPDATE engineering_change_orders SET in_workflow = FALSE WHERE in_workflow IS NULL")
+        logger.info("Backfilled in_workflow=FALSE for all parts and ECOs")
 
     # Create workflow indexes
     with engine.begin() as conn:
@@ -215,8 +229,8 @@ def seed_database():
 def _seed_workflow_templates_for_new_tenants():
     """Idempotently seed default release templates for new tenants."""
     with engine.begin() as conn:
-        tenants = conn.exec_driver_sql("SELECT tenant_id FROM tenants").fetchall()
-    for (tid,) in tenants:
+        tenants = conn.exec_driver_sql("SELECT tenant_id, tenant_key FROM tenants").fetchall()
+    for (tid, tkey) in tenants:
         existing = (
             SessionLocal()
             .query(WorkflowTemplate)
@@ -255,9 +269,11 @@ def _seed_workflow_templates_for_new_tenants():
         sess = SessionLocal()
         try:
             sess.add(WorkflowTemplate(name="Standard Part Release", object_type="part",
-                                      definition=part_def, is_active=True, tenant_id=tid, created_at=today))
+                                      definition=part_def, is_active=True, tenant_id=tid,
+                                      tenant_key=tkey, created_at=today))
             sess.add(WorkflowTemplate(name="Standard ECO Release", object_type="eco",
-                                      definition=eco_def, is_active=True, tenant_id=tid, created_at=today))
+                                      definition=eco_def, is_active=True, tenant_id=tid,
+                                      tenant_key=tkey, created_at=today))
             sess.commit()
         finally:
             sess.close()

@@ -37,6 +37,7 @@
         <thead class="table-dark">
             <tr>
                 <th>Part Number</th>
+                <th></th>
                 <th>Revision</th>
                 <th>Name</th>
                 <th>Material</th>
@@ -61,6 +62,11 @@
                     <i class="bi bi-flag fs-6" title="{{ p.status or 'Draft' }}"></i>
                     {% endif %}
                 </td>
+                <td class="text-center">
+                    {% if p.in_workflow %}
+                    <i class="bi bi-play-circle-fill text-info" title="In active workflow"></i>
+                    {% endif %}
+                </td>
                 <td>{{ p.part_revision }}</td>
                 <td>{{ p.part_name }}</td>
                 <td><small>{{ (p.material or '')|truncate(40) or '-' }}</small></td>
@@ -76,7 +82,7 @@
                 <td><small class="text-muted">{{ p.modified_date or '-' }}</small></td>
             </tr>
             {% else %}
-            <tr><td colspan="10" class="text-center text-muted py-4">No parts found.</td></tr>
+            <tr><td colspan="11" class="text-center text-muted py-4">No parts found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

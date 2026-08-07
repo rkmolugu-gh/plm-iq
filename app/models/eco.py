@@ -1,6 +1,6 @@
 """Engineering Change Order model."""
 
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -12,6 +12,7 @@ class EngineeringChangeOrder(Base):
     eco_title = Column("eco_title", String, nullable=False)
     eco_description = Column("eco_description", String)
     eco_status = Column("eco_status", String, nullable=False, default="DRAFT")
+    in_workflow = Column("in_workflow", Boolean, nullable=False, default=False)
     part_number = Column("part_number", String, ForeignKey("parts.part_number"), nullable=False)
     current_revision = Column("current_revision", String)
     new_revision = Column("new_revision", String)

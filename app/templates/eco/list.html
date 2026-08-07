@@ -33,12 +33,17 @@
 <div class="table-responsive">
     <table class="table table-striped table-hover align-middle">
         <thead class="table-dark">
-            <tr><th>ECO#</th><th>Title</th><th>Part</th><th>Change</th><th>From</th><th>To</th><th>Status</th><th>Created By</th><th>Modified By</th><th>Drafter</th><th>Date</th></tr>
+            <tr><th>ECO#</th><th></th><th>Title</th><th>Part</th><th>Change</th><th>From</th><th>To</th><th>Status</th><th>Created By</th><th>Modified By</th><th>Drafter</th><th>Date</th></tr>
         </thead>
         <tbody>
             {% for item in items %}
             <tr>
                 <td><strong>{{ item.eco_number }}</strong></td>
+                <td class="text-center">
+                    {% if item.in_workflow %}
+                    <i class="bi bi-play-circle-fill text-info" title="In active workflow"></i>
+                    {% endif %}
+                </td>
                 <td><small>{{ (item.eco_title or '')|truncate(50) }}</small></td>
                 <td><a href="/parts/{{ item.part_number }}">{{ item.part_number }}</a></td>
                 <td><span class="badge bg-dark badge-status">{{ item.change_type or 'N/A' }}</span></td>
@@ -55,7 +60,7 @@
                 <td><small class="text-muted">{{ item.drafted_date or '-' }}</small></td>
             </tr>
             {% else %}
-            <tr><td colspan="11" class="text-center text-muted py-4">No ECOs found.</td></tr>
+            <tr><td colspan="12" class="text-center text-muted py-4">No ECOs found.</td></tr>
             {% endfor %}
         </tbody>
     </table>

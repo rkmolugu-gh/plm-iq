@@ -1,6 +1,6 @@
 """Part model."""
 
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -16,6 +16,7 @@ class Part(Base):
     uom = Column("uom", String, nullable=False)
     qty = Column("qty", Integer, nullable=False, default=1)
     status = Column("status", String, nullable=False, default="DRAFT")
+    in_workflow = Column("in_workflow", Boolean, nullable=False, default=False)
     created_date = Column("created_date", String)
     modified_date = Column("modified_date", String)
     modified_owner = Column("modified_owner", Integer, ForeignKey("users.user_id"))

@@ -2,7 +2,7 @@
 
 from typing import Optional
 from fastapi import APIRouter, Depends, Form, Query, Request
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -11,7 +11,6 @@ from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, Ap
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
-from app.workflow.engine import active_instance
 
 router = APIRouter(prefix="/parts")
 
@@ -89,7 +88,6 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
     cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
 
     # Query global templates + this tenant's templates (bypass tenant_key scoping)
-    from sqlalchemy import select
     release_templates = (
         db.execute(select(WorkflowTemplate).where(
             WorkflowTemplate.object_type == "part",
@@ -98,7 +96,7 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
             WorkflowTemplate.is_active == True,  # noqa: E712
         ).order_by(WorkflowTemplate.name)).scalars().all()
     )
-    active_release = active_instance(db, "part", part_number)
+    # in_workflow flag is set on the part by the workflow engine
     release_instance = (
         db.query(WorkflowInstance).filter(
             WorkflowInstance.object_type == "part",
@@ -118,7 +116,6 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         avls=avls,
         cads=cads,
         release_templates=release_templates,
-        active_release=active_release,
         release_instance=release_instance,
     ))
 

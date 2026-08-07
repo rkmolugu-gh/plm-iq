@@ -11,7 +11,6 @@ from app.models import EngineeringChangeOrder, User, WorkflowTemplate, WorkflowI
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
-from app.workflow.engine import active_instance
 
 router = APIRouter(prefix="/eco")
 
@@ -88,7 +87,7 @@ def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depe
         (WorkflowTemplate.tenant_id == user.tenant_id),
         WorkflowTemplate.is_active == True,  # noqa: E712
     ).order_by(WorkflowTemplate.name)).scalars().all()
-    active_release = active_instance(db, "eco", eco_number)
+    # in_workflow flag is set on the ECO by the workflow engine
     release_instance = (
         db.query(WorkflowInstance).filter(
             WorkflowInstance.object_type == "eco",
@@ -100,7 +99,6 @@ def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depe
     return HTMLResponse(content=render(
         "eco/detail.html", **ctx, item=item,
         release_templates=release_templates,
-        active_release=active_release,
         release_instance=release_instance,
     ))
 

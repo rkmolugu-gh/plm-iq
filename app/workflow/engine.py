@@ -244,8 +244,18 @@ def start_workflow(
 
     if object_type == "part":
         result_status = result_status or "RELEASED"
+        # Set in_workflow flag on the part
+        part = db.query(Part).filter(Part.part_number == object_id, Part.tenant_id == user.tenant_id).first()
+        if part:
+            part.in_workflow = True
     elif object_type == "eco":
         result_status = result_status or "APPROVED"
+        # Set in_workflow flag on the ECO
+        eco = db.query(EngineeringChangeOrder).filter(
+            EngineeringChangeOrder.eco_number == object_id, EngineeringChangeOrder.tenant_id == user.tenant_id
+        ).first()
+        if eco:
+            eco.in_workflow = True
     else:
         raise WorkflowError(f"Unsupported object_type: {object_type}")
 
@@ -377,6 +387,15 @@ def _supersede_peer_tasks(
 def _reject_workflow(db, instance: WorkflowInstance, user: User, comment, background=None) -> None:
     instance.status = "REJECTED"
     instance.completed_at = _today()
+    # Clear the in_workflow flag on the target object
+    if instance.object_type == "part":
+        part = db.query(Part).filter(Part.part_number == instance.object_id).first()
+        if part:
+            part.in_workflow = False
+    elif instance.object_type == "eco":
+        eco = db.query(EngineeringChangeOrder).filter(EngineeringChangeOrder.eco_number == instance.object_id).first()
+        if eco:
+            eco.in_workflow = False
     db.flush()
     _notify_participants(
         db, instance, "workflow_rejected",
@@ -398,6 +417,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
         )
         if part:
             part.status = instance.result_status or "RELEASED"
+            part.in_workflow = False
             part.modified_date = today
             part.modified_owner = instance.started_by
     elif instance.object_type == "eco":
@@ -411,6 +431,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
         )
         if eco:
             eco.eco_status = "APPROVED"
+            eco.in_workflow = False
             eco.approved_date = today
             # Apply the change to the linked part.
             if eco.new_status or eco.new_revision:

@@ -331,12 +331,12 @@ def _obj_url(object_type: str, object_id: str) -> str:
 
 def _startable_check(db: Session, user: User, object_type: str, object_id: str) -> Optional[str]:
     """Return an error string if the object can't start a workflow, else None."""
-    if active_instance(db, object_type, object_id):
-        return "An active workflow already exists for this object."
     if object_type == "part":
         obj = db.query(Part).filter(Part.part_number == object_id, Part.tenant_id == user.tenant_id).first()
         if not obj:
             return "Part not found."
+        if obj.in_workflow:
+            return "An active workflow already exists for this object."
         if obj.status != "DRAFT":
             return "Only DRAFT parts can be released."
     elif object_type == "eco":
@@ -344,6 +344,8 @@ def _startable_check(db: Session, user: User, object_type: str, object_id: str) 
             EngineeringChangeOrder.eco_number == object_id, EngineeringChangeOrder.tenant_id == user.tenant_id).first()
         if not obj:
             return "ECO not found."
+        if obj.in_workflow:
+            return "An active workflow already exists for this object."
         if obj.eco_status != "DRAFT":
             return "Only DRAFT ECOs can be released."
     else:
