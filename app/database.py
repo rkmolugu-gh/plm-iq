@@ -2,6 +2,7 @@
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
+from sqlalchemy import inspect
 
 from app.config import DATABASE_URL
 
@@ -64,17 +65,35 @@ class TenantScopedSession:
         SQLAlchemy's ``Session.query()``.
         """
         # Determine the primary model for tenant-key filtering.
-        # Look for a model class (has __tablename__) that has a tenant_key column.
+        # Look for:
+        # 1. A model class (has __tablename__) with tenant_key column
+        # 2. A column expression - use inspect() to get table and find model
         # This handles cases like:
-        #   db.query(Part)                    -> filters by Part.tenant_key
+        #   db.query(Part)                                    -> filters by Part.tenant_key
         #   db.query(Part.status, func.count(Part.part_number)) -> filters by Part.tenant_key
-        #   db.query(func.count(Part.part_number)) -> filters by Part.tenant_key
+        #   db.query(func.count(Part.part_number))            -> filters by Part.tenant_key
         primary = None
         for arg in args:
-            # Check if this is a model class (has __tablename__) with tenant_key
-            if hasattr(arg, "__tablename__") and hasattr(arg, "tenant_key"):
-                primary = arg
-                break
+            # Check if this is a model class (has __tablename__) with tenant_key column
+            if hasattr(arg, "__tablename__"):
+                # Check if the model has a tenant_key column
+                if hasattr(arg, "tenant_key") or "tenant_key" in [c.name for c in arg.__table__.columns]:
+                    primary = arg
+                    break
+            # Check if this is a column/expression - use inspect to get table
+            else:
+                try:
+                    table = inspect(arg).table
+                    if table and "tenant_key" in [c.name for c in table.columns]:
+                        # Find the model class that maps to this table
+                        # Try to get from the column's parent mapper
+                        if hasattr(arg, "parent") and hasattr(arg.parent, "mapper"):
+                            mapper = arg.parent.mapper
+                            if hasattr(mapper, "class_"):
+                                primary = mapper.class_
+                                break
+                except Exception:
+                    pass
         if primary is not None and self.tenant_key is not None:
             return self._db.query(*args).filter(primary.tenant_key == self.tenant_key)
         return self._db.query(*args)

@@ -32,8 +32,21 @@ def get_tenant_db(request: Request, db: Session = Depends(get_db)) -> TenantScop
     All queries on models with a ``tenant_key`` column are automatically
     filtered to the current tenant.  Models without ``tenant_key``
     (e.g. Role, AppSetting) are returned unscoped.
+
+    Resolution order:
+    1. Subdomain (from request state, set by middleware)
+    2. Logged-in user's tenant_key (when on apex domain)
     """
     tenant_key = get_tenant_key(request)
+
+    # If no subdomain (apex domain), try to resolve from logged-in user
+    if tenant_key is None:
+        user_id = request.session.get("user_id")
+        if user_id is not None:
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if user and user.tenant_key:
+                tenant_key = user.tenant_key
+
     return TenantScopedSession(db, tenant_key)
 
 

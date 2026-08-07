@@ -20,14 +20,47 @@ def dashboard(request: Request, db: TenantScopedSession = Depends(get_tenant_db)
     user = require_user(request, db)
     ctx = auth_context(request, db)
 
-    part_count = db.query(func.count(Part.part_number)).scalar() or 0
-    bom_count = db.query(func.count(BomItem.id)).scalar() or 0
-    costing_count = db.query(func.count(CostingBomItem.id)).scalar() or 0
-    eco_count = db.query(func.count(EngineeringChangeOrder.eco_number)).scalar() or 0
-    aml_count = db.query(func.count(ApprovedManufacturer.id)).scalar() or 0
-    avl_count = db.query(func.count(ApprovedVendor.id)).scalar() or 0
-    cad_count = db.query(func.count(CadMetadata.id)).scalar() or 0
-    document_count = db.query(func.count(Document.id)).scalar() or 0
+    # Use subquery approach to ensure tenant scoping works with count/sum functions
+    part_count = (
+        db.query(func.count(Part.part_number))
+        .filter(Part.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    bom_count = (
+        db.query(func.count(BomItem.id))
+        .filter(BomItem.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    costing_count = (
+        db.query(func.count(CostingBomItem.id))
+        .filter(CostingBomItem.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    eco_count = (
+        db.query(func.count(EngineeringChangeOrder.eco_number))
+        .filter(EngineeringChangeOrder.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    aml_count = (
+        db.query(func.count(ApprovedManufacturer.id))
+        .filter(ApprovedManufacturer.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    avl_count = (
+        db.query(func.count(ApprovedVendor.id))
+        .filter(ApprovedVendor.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    cad_count = (
+        db.query(func.count(CadMetadata.id))
+        .filter(CadMetadata.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
+    document_count = (
+        db.query(func.count(Document.id))
+        .filter(Document.tenant_key == user.tenant_key)
+        .scalar()
+    ) or 0
 
     # Status breakdown for parts
     status_breakdown = dict(
@@ -46,7 +79,7 @@ def dashboard(request: Request, db: TenantScopedSession = Depends(get_tenant_db)
     # Cost summary stats
     total_cost = (
         db.query(func.sum(CostingBomItem.rolled_total))
-        .filter(CostingBomItem.level == 0)
+        .filter(CostingBomItem.level == 0, CostingBomItem.tenant_key == user.tenant_key)
         .scalar()
     ) or 0
 
