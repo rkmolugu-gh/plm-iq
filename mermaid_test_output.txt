@@ -1,0 +1,23 @@
+flowchart TD
+start((Start))
+subgraph S0["Engineering"]
+n0_0["Engineering Review<br/><small><code>eng</code><br/><em>Review CAD data</em><br/>User: john.doe<br/>Due: 3 days</small>"]
+end
+subgraph S1["Approvals · parallel (2 of 2)"]
+n1_0["QA Approval<br/><small><code>qa</code><br/><em>Verify quality</em><br/>Role: quality (quorum: 2)<br/>Due: 5 days</small>"]
+n1_1["Mfg Approval<br/><small><code>mfg</code><br/><em>Verify mfg</em><br/>Role: manufacturing (quorum: 2)<br/>Due: 5 days</small>"]
+end
+start --> n0_0
+n0_0 --> n1_0
+n0_0 --> n1_1
+n1_0 --> finish
+n1_1 --> finish
+finish((Done))
+
+%% Legend
+subgraph Legend["Legend"]
+L1["User = Assigned to specific user"]
+L2["Role = Assigned to role (multiple approvers)"]
+L3["Due: X days = SLA for completion"]
+L4["<code>key</code> = Step identifier"]
+end

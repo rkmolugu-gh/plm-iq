@@ -297,11 +297,11 @@ test_query_endpoints() {
 test_workflow_endpoints() {
     echo -e "${BLUE}=== Testing Workflow Endpoints ===${NC}}"
 
-    # Workflow templates list
-    api_call "Workflow Templates" "/workflow/templates" "GET" "" "200" "Should show workflow templates"
+    # Workflow definitions list
+    api_call "Workflow Definitions" "/workflow/templates" "GET" "" "200" "Should show workflow definitions"
 
-    # New template form
-    api_call "New Template Form" "/workflow/templates/new" "GET" "" "200" "Should show template creation form"
+    # New definition form
+    api_call "New Definition Form" "/workflow/templates/new" "GET" "" "200" "Should show definition creation form"
 
     # Workflow inbox
     api_call "Workflow Inbox" "/workflow/inbox" "GET" "" "200" "Should show user inbox"
