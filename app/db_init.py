@@ -18,7 +18,7 @@ from pathlib import Path
 
 from app.database import engine, SessionLocal
 from app.models import (
-    SavedQuery, WorkflowTemplate, WorkflowInstance,
+    SavedQuery, WorkflowDefinition, WorkflowInstance,
     WorkflowTask, Notification, Role, Favorite, User, Tenant
 )
 from app.routers.auth import _hash_password
@@ -43,7 +43,7 @@ def init_orm_tables():
     from app.database import Base as ORMBase
     ORMBase.metadata.create_all(bind=engine, tables=[
         SavedQuery.__table__,
-        WorkflowTemplate.__table__,
+        WorkflowDefinition.__table__,
         WorkflowInstance.__table__,
         WorkflowTask.__table__,
         Notification.__table__,
@@ -147,19 +147,19 @@ def migrate_schema():
             )
         logger.info("Backfilled is_global=TRUE for default roles")
 
-        # Add is_global and make tenant_id nullable for workflow_templates
-        wf_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(workflow_templates)").all()}
+        # Add is_global and make tenant_id nullable for workflow_definitions
+        wf_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(workflow_definitions)").all()}
         if "is_global" not in wf_cols:
-            conn.exec_driver_sql("ALTER TABLE workflow_templates ADD COLUMN is_global BOOLEAN NOT NULL DEFAULT FALSE")
-            logger.info("Added column workflow_templates.is_global")
+            conn.exec_driver_sql("ALTER TABLE workflow_definitions ADD COLUMN is_global BOOLEAN NOT NULL DEFAULT FALSE")
+            logger.info("Added column workflow_definitions.is_global")
 
-        # Backfill: mark the standard release templates as global
+        # Backfill: mark the standard release definitions as global
         for tmpl_name in ["Standard Part Release", "ECO Approval"]:
             conn.exec_driver_sql(
-                "UPDATE workflow_templates SET is_global = TRUE, tenant_id = NULL WHERE name = ? AND is_global = FALSE",
+                "UPDATE workflow_definitions SET is_global = TRUE, tenant_id = NULL WHERE name = ? AND is_global = FALSE",
                 (tmpl_name,),
             )
-        logger.info("Backfilled is_global=TRUE for standard workflow templates")
+        logger.info("Backfilled is_global=TRUE for standard workflow definitions")
 
         # Add in_workflow flag and active_workflow_instance_id to parts and engineering_change_orders
         for table in ["parts", "engineering_change_orders"]:
@@ -217,8 +217,8 @@ def seed_database():
     else:
         logger.warning("seed.sql not found at %s", seed_file)
 
-    # Seed workflow templates for any tenants that don't have them
-    _seed_workflow_templates_for_new_tenants()
+    # Seed workflow definitions for any tenants that don't have them
+    _seed_workflow_definitions_for_new_tenants()
 
     # Ensure masteradmin exists and has correct role
     _ensure_masteradmin()
@@ -229,15 +229,15 @@ def seed_database():
     logger.info("Database seeding complete")
 
 
-def _seed_workflow_templates_for_new_tenants():
-    """Idempotently seed default release templates for new tenants."""
+def _seed_workflow_definitions_for_new_tenants():
+    """Idempotently seed default release definitions for new tenants."""
     with engine.begin() as conn:
         tenants = conn.exec_driver_sql("SELECT tenant_id, tenant_key FROM tenants").fetchall()
     for (tid, tkey) in tenants:
         existing = (
             SessionLocal()
-            .query(WorkflowTemplate)
-            .filter(WorkflowTemplate.tenant_id == tid)
+            .query(WorkflowDefinition)
+            .filter(WorkflowDefinition.tenant_id == tid)
             .count()
         )
         if existing:
@@ -281,16 +281,16 @@ def _seed_workflow_templates_for_new_tenants():
         }
         sess = SessionLocal()
         try:
-            sess.add(WorkflowTemplate(name="Standard Part Release", object_type="part",
+            sess.add(WorkflowDefinition(name="Standard Part Release", object_type="part",
                                       definition=part_def, is_active=True, tenant_id=tid,
                                       tenant_key=tkey, created_at=today))
-            sess.add(WorkflowTemplate(name="Standard ECO Release", object_type="eco",
+            sess.add(WorkflowDefinition(name="Standard ECO Release", object_type="eco",
                                       definition=eco_def, is_active=True, tenant_id=tid,
                                       tenant_key=tkey, created_at=today))
             sess.commit()
         finally:
             sess.close()
-        logger.info("Seeded default workflow templates for tenant %s", tid)
+        logger.info("Seeded default workflow definitions for tenant %s", tid)
 
 
 def _ensure_masteradmin():
@@ -384,7 +384,7 @@ def _normalize_tenants():
             else:
                 logger.warning("Legacy 'admin' role still has users; leaving it in place.")
 
-        for t in sess.query(WorkflowTemplate).all():
+        for t in sess.query(WorkflowDefinition).all():
             defn = _copy.deepcopy(t.definition or {})
             changed = False
             for stage in defn.get("stages", []) or []:
@@ -395,7 +395,7 @@ def _normalize_tenants():
             if changed:
                 t.definition = defn
                 sess.commit()
-                logger.info("Rewrote workflow template '%s' admin → tenantadmin assignee", t.name)
+                logger.info("Rewrote workflow definition '%s' admin → tenantadmin assignee", t.name)
     finally:
         sess.close()
 

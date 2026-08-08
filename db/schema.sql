@@ -371,7 +371,7 @@ CREATE INDEX idx_doc_kind     ON documents(kind);
 -- instance is one run against a part_number or eco_number; tasks are the
 -- per-user Inbox items (fanned out by role); notifications are alerts.
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS workflow_templates (
+CREATE TABLE IF NOT EXISTS workflow_definitions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL,
     object_type TEXT    NOT NULL,
@@ -380,16 +380,16 @@ CREATE TABLE IF NOT EXISTS workflow_templates (
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     is_global   BOOLEAN NOT NULL DEFAULT FALSE,
     created_by  INTEGER REFERENCES users(user_id),
-    tenant_id   INTEGER REFERENCES tenants(tenant_id),  -- NULL for global templates
+    tenant_id   INTEGER REFERENCES tenants(tenant_id),  -- NULL for global definitions
     tenant_key  TEXT    NOT NULL,
     created_at  DATE
 );
-CREATE INDEX idx_wf_tmpl_tenant ON workflow_templates(tenant_id);
-CREATE INDEX idx_wf_tmpl_tenant_key ON workflow_templates(tenant_key);
+CREATE INDEX idx_wf_def_tenant ON workflow_definitions(tenant_id);
+CREATE INDEX idx_wf_def_tenant_key ON workflow_definitions(tenant_key);
 
 CREATE TABLE IF NOT EXISTS workflow_instances (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    template_id   INTEGER REFERENCES workflow_templates(id),
+    definition_id INTEGER REFERENCES workflow_definitions(id),
     object_type   TEXT    NOT NULL,        -- 'part' | 'eco'
     object_id     TEXT    NOT NULL,        -- part_number | eco_number
     status        TEXT    NOT NULL DEFAULT 'IN_PROGRESS',  -- DRAFT|IN_PROGRESS|APPROVED|REJECTED|COMPLETED

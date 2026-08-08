@@ -10,7 +10,7 @@ from app.models.avl import ApprovedVendor
 from app.models.cad import CadMetadata
 from app.models.documents import Document
 from app.models.queries import SavedQuery
-from app.models.workflow import WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification
+from app.models.workflow import WorkflowDefinition, WorkflowInstance, WorkflowTask, Notification
 from app.models.role import Role, role_names
 from app.models.favorite import Favorite
 from app.models.setting import AppSetting
@@ -27,7 +27,7 @@ __all__ = [
     "CadMetadata",
     "Document",
     "SavedQuery",
-    "WorkflowTemplate",
+    "WorkflowDefinition",
     "WorkflowInstance",
     "WorkflowTask",
     "Notification",

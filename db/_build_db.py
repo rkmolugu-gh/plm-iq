@@ -25,7 +25,7 @@ TABLES = [
     "approved_vendor_list",
     "cad_metadata",
     "documents",
-    "workflow_templates",
+    "workflow_definitions",
     "workflow_instances",
     "workflow_tasks",
     "notifications",

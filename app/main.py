@@ -16,7 +16,7 @@ from app.routers.auth import _RedirectToLogin
 from app.aisearch import router as search_router
 from app.plmassistant.assistant_router import router as assistant_router
 from app.database import engine, Base
-from app.models import SavedQuery, WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, Role, Favorite, AppSetting
+from app.models import SavedQuery, WorkflowDefinition, WorkflowInstance, WorkflowTask, Notification, Role, Favorite, AppSetting
 
 # ── Logging configuration ─────────────────────────────────────
 _log_level = os.environ.get("LOG_LEVEL", "INFO").upper()

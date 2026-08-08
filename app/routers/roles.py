@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import TenantScopedSession
-from app.models import Role, User, WorkflowTemplate
+from app.models import Role, User, WorkflowDefinition
 from app.routers.auth import require_user, require_role, require_superuser, auth_context, get_tenant_db
 from app.routers.admin import _render_tree
 from app.template_utils import render
@@ -99,7 +99,7 @@ def role_delete(
 
 def _template_using_role(db: Session, role_name: str) -> Optional[str]:
     """Return the name of a workflow template that references `role_name` as a step assignee."""
-    for t in db.query(WorkflowTemplate).all():
+    for t in db.query(WorkflowDefinition).all():
         defn = t.definition or {}
         for stage in defn.get("stages", []) or []:
             for step in stage.get("steps", []) or []:

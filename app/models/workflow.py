@@ -1,6 +1,6 @@
 """Workflow / release-approval models.
 
-A release workflow is a reusable :class:`WorkflowTemplate` (sequential *stages*, each
+A release workflow is a reusable :class:`WorkflowDefinition` (sequential *stages*, each
 stage optionally *parallel* / AND-joined) instantiated against a Part or an ECO as a
 :class:`WorkflowInstance`. Each step of a stage is fanned out into one
 :class:`WorkflowTask` per user in the assigned role — those tasks are what appear in a
@@ -14,8 +14,8 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-class WorkflowTemplate(Base):
-    __tablename__ = "workflow_templates"
+class WorkflowDefinition(Base):
+    __tablename__ = "workflow_definitions"
 
     id = Column("id", Integer, primary_key=True, autoincrement=True)
     name = Column("name", String, nullable=False)
@@ -31,14 +31,14 @@ class WorkflowTemplate(Base):
     tenant_key = Column("tenant_key", String, nullable=False)
     created_at = Column("created_at", String)
 
-    instances = relationship("WorkflowInstance", back_populates="template")
+    instances = relationship("WorkflowInstance", back_populates="definition")
 
 
 class WorkflowInstance(Base):
     __tablename__ = "workflow_instances"
 
     id = Column("id", Integer, primary_key=True, autoincrement=True)
-    template_id = Column("template_id", Integer, ForeignKey("workflow_templates.id"))
+    definition_id = Column("definition_id", Integer, ForeignKey("workflow_definitions.id"))
     object_type = Column("object_type", String, nullable=False)  # 'part' | 'eco'
     object_id = Column("object_id", String, nullable=False)      # part_number | eco_number
     # DRAFT | IN_PROGRESS | APPROVED | REJECTED | COMPLETED
@@ -52,7 +52,7 @@ class WorkflowInstance(Base):
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
     tenant_key = Column("tenant_key", String, nullable=False)
 
-    template = relationship("WorkflowTemplate", back_populates="instances")
+    definition = relationship("WorkflowDefinition", back_populates="instances")
     tasks = relationship(
         "WorkflowTask",
         back_populates="instance",

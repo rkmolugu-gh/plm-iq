@@ -31,7 +31,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import (
-    WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
+    WorkflowDefinition, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
 )
 from app.notifications import notify
 from app.routers.auth import is_superuser
@@ -51,9 +51,9 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
-def _stages(template: WorkflowTemplate) -> List[dict]:
-    """Extract stages from a template's v2 definition."""
-    return (template.definition or {}).get("stages", []) or []
+def _stages(definition: WorkflowDefinition) -> List[dict]:
+    """Extract stages from a definition's v2 definition."""
+    return (definition.definition or {}).get("stages", []) or []
 
 
 def _link_for(object_type: str, object_id: str) -> str:
@@ -280,7 +280,7 @@ def _notify_participants(db, instance, ntype, title, message, background=None):
 
 def start_workflow(
     db: Session,
-    template: WorkflowTemplate,
+    definition: WorkflowDefinition,
     object_type: str,
     object_id: str,
     user: User,
@@ -288,7 +288,7 @@ def start_workflow(
     due_date: Optional[str] = None,
     background=None,
 ) -> WorkflowInstance:
-    """Instantiate ``template`` against ``object_id`` and create the first tasks."""
+    """Instantiate ``definition`` against ``object_id`` and create the first tasks."""
     if active_instance(db, object_type, object_id):
         raise WorkflowError(f"{object_type} '{object_id}' already has an active workflow.")
 
@@ -310,7 +310,7 @@ def start_workflow(
         raise WorkflowError(f"Unsupported object_type: {object_type}")
 
     instance = WorkflowInstance(
-        template_id=template.id,
+        definition_id=definition.id,
         object_type=object_type,
         object_id=object_id,
         status="IN_PROGRESS",
@@ -352,7 +352,7 @@ def start_workflow(
 
 def _advance(db: Session, instance: WorkflowInstance, background=None) -> None:
     """Progress the workflow: create tasks, advance stages, finalize when done."""
-    stages = _stages(instance.template)
+    stages = _stages(instance.definition)
     while True:
         stage = stages[instance.current_stage]
         complete = _progress_stage(db, instance, stage, background)

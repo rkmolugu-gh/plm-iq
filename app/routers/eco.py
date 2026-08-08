@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.database import TenantScopedSession
-from app.models import EngineeringChangeOrder, User, WorkflowTemplate, WorkflowInstance, Favorite
+from app.models import EngineeringChangeOrder, User, WorkflowDefinition, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
 from app.template_utils import render
@@ -81,12 +81,12 @@ def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depe
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
     # Query global templates + this tenant's templates (bypass tenant_key scoping)
-    release_templates = db.execute(select(WorkflowTemplate).where(
-        WorkflowTemplate.object_type == "eco",
-        (WorkflowTemplate.is_global == True) |
-        (WorkflowTemplate.tenant_id == user.tenant_id),
-        WorkflowTemplate.is_active == True,  # noqa: E712
-    ).order_by(WorkflowTemplate.name)).scalars().all()
+    release_templates = db.execute(select(WorkflowDefinition).where(
+        WorkflowDefinition.object_type == "eco",
+        (WorkflowDefinition.is_global == True) |
+        (WorkflowDefinition.tenant_id == user.tenant_id),
+        WorkflowDefinition.is_active == True,  # noqa: E712
+    ).order_by(WorkflowDefinition.name)).scalars().all()
     # in_workflow flag is set on the ECO by the workflow engine
     release_instance = (
         db.query(WorkflowInstance).filter(

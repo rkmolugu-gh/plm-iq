@@ -245,7 +245,7 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Workflow Definition</label>
-                        <select class="form-select" name="template_id" required>
+                        <select class="form-select" name="definition_id" required>
                             {% for t in release_templates %}
                             <option value="{{ t.id }}">{{ t.name }}</option>
                             {% endfor %}

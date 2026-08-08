@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import TenantScopedSession
 from app.models import (
-    WorkflowTemplate, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
+    WorkflowDefinition, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
 )
 from app.models.role import role_names
 from app.routers.auth import require_user, require_role, require_superuser, is_superuser, auth_context, get_tenant_db
@@ -42,10 +42,10 @@ def definitions_list(request: Request, db: TenantScopedSession = Depends(get_ten
     ctx = auth_context(request, db)
     # Show global definitions (is_global=True) plus this tenant's definitions
     # Uses db.execute() to bypass tenant_key auto-filtering (global definitions have different tenant_key)
-    items = db.execute(select(WorkflowTemplate).where(
-        (WorkflowTemplate.is_global == True) |
-        (WorkflowTemplate.tenant_id == user.tenant_id)
-    ).order_by(WorkflowTemplate.object_type, WorkflowTemplate.name)).scalars().all()
+    items = db.execute(select(WorkflowDefinition).where(
+        (WorkflowDefinition.is_global == True) |
+        (WorkflowDefinition.tenant_id == user.tenant_id)
+    ).order_by(WorkflowDefinition.object_type, WorkflowDefinition.name)).scalars().all()
     return HTMLResponse(content=render(
         "workflow/definitions.html", **ctx,
         definitions=items,
@@ -93,7 +93,7 @@ def definition_create(
         return _definition_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition)
 
     is_global_flag = is_global == "on"
-    wf_def = WorkflowTemplate(
+    wf_def = WorkflowDefinition(
         name=name,
         object_type=object_type,
         description=description or None,
@@ -191,16 +191,16 @@ def workflow_start(
     background: BackgroundTasks,
     object_type: str = Form(...),
     object_id: str = Form(...),
-    template_id: int = Form(...),
+    definition_id: int = Form(...),
     due_date: str = Form(""),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     user = require_user(request, db)
-    tmpl = db.execute(select(WorkflowTemplate).where(
-        WorkflowTemplate.id == template_id,
-        (WorkflowTemplate.is_global == True) |
-        (WorkflowTemplate.tenant_id == user.tenant_id)
+    tmpl = db.execute(select(WorkflowDefinition).where(
+        WorkflowDefinition.id == definition_id,
+        (WorkflowDefinition.is_global == True) |
+        (WorkflowDefinition.tenant_id == user.tenant_id)
     )).scalars().first()
     if not tmpl:
         return RedirectResponse(url=_obj_url(object_type, object_id), status_code=303)
@@ -298,7 +298,7 @@ def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(
     return HTMLResponse(content=render(
         "workflow/instance.html", **ctx,
         instance=inst,
-        stages=inst.template.definition.get("stages", []) if inst.template else [],
+        stages=inst.definition.definition.get("stages", []) if inst.definition else [],
     ))
 
 
@@ -306,14 +306,14 @@ def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(
 # Helpers
 # --------------------------------------------------------------------------- #
 
-def _load_definition(db: TenantScopedSession, user: User, did: int) -> Optional[WorkflowTemplate]:
+def _load_definition(db: TenantScopedSession, user: User, did: int) -> Optional[WorkflowDefinition]:
     """Load a definition visible to the user: global, or their tenant's.
     Uses db.execute() to bypass tenant_key auto-filtering for global definitions.
     """
-    return db.execute(select(WorkflowTemplate).where(
-        WorkflowTemplate.id == did,
-        (WorkflowTemplate.is_global == True) |
-        (WorkflowTemplate.tenant_id == user.tenant_id)
+    return db.execute(select(WorkflowDefinition).where(
+        WorkflowDefinition.id == did,
+        (WorkflowDefinition.is_global == True) |
+        (WorkflowDefinition.tenant_id == user.tenant_id)
     )).scalars().first()
 
 
@@ -358,7 +358,7 @@ def _definition_form_error(request, db, user, message, name="", object_type="", 
     return HTMLResponse(content=render(
         "workflow/definition_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
-        definition=None, error=message,
+        error=message,
         name=name, object_type=object_type, description=description, definition=definition,
         is_superuser=is_superuser(user),
         did=did,
