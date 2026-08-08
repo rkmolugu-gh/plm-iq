@@ -1,59 +1,92 @@
-# New Workflow Definition Format (v2)
+#  Workflow Definition Format
 # ------------------------------------------
 # Enhanced schema with version field, per-step metadata, approval thresholds,
-# and normalized assignee syntax.
+# normalized assignee syntax, allowed actions, and notifications.
+#
+# NOTE: If "parallel" is not specified in a stage, it defaults to false.
 
 {
   "version": 2,
+  "metadata": {
+    "name": "Engineering Change Workflow",
+    "description": "Standard workflow for engineering changes with approval stages",
+    "owner": "tntmx6",
+    "created_at": null,
+    "updated_at": null
+  },
   "stages": [
     {
-      "name": "Engineering",
-      "parallel": false,
+      "name": "Start",
+      "start": true,
       "steps": [
         {
-          "key": "eng",
+          "name": "Start",
+          "assignee": "system:workflow",
+          "description": "Workflow start node",
+          "allowed_actions": [],
+          "notification": null
+        }
+      ]
+    },
+    {
+      "name": "Engineering",
+      "steps": [
+        {
           "name": "Engineering Review",
-          "assignee_type": "role",        // "role" | "user"
-          "assignee": "author",            // role name or user_id
+          "assignee": "role:author",
           "description": "Review CAD data and BOM for manufacturability",
-          "due_days": 3                    // optional: days from stage start
+          "due_days": 3,
+          "allowed_actions": ["accept", "reject"],
+          "notification": "email:xyz@d.com"
         }
       ]
     },
     {
       "name": "Approvals",
       "parallel": true,
-      "threshold": 2,                      // optional: require N of M approvers (default: all)
+      "threshold": 2,
       "steps": [
         {
-          "key": "qa",
           "name": "QA Approval",
-          "assignee_type": "role",
-          "assignee": "quality",
+          "assignee": "role:quality",
           "description": "Verify quality standards compliance",
-          "due_days": 5
+          "due_days": 5,
+          "allowed_actions": ["accept", "reject"],
+          "notification": "email:xyz@d.com"
         },
         {
-          "key": "mfg",
           "name": "Mfg Approval",
-          "assignee_type": "role",
-          "assignee": "manufacturing",
+          "assignee": "role:manufacturing",
           "description": "Verify manufacturability and cost",
-          "due_days": 5
+          "due_days": 5,
+          "allowed_actions": ["accept", "reject"],
+          "notification": "email:xyz@d.com"
         }
       ]
     },
     {
       "name": "Release",
-      "parallel": false,
       "steps": [
         {
-          "key": "rel",
           "name": "Release",
-          "assignee_type": "role",
-          "assignee": "tenantadmin",
+          "assignee": "role:tenantadmin",
           "description": "Final release authorization",
-          "due_days": 2
+          "due_days": 2,
+          "allowed_actions": ["accept", "reject"],
+          "notification": "email:xyz@d.com"
+        }
+      ]
+    },
+    {
+      "name": "End",
+      "end": true,
+      "steps": [
+        {
+          "name": "End",
+          "assignee": "system:workflow",
+          "description": "Workflow end node",
+          "allowed_actions": [],
+          "notification": null
         }
       ]
     }
@@ -64,12 +97,25 @@
 #   version (int, optional)
 #       Format version. v2 or absent = v1 compatibility mode.
 #
+#   start (datetime, optional)
+#       Workflow start date/time. Set when workflow is instantiated.
+#
+#   end (datetime, optional)
+#       Workflow end date/time. Set when workflow completes or is cancelled.
+#
+#   metadata (object, optional)
+#       Workflow-level metadata including name, description, owner, timestamps.
+#
 #   Per-step:
 #     description (str, optional)
 #         Human-readable description shown in visualization and instance panel.
 #     due_days (int, optional)
 #         Days from the stage's start date. Computed to an absolute due_date
 #         when tasks are created (falls back to instance-level due_date).
+#     allowed_actions (array[str], optional)
+#         Actions allowed on this step. Default: ["accept", "reject"].
+#     notification (str, optional)
+#         Notification target. Format: "email:address@domain.com".
 #
 #   Per-parallel-stage:
 #     threshold (int, optional, default = all)
@@ -77,5 +123,8 @@
 #         When reached, remaining pending peer tasks are SUPERSEDED.
 #
 #   Normalized assignee syntax:
-#     assignee_type: "role" | "user"   (always present)
-#     assignee:      role name | user_id
+#     assignee: "role:<role_name>" | "user:<user_id>"
+#         Combined format replacing assignee_type + assignee fields.
+#
+#   Parallel stage default:
+#     If "parallel" is not specified, it defaults to false.

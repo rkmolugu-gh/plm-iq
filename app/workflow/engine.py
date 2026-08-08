@@ -63,24 +63,35 @@ def _link_for(object_type: str, object_id: str) -> str:
 def _resolve_assignees(db: Session, instance: WorkflowInstance, step: dict) -> List[User]:
     """Resolve the users a step is assigned to (role-based fan-out).
 
-    v2 syntax: ``assignee_type`` ("role" | "user") + ``assignee`` (role name or user_id).
+    v2 syntax: ``assignee`` ("role:<role_name>" | "user:<user_id>" | "system:<system_id>").
     """
-    assignee_type = step.get("assignee_type", "role")
     assignee = step.get("assignee")
     if not assignee:
         return []
+
+    # Parse the combined assignee format
+    if ":" in assignee:
+        assignee_type, assignee_value = assignee.split(":", 1)
+    else:
+        # Legacy format fallback: assume role
+        assignee_type = "role"
+        assignee_value = assignee
+
     if assignee_type == "user":
         # Direct user assignment
         return db.query(User).filter(
-            User.user_id == int(assignee),
+            User.user_id == int(assignee_value),
             User.tenant_id == instance.tenant_id,
             User.is_active == True,  # noqa: E712
         ).all()
+    elif assignee_type == "system":
+        # System-assigned step: no human assignees
+        return []
     # Role-based assignment (default)
     return (
         db.query(User)
         .filter(
-            User.role == assignee,
+            User.role == assignee_value,
             User.tenant_id == instance.tenant_id,
             User.is_active == True,  # noqa: E712
         )
@@ -94,6 +105,11 @@ def _tasks_for_step(db: Session, instance: WorkflowInstance, stage_index: int, s
         WorkflowTask.stage_index == stage_index,
         WorkflowTask.step_key == step_key,
     )
+
+
+def _get_step_key(step: dict) -> str:
+    """Get the step key from a step definition. Uses 'name' as the key (v2 format)."""
+    return step.get("name") or step.get("key") or ""
 
 
 def _compute_step_due_date(instance: WorkflowInstance, step: dict) -> Optional[str]:
@@ -117,7 +133,7 @@ def _ensure_step_tasks(
     db: Session, instance: WorkflowInstance, stage_index: int, step: dict, background=None
 ) -> None:
     """Create the WorkflowTasks for one step (idempotent). No assignees => vacuous APPROVED."""
-    step_key = step.get("key") or step.get("name")
+    step_key = _get_step_key(step)
     step_name = step.get("name", step_key)
     step_desc = step.get("description", "")
     existing = _tasks_for_step(db, instance, stage_index, step_key).count()
@@ -185,7 +201,7 @@ def _current_sequential_step_index(instance: WorkflowInstance, steps: List[dict]
     """First step (in order) whose tasks are not all APPROVED yet."""
     db = Session.object_session(instance)
     for idx, step in enumerate(steps):
-        key = step.get("key") or step.get("name")
+        key = _get_step_key(step)
         q = _tasks_for_step(db, instance, instance.current_stage, key)
         if q.count() == 0:
             return idx
@@ -238,7 +254,7 @@ def _progress_stage(db: Session, instance: WorkflowInstance, stage: dict, backgr
         if idx >= len(steps):
             return True
         _ensure_step_tasks(db, instance, stage_index, steps[idx], background)
-        step_key = steps[idx].get("key") or steps[idx].get("name")
+        step_key = _get_step_key(steps[idx])
         if _tasks_for_step(db, instance, stage_index, step_key).filter(WorkflowTask.status == "PENDING").count() > 0:
             return False  # awaiting human approval
         # this step is fully approved (placeholder or all approved) -> next
