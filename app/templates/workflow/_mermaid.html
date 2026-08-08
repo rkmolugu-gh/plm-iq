@@ -9,11 +9,11 @@
     background: rgba(33, 37, 41, 0.9);
     border: 1px solid #495057;
     border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 14px;
+    padding: 6px 10px;
+    font-size: 1em;
     color: #e9ecef;
     display: flex;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: nowrap;
     z-index: 10;
     backdrop-filter: blur(4px);
@@ -23,9 +23,9 @@
   }
   .plm-workflow-legend code {
     background: rgba(255, 255, 255, 0.1);
-    padding: 0 4px;
+    padding: 0 3px;
     border-radius: 2px;
-    font-size: 12px;
+    font-size: 0.9em;
   }
   .mermaid-container {
     position: relative;
@@ -108,9 +108,13 @@
         lines.push(nid + '["' + label + '"]' + cls);
         nodeIds.push(nid);
 
-        // Store description for tooltip
+        // Mark nodes that have descriptions (for tooltip addition after render)
         if (step.description) {
-          lines.push("click " + nid + " plmShowTooltip '" + plmEscapeMermaid(step.description) + "'");
+          // Store description in global object
+          if (!window.plmNodeDescriptions) window.plmNodeDescriptions = {};
+          window.plmNodeDescriptions[nid] = step.description;
+          // Add a CSS class marker (will be used to find nodes after render)
+          lines.push(nid + ':::hasDesc');
         }
       });
 
@@ -151,9 +155,19 @@
       lines.push("classDef pend fill:#ffc107,stroke:#000,color:#000;");
       lines.push("classDef rej fill:#dc3545,stroke:#fff,color:#fff;");
     }
+    // Add class for nodes with descriptions
+    lines.push("classDef hasDesc stroke-dasharray: 2 2;");
 
     return lines.join("\n");
   }
+
+  // Build Mermaid diagram with tooltips (stores descriptions for hover)
+  window.plmBuildMermaidWithTooltips = function(def, statusByStepKey) {
+    // Reset descriptions
+    window.plmNodeDescriptions = {};
+
+    return plmBuildMermaid(def, statusByStepKey);
+  };
 
   // Guard to prevent simultaneous renders of the same element.
   var plmRenderPending = new Map();
@@ -205,6 +219,8 @@
       await mermaid.run({ nodes: [containerEl] });
       // Add compact legend after diagram renders
       plmAddLegend(containerEl);
+      // Add hover tooltips to nodes with descriptions
+      plmAddHoverTooltips(containerEl);
     } catch (e) {
       containerEl.className = "";
       containerEl.innerHTML =
@@ -227,24 +243,59 @@
     containerEl.parentNode.appendChild(legend);
   }
 
-  // Tooltip callback for Mermaid click events
-  function plmShowTooltip(evt, description) {
-    // Create or update tooltip
+  // Store node descriptions globally
+  window.plmNodeDescriptions = {};
+
+  // Add hover tooltips to SVG nodes after rendering
+  function plmAddHoverTooltips(containerEl) {
+    if (!containerEl) return;
+
+    // Find all SVG node elements (Mermaid creates complex SVG structures)
+    var svg = containerEl.querySelector('svg');
+    if (!svg) return;
+
+    // Find all nodes with hasDesc class (added via classDef)
+    var nodes = svg.querySelectorAll('.hasDesc');
+    nodes.forEach(function(node) {
+      // Get the node ID from the DOM element
+      var nodeId = null;
+      var id = node.id || '';
+      var match = id.match(/n\d+_\d+/);
+      if (match) nodeId = match[0];
+
+      if (nodeId && window.plmNodeDescriptions[nodeId]) {
+        var description = window.plmNodeDescriptions[nodeId];
+
+        node.addEventListener('mouseenter', function(e) {
+          plmShowHoverTooltip(e, description);
+        });
+        node.addEventListener('mouseleave', function() {
+          plmHideHoverTooltip();
+        });
+      }
+    });
+  }
+
+  // Show hover tooltip
+  function plmShowHoverTooltip(e, description) {
     var tooltip = document.getElementById('plm-mermaid-tooltip');
     if (!tooltip) {
       tooltip = document.createElement('div');
       tooltip.id = 'plm-mermaid-tooltip';
-      tooltip.style.cssText = 'position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:8px 12px;border-radius:4px;font-size:13px;max-width:300px;z-index:9999;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      tooltip.style.cssText = 'position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:8px 12px;border-radius:4px;font-size:13px;max-width:300px;z-index:9999;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:none;';
       document.body.appendChild(tooltip);
     }
     tooltip.textContent = description;
-    tooltip.style.left = (evt.clientX + 10) + 'px';
-    tooltip.style.top = (evt.clientY + 10) + 'px';
     tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY + 15) + 'px';
+  }
 
-    // Hide tooltip on mouseout
-    evt.target.addEventListener('mouseout', function() {
+  // Hide hover tooltip
+  function plmHideHoverTooltip() {
+    var tooltip = document.getElementById('plm-mermaid-tooltip');
+    if (tooltip) {
       tooltip.style.display = 'none';
-    });
+    }
   }
 </script>

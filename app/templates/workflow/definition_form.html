@@ -128,7 +128,7 @@
         var def;
         try { def = JSON.parse(raw); }
         catch (e) { box.className = ''; box.innerHTML = '<div class="text-danger small">Invalid JSON: ' + plmEscapeMermaid(e.message) + '</div>'; return; }
-        plmRenderMermaid(box, plmBuildMermaid(def));
+        plmRenderMermaid(box, plmBuildMermaidWithTooltips(def));
     }
     var tmplRefresh = document.getElementById('tmplRefresh');
     if (tmplRefresh) tmplRefresh.addEventListener('click', tmplRender);

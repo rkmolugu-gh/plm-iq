@@ -60,7 +60,7 @@
             else if (a.approved === a.total) statusByKey[k] = "APPROVED";
             else statusByKey[k] = "PENDING";
         });
-        plmRenderMermaid(box, plmBuildMermaid(def, statusByKey));
+        plmRenderMermaid(box, plmBuildMermaidWithTooltips(def, statusByKey));
     });
 </script>
 
