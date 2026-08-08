@@ -1,6 +1,6 @@
 """Release workflow router.
 
-Endpoints for managing workflow templates, starting a release, the user Inbox
+Endpoints for managing workflow definitions, starting a release, the user Inbox
 (approval tasks + notifications), acting on a task, and viewing a workflow's progress.
 """
 
@@ -33,42 +33,42 @@ OBJECT_TYPES = ["part", "eco"]
 
 
 # --------------------------------------------------------------------------- #
-# Template management (admin)
+# Definition management (admin)
 # --------------------------------------------------------------------------- #
 
-@router.get("/templates", response_class=HTMLResponse)
-def templates_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
+@router.get("/definitions", response_class=HTMLResponse)
+def definitions_list(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    # Show global templates (is_global=True) plus this tenant's templates
-    # Uses db.execute() to bypass tenant_key auto-filtering (global templates have different tenant_key)
+    # Show global definitions (is_global=True) plus this tenant's definitions
+    # Uses db.execute() to bypass tenant_key auto-filtering (global definitions have different tenant_key)
     items = db.execute(select(WorkflowTemplate).where(
         (WorkflowTemplate.is_global == True) |
         (WorkflowTemplate.tenant_id == user.tenant_id)
     ).order_by(WorkflowTemplate.object_type, WorkflowTemplate.name)).scalars().all()
     return HTMLResponse(content=render(
-        "workflow/templates.html", **ctx,
-        templates=items,
+        "workflow/definitions.html", **ctx,
+        definitions=items,
         object_types=OBJECT_TYPES,
         can_manage=is_superuser(user),
     ))
 
 
-@router.get("/templates/new", response_class=HTMLResponse)
-def template_new_form(request: Request, db: TenantScopedSession = Depends(get_tenant_db),
+@router.get("/definitions/new", response_class=HTMLResponse)
+def definition_new_form(request: Request, db: TenantScopedSession = Depends(get_tenant_db),
                       _role: User = Depends(require_superuser)):
     user = require_user(request, db)
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
-        "workflow/template_form.html", **ctx,
+        "workflow/definition_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
-        template=None,
+        definition=None,
         is_superuser=is_superuser(user),
     ))
 
 
-@router.post("/templates", response_class=HTMLResponse)
-def template_create(
+@router.post("/definitions", response_class=HTMLResponse)
+def definition_create(
     request: Request,
     background: BackgroundTasks,
     name: str = Form(...),
@@ -82,18 +82,18 @@ def template_create(
     user = require_user(request, db)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition)
+        return _definition_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition)
     if object_type not in OBJECT_TYPES:
-        return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition)
+        return _definition_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition)
     try:
         defn = json.loads(definition) if definition else {}
     except json.JSONDecodeError:
-        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition)
+        return _definition_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition)
     if not defn.get("stages"):
-        return _template_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition)
+        return _definition_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition)
 
     is_global_flag = is_global == "on"
-    tmpl = WorkflowTemplate(
+    wf_def = WorkflowTemplate(
         name=name,
         object_type=object_type,
         description=description or None,
@@ -105,34 +105,34 @@ def template_create(
         tenant_key=user.tenant_key,
         created_at=_today(),
     )
-    db.add(tmpl)
+    db.add(wf_def)
     db.commit()
-    return RedirectResponse(url="/workflow/templates", status_code=303)
+    return RedirectResponse(url="/workflow/definitions", status_code=303)
 
 
-@router.get("/templates/{tid}/edit", response_class=HTMLResponse)
-def template_edit_form(
-    request: Request, tid: int, db: TenantScopedSession = Depends(get_tenant_db),
+@router.get("/definitions/{did}/edit", response_class=HTMLResponse)
+def definition_edit_form(
+    request: Request, did: int, db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    tmpl = _load_template(db, user, tid)
-    if not tmpl:
+    wf_def = _load_definition(db, user, did)
+    if not wf_def:
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
     return HTMLResponse(content=render(
-        "workflow/template_form.html", **ctx,
+        "workflow/definition_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
-        template=tmpl,
+        definition=wf_def,
         is_superuser=is_superuser(user),
     ))
 
 
-@router.post("/templates/{tid}/edit", response_class=HTMLResponse)
-def template_edit(
+@router.post("/definitions/{did}/edit", response_class=HTMLResponse)
+def definition_edit(
     request: Request,
     background: BackgroundTasks,
-    tid: int,
+    did: int,
     name: str = Form(...),
     object_type: str = Form(...),
     description: str = Form(""),
@@ -142,43 +142,43 @@ def template_edit(
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
-    tmpl = _load_template(db, user, tid)
-    if not tmpl:
+    wf_def = _load_definition(db, user, did)
+    if not wf_def:
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
     name = (name or "").strip()
     if not name:
-        return _template_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
+        return _definition_form_error(request, db, user, "Definition name is required.", name=name, object_type=object_type, description=description, definition=definition, did=did)
     if object_type not in OBJECT_TYPES:
-        return _template_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
+        return _definition_form_error(request, db, user, "Invalid object type.", name=name, object_type=object_type, description=description, definition=definition, did=did)
     try:
         defn = json.loads(definition) if definition else {}
     except json.JSONDecodeError:
-        return _template_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
+        return _definition_form_error(request, db, user, "Workflow definition is not valid JSON.", name=name, object_type=object_type, description=description, definition=definition, did=did)
     if not defn.get("stages"):
-        return _template_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition, tid=tid)
+        return _definition_form_error(request, db, user, "Add at least one stage with a step.", name=name, object_type=object_type, description=description, definition=definition, did=did)
 
     is_global_flag = is_global == "on"
-    tmpl.name = name
-    tmpl.object_type = object_type
-    tmpl.description = description or None
-    tmpl.definition = defn
-    tmpl.is_global = is_global_flag
-    tmpl.tenant_id = None if is_global_flag else user.tenant_id
+    wf_def.name = name
+    wf_def.object_type = object_type
+    wf_def.description = description or None
+    wf_def.definition = defn
+    wf_def.is_global = is_global_flag
+    wf_def.tenant_id = None if is_global_flag else user.tenant_id
     db.commit()
-    return RedirectResponse(url="/workflow/templates", status_code=303)
+    return RedirectResponse(url="/workflow/definitions", status_code=303)
 
 
-@router.post("/templates/{tid}/delete", response_class=HTMLResponse)
-def template_delete(
-    request: Request, tid: int, db: TenantScopedSession = Depends(get_tenant_db),
+@router.post("/definitions/{did}/delete", response_class=HTMLResponse)
+def definition_delete(
+    request: Request, did: int, db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_superuser),
 ):
     user = require_user(request, db)
-    tmpl = _load_template(db, user, tid)
-    if tmpl:
-        db.delete(tmpl)
+    wf_def = _load_definition(db, user, did)
+    if wf_def:
+        db.delete(wf_def)
         db.commit()
-    return RedirectResponse(url="/workflow/templates", status_code=303)
+    return RedirectResponse(url="/workflow/definitions", status_code=303)
 
 
 # --------------------------------------------------------------------------- #
@@ -306,12 +306,12 @@ def instance_view(request: Request, iid: int, db: TenantScopedSession = Depends(
 # Helpers
 # --------------------------------------------------------------------------- #
 
-def _load_template(db: TenantScopedSession, user: User, tid: int) -> Optional[WorkflowTemplate]:
-    """Load a template visible to the user: global, or their tenant's.
-    Uses db.execute() to bypass tenant_key auto-filtering for global templates.
+def _load_definition(db: TenantScopedSession, user: User, did: int) -> Optional[WorkflowTemplate]:
+    """Load a definition visible to the user: global, or their tenant's.
+    Uses db.execute() to bypass tenant_key auto-filtering for global definitions.
     """
     return db.execute(select(WorkflowTemplate).where(
-        WorkflowTemplate.id == tid,
+        WorkflowTemplate.id == did,
         (WorkflowTemplate.is_global == True) |
         (WorkflowTemplate.tenant_id == user.tenant_id)
     )).scalars().first()
@@ -353,15 +353,15 @@ def _startable_check(db: Session, user: User, object_type: str, object_id: str) 
     return None
 
 
-def _template_form_error(request, db, user, message, name="", object_type="", description="", definition="", tid=None):
+def _definition_form_error(request, db, user, message, name="", object_type="", description="", definition="", did=None):
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
-        "workflow/template_form.html", **ctx,
+        "workflow/definition_form.html", **ctx,
         roles=role_names(db), object_types=OBJECT_TYPES,
-        template=None, error=message,
+        definition=None, error=message,
         name=name, object_type=object_type, description=description, definition=definition,
         is_superuser=is_superuser(user),
-        tid=tid,
+        did=did,
     ))
 
 

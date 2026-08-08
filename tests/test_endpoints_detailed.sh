@@ -298,10 +298,10 @@ test_workflow_endpoints() {
     echo -e "${BLUE}=== Testing Workflow Endpoints ===${NC}}"
 
     # Workflow definitions list
-    api_call "Workflow Definitions" "/workflow/templates" "GET" "" "200" "Should show workflow definitions"
+    api_call "Workflow Definitions" "/workflow/definitions" "GET" "" "200" "Should show workflow definitions"
 
     # New definition form
-    api_call "New Definition Form" "/workflow/templates/new" "GET" "" "200" "Should show definition creation form"
+    api_call "New Definition Form" "/workflow/definitions/new" "GET" "" "200" "Should show definition creation form"
 
     # Workflow inbox
     api_call "Workflow Inbox" "/workflow/inbox" "GET" "" "200" "Should show user inbox"

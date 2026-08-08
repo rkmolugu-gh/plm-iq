@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{% if template %}Edit{% else %}New{% endif %} Workflow Definition - PLM-IQ{% endblock %}
+{% block title %}{% if definition %}Edit{% else %}New{% endif %} Workflow Definition - PLM-IQ{% endblock %}
 {% block content %}
 
-<h4><i class="bi bi-diagram-3"></i> {% if template %}Edit{% else %}New{% endif %} Workflow Definition</h4>
+<h4><i class="bi bi-diagram-3"></i> {% if definition %}Edit{% else %}New{% endif %} Workflow Definition</h4>
 
 {% if error %}
 <div class="alert alert-danger">{{ error }}</div>
@@ -44,18 +44,18 @@
         <div class="card">
             <div class="card-header"><i class="bi bi-pencil-square"></i> Workflow Definition</div>
             <div class="card-body">
-    <form method="POST" action="{% if template %}/workflow/templates/{{ template.id }}/edit{% elif tid %}/workflow/templates/{{ tid }}/edit{% else %}/workflow/templates{% endif %}">
+    <form method="POST" action="{% if definition %}/workflow/definitions/{{ definition.id }}/edit{% elif did %}/workflow/definitions/{{ did }}/edit{% else %}/workflow/definitions/new{% endif %}">
     <div class="mb-3">
         <label class="form-label">Definition Name</label>
         <input type="text" name="name" class="form-control" required
-               value="{{ template.name if template else (name or '') }}">
+               value="{{ definition.name if definition else (name or '') }}">
     </div>
 
     <div class="mb-3">
         <label class="form-label">Object Type</label>
         <select name="object_type" class="form-select">
             {% for ot in object_types %}
-            <option value="{{ ot }}" {% if template and template.object_type == ot %}selected{% elif not template and ot == object_type %}selected{% endif %}>{{ ot|upper }}</option>
+            <option value="{{ ot }}" {% if definition and definition.object_type == ot %}selected{% elif not definition and ot == object_type %}selected{% endif %}>{{ ot|upper }}</option>
             {% endfor %}
         </select>
     </div>
@@ -63,7 +63,7 @@
     {% if is_superuser %}
     <div class="mb-3 form-check">
         <input type="checkbox" name="is_global" class="form-check-input" id="is_global"
-               {% if template and template.is_global %}checked{% endif %}>
+               {% if definition and definition.is_global %}checked{% endif %}>
         <label class="form-check-label" for="is_global">
             Global definition <i class="bi bi-globe"></i>
         </label>
@@ -73,13 +73,13 @@
 
     <div class="mb-3">
         <label class="form-label">Description</label>
-        <textarea name="description" class="form-control" rows="2">{{ template.description if template else (description or '') }}</textarea>
+        <textarea name="description" class="form-control" rows="2">{{ definition.description if definition else (description or '') }}</textarea>
     </div>
 
     <div class="mb-3">
         <label class="form-label">Workflow Definition (JSON)</label>
         <textarea name="definition" class="form-control font-monospace" rows="16" spellcheck="false"
-                  placeholder='{ "stages": [ ... ] }'>{% if definition %}{{ definition }}{% elif template and template.definition %}{{ template.definition | tojson(indent=2) }}{% else %}{{ default_def }}{% endif %}</textarea>
+                  placeholder='{ "stages": [ ... ] }'>{% if definition and definition.definition %}{{ definition.definition | tojson(indent=2) }}{% elif definition %}{{ definition }}{% else %}{{ default_def }}{% endif %}</textarea>
         <div class="form-text">
             Stages run <strong>in order</strong>. Each stage has a <code>name</code>, an optional
             <code>"parallel": true</code> (all steps must approve before the stage completes), and a
@@ -94,7 +94,7 @@
 
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Save Definition</button>
-        <a href="/workflow/templates" class="btn btn-outline-secondary">Cancel</a>
+        <a href="/workflow/definitions" class="btn btn-outline-secondary">Cancel</a>
     </div>
     </form>
             </div>

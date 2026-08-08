@@ -173,7 +173,7 @@ test_specialized_endpoints() {
     test_endpoint "Import Template" "GET" "/import/template?entity=parts" "" "$token" "200"
 
     # Test workflow endpoints
-    test_endpoint "Workflow Definitions" "GET" "/workflow/templates" "" "$token" "200"
+    test_endpoint "Workflow Definitions" "GET" "/workflow/definitions" "" "$token" "200"
     test_endpoint "Workflow Inbox" "GET" "/workflow/inbox" "" "$token" "200"
 
     # Test admin endpoints
