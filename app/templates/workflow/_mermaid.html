@@ -90,29 +90,52 @@
     return lines.join("\n");
   }
 
-  // Render Mermaid text into a container element. Never throws to the page.
+  // Guard to prevent simultaneous renders of the same element.
+  var plmRenderPending = new Map();
+
+  // Render Mermaid diagram into a container element. Uses textContent
+  // instead of innerHTML to avoid HTML parsing issues that can corrupt
+  // Mermaid syntax (e.g. <br/> tags, <small>/<em> elements, HTML-encoded
+  // arrows like --> → --&gt;).
   async function plmRenderMermaid(containerEl, text, attempt) {
     if (!containerEl) return;
+
+    // If a render is already pending for this element, cancel it.
+    var existingTimer = plmRenderPending.get(containerEl);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      plmRenderPending.delete(containerEl);
+    }
+
     attempt = attempt || 0;
     // The shared Mermaid CDN script is loaded at the end of base.html, after
     // page-specific scripts. Wait briefly instead of failing on the first
     // render call while Mermaid is still downloading.
     if (typeof mermaid === "undefined") {
-      if (attempt < 50) {
+      if (attempt < 120) {
         containerEl.className = "";
         containerEl.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split"></i> Loading workflow diagram…</div>';
-        window.setTimeout(function () {
+        var timer = window.setTimeout(function () {
+          plmRenderPending.delete(containerEl);
           plmRenderMermaid(containerEl, text, attempt + 1);
         }, 100);
+        plmRenderPending.set(containerEl, timer);
       } else {
         containerEl.className = "";
         containerEl.innerHTML = '<div class="text-warning small">Mermaid failed to load. Check the network connection or CDN access.</div>';
       }
       return;
     }
+
+    // Ensure Mermaid is initialized with correct settings.
+    if (mermaid.initialize && !mermaid._plmInitialized) {
+      mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+      mermaid._plmInitialized = true;
+    }
+
     containerEl.className = "mermaid";
     containerEl.removeAttribute("data-processed");
-    containerEl.innerHTML = text;
+    containerEl.textContent = text;
     try {
       await mermaid.run({ nodes: [containerEl] });
     } catch (e) {
