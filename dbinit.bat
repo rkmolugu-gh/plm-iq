@@ -90,4 +90,3 @@ echo   Seed: seed.sql
 echo.
 echo   You can now run the server
 echo.
-pause

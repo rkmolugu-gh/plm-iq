@@ -1,6 +1,38 @@
 {# Shared Mermaid helpers for workflow diagrams. Include this once per page that
    needs to draw a workflow. Defines two globals used by the definition form and the
    instance progress view. #}
+<style>
+  .plm-workflow-legend {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(33, 37, 41, 0.9);
+    border: 1px solid #495057;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #e9ecef;
+    display: flex;
+    gap: 12px;
+    flex-wrap: nowrap;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+  }
+  .plm-workflow-legend span {
+    white-space: nowrap;
+  }
+  .plm-workflow-legend code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 12px;
+  }
+  .mermaid-container {
+    position: relative;
+    display: block;
+    width: 100%;
+  }
+</style>
 <script>
   function plmEscapeMermaid(s) {
     return String(s == null ? "" : s)
@@ -36,39 +68,34 @@
         var nid = "n" + si + "_" + ti;
         var label = plmEscapeMermaid(step.name || ("Step " + (ti + 1)));
 
-        // Build detailed step information
+        // Build compact step information (no description - will be tooltip)
         var details = [];
 
         // Add step key if available
         if (step.key) details.push("<code>" + plmEscapeMermaid(step.key) + "</code>");
 
-        // Add description
-        if (step.description) details.push("<em>" + plmEscapeMermaid(step.description) + "</em>");
-
         // Add assignee information with quorum indicator
         if (step.assignee) {
           var assigneeInfo = "";
           if (step.assignee_type === "role") {
-            assigneeInfo = "👥 Role: " + plmEscapeMermaid(step.assignee);
+            assigneeInfo = "👥 " + plmEscapeMermaid(step.assignee);
             // Add quorum info if available (from stage threshold or step-level)
             var quorum = step.quorum || (stage.threshold && stage.parallel ? stage.threshold : null);
             if (quorum) {
-              assigneeInfo += " <small>(quorum: " + quorum + ")</small>";
-            } else {
-              assigneeInfo += " <small>(multi-approver)</small>";
+              assigneeInfo += " <small>(q:" + quorum + ")</small>";
             }
           } else {
-            assigneeInfo = "👤 " + plmEscapeMermaid(step.assignee_type || "User") + ": " + plmEscapeMermaid(step.assignee);
+            assigneeInfo = "👤 " + plmEscapeMermaid(step.assignee);
           }
           details.push(assigneeInfo);
         }
 
         // Add due date
-        if (step.due_days) details.push("⏱️ Due: " + step.due_days + " days");
+        if (step.due_days) details.push("⏱️" + step.due_days + "d");
 
-        // Combine all details
+        // Combine details (compact)
         if (details.length) {
-          label += "<br/><small>" + details.join("<br/>") + "</small>";
+          label += "<br/><small>" + details.join(" ") + "</small>";
         }
 
         var cls = "";
@@ -80,6 +107,11 @@
         }
         lines.push(nid + '["' + label + '"]' + cls);
         nodeIds.push(nid);
+
+        // Store description for tooltip
+        if (step.description) {
+          lines.push("click " + nid + " plmShowTooltip '" + plmEscapeMermaid(step.description) + "'");
+        }
       });
 
       // Sequential stage chains its steps; parallel stage fans them out together.
@@ -114,21 +146,12 @@
     });
     lines.push("finish((Done))");
 
-    // Add legend for icons and indicators
-    lines.push("");
-    lines.push("%% Legend");
-    lines.push('subgraph Legend["Legend"]');
-    lines.push('L1["👤 = Assigned to specific user"]');
-    lines.push('L2["👥 = Assigned to role (multiple approvers)"]');
-    lines.push('L3["⏱️ Due: X days = SLA for completion"]');
-    lines.push('L4["<code>key</code> = Step identifier"]');
-    lines.push("end");
-
     if (statusByStepKey) {
       lines.push("classDef done fill:#198754,stroke:#fff,color:#fff;");
       lines.push("classDef pend fill:#ffc107,stroke:#000,color:#000;");
       lines.push("classDef rej fill:#dc3545,stroke:#fff,color:#fff;");
     }
+
     return lines.join("\n");
   }
 
@@ -180,11 +203,48 @@
     containerEl.textContent = text;
     try {
       await mermaid.run({ nodes: [containerEl] });
+      // Add compact legend after diagram renders
+      plmAddLegend(containerEl);
     } catch (e) {
       containerEl.className = "";
       containerEl.innerHTML =
         '<div class="text-danger small">Cannot render diagram: ' +
         plmEscapeMermaid(e && e.message ? e.message : e) + "</div>";
     }
+  }
+
+  // Add a compact legend to the bottom-right of the diagram
+  function plmAddLegend(containerEl) {
+    if (!containerEl) return;
+    // Remove existing legend if present
+    var existing = containerEl.parentNode.querySelector('.plm-workflow-legend');
+    if (existing) existing.remove();
+    // Create legend element
+    var legend = document.createElement('div');
+    legend.className = 'plm-workflow-legend';
+    legend.innerHTML = '<span>👤=User</span> <span>👥=Role</span> <span>⏱️=Due</span> <span><code>key</code>=ID</span>';
+    // Insert after the container
+    containerEl.parentNode.appendChild(legend);
+  }
+
+  // Tooltip callback for Mermaid click events
+  function plmShowTooltip(evt, description) {
+    // Create or update tooltip
+    var tooltip = document.getElementById('plm-mermaid-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'plm-mermaid-tooltip';
+      tooltip.style.cssText = 'position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:8px 12px;border-radius:4px;font-size:13px;max-width:300px;z-index:9999;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      document.body.appendChild(tooltip);
+    }
+    tooltip.textContent = description;
+    tooltip.style.left = (evt.clientX + 10) + 'px';
+    tooltip.style.top = (evt.clientY + 10) + 'px';
+    tooltip.style.display = 'block';
+
+    // Hide tooltip on mouseout
+    evt.target.addEventListener('mouseout', function() {
+      tooltip.style.display = 'none';
+    });
   }
 </script>
