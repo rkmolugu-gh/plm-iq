@@ -24,7 +24,18 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Part Number</label>
-                    <input type="text" name="part_number" class="form-control" required>
+                    <input type="text" name="part_number" class="form-control" placeholder="Select or enter part number">
+                </div>
+            </div>
+            <hr>
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Current Rev</label>
+                    <input type="text" name="current_revision" class="form-control" value="A">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">New Rev</label>
+                    <input type="text" name="new_revision" class="form-control" value="B">
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
@@ -36,11 +47,24 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Change Type</label>
-                    <input type="text" name="change_type" class="form-control">
+                    <select name="change_type" class="form-select">
+                        <option value="">(none)</option>
+                        {% for ct in change_types %}
+                        <option value="{{ ct }}" {% if form_change_type == ct %}selected{% endif %}>{{ ct }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">BOM Level</label>
+                    <input type="number" name="affected_bom_level" class="form-control" min="0" value="0">
                 </div>
                 <div class="col-12">
                     <label class="form-label">Description</label>
                     <textarea name="eco_description" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Change Detail</label>
+                    <textarea name="change_detail" class="form-control" rows="3" placeholder="Describe changes using pipe-separated key-value pairs (e.g., Material: Steel -> Al| Weight: 100g -> 80g)"></textarea>
                 </div>
             </div>
             <div class="mt-3">

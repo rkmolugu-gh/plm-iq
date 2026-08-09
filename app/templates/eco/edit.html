@@ -24,11 +24,15 @@
     <div class="card-body">
         <form method="POST" action="/eco/{{ item.eco_number }}/edit">
             <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label">ECO Title</label>
                     <input type="text" name="eco_title" class="form-control" value="{{ item.eco_title }}" required>
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Part Number</label>
+                    <input type="text" name="part_number" class="form-control" value="{{ item.part_number or '' }}">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label">Status</label>
                     <select name="eco_status" class="form-select">
                         {% for s in statuses %}
@@ -38,14 +42,61 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Change Type</label>
-                    <input type="text" name="change_type" class="form-control" value="{{ item.change_type or '' }}">
+                    <select name="change_type" class="form-select">
+                        <option value="">(none)</option>
+                        {% for ct in change_types %}
+                        <option value="{{ ct }}" {% if item.change_type == ct %}selected{% endif %}>{{ ct }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">Current Rev</label>
+                    <input type="text" name="current_revision" class="form-control" value="{{ item.current_revision or 'A' }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">New Rev</label>
+                    <input type="text" name="new_revision" class="form-control" value="{{ item.new_revision or 'B' }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">BOM Level</label>
+                    <input type="number" name="affected_bom_level" class="form-control" min="0" value="{{ item.affected_bom_level or 0 }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Drafter</label>
+                    <select name="change_drafter" class="form-select">
+                        <option value="">(none)</option>
+                        {% for u in users %}
+                        <option value="{{ u.user_id }}" {% if item.change_drafter == u.user_id %}selected{% endif %}>{{ u.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Approver</label>
+                    <select name="change_approver" class="form-select">
+                        <option value="">(none)</option>
+                        {% for u in users %}
+                        <option value="{{ u.user_id }}" {% if item.change_approver == u.user_id %}selected{% endif %}>{{ u.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Drafted Date</label>
+                    <input type="date" name="drafted_date" class="form-control" value="{{ item.drafted_date or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Approved Date</label>
+                    <input type="date" name="approved_date" class="form-control" value="{{ item.approved_date or '' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Implemented Date</label>
+                    <input type="date" name="implemented_date" class="form-control" value="{{ item.implemented_date or '' }}">
                 </div>
                 <div class="col-12">
                     <label class="form-label">Description</label>
                     <textarea name="eco_description" class="form-control" rows="3">{{ item.eco_description or '' }}</textarea>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Change Details</label>
+                    <label class="form-label">Change Detail</label>
                     <textarea name="change_detail" class="form-control" rows="3">{{ item.change_detail or '' }}</textarea>
                 </div>
             </div>

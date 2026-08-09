@@ -138,7 +138,7 @@
                     <tbody>
                         {% for e in ecos %}
                         <tr>
-                            <td><a href="/eco?q={{ e.eco_number }}">{{ e.eco_number }}</a></td>
+                            <td><a href="/eco/{{ e.eco_number }}">{{ e.eco_number }}</a></td>
                             <td><small>{{ (e.eco_title or '')|truncate(35) }}</small></td>
                             <td>{{ e.current_revision or '-' }}</td>
                             <td>{{ e.new_revision or '-' }}</td>

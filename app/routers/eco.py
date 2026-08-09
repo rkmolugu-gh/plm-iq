@@ -59,15 +59,19 @@ def list_ecos(
 @router.get("/new", response_class=HTMLResponse)
 def eco_new_form(
     request: Request,
+    q: Optional[str] = Query(None),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
     """Show ECO creation form."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
+    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE"]
     return HTMLResponse(content=render(
         "eco/new.html", **ctx,
         statuses=["DRAFT", "REVIEW", "APPROVED"],
+        change_types=change_types,
+        form_change_type=q or "",
     ))
 
 
@@ -132,7 +136,15 @@ def eco_edit_form(
         Favorite.object_id == eco_number,
     ).first() is not None
 
-    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=["DRAFT", "REVIEW", "APPROVED"], is_favorite=is_favorite))
+    # Build user dropdown for change_drafter/change_approver
+    users_for_select = db.query(User).filter(
+        User.tenant_id == user.tenant_id,
+        User.is_active == True,  # noqa: E712
+    ).order_by(User.username).all()
+
+    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE"]
+
+    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=["DRAFT", "REVIEW", "APPROVED"], is_favorite=is_favorite, users=users_for_select, change_types=change_types))
 
 
 @router.post("/{eco_number}/edit", response_class=HTMLResponse)
@@ -140,10 +152,19 @@ def eco_edit_submit(
     request: Request,
     eco_number: str,
     eco_title: str = Form(...),
+    part_number: str = Form(""),
     eco_description: str = Form(""),
     eco_status: str = Form("DRAFT"),
+    current_revision: str = Form("A"),
+    new_revision: str = Form("B"),
     change_type: str = Form(""),
     change_detail: str = Form(""),
+    affected_bom_level: int = Form(0),
+    change_drafter: Optional[str] = Form(""),
+    change_approver: Optional[str] = Form(""),
+    drafted_date: str = Form(""),
+    approved_date: str = Form(""),
+    implemented_date: str = Form(""),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
@@ -154,10 +175,20 @@ def eco_edit_submit(
         ctx = auth_context(request, db)
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
     item.eco_title = eco_title
+    item.part_number = part_number or None
     item.eco_description = eco_description or None
     item.eco_status = eco_status or "DRAFT"
+    item.current_revision = current_revision or None
+    item.new_revision = new_revision or None
     item.change_type = change_type or None
     item.change_detail = change_detail or None
+    item.affected_bom_level = affected_bom_level or None
+    item.change_drafter = int(change_drafter) if change_drafter else None
+    item.change_approver = int(change_approver) if change_approver else None
+    item.drafted_date = drafted_date or None
+    item.approved_date = approved_date or None
+    item.implemented_date = implemented_date or None
+    item.modified_by = user.user_id
     db.commit()
     return RedirectResponse(url=f"/eco/{eco_number}", status_code=303)
 
@@ -167,10 +198,14 @@ def eco_new_submit(
     request: Request,
     eco_number: str = Form(...),
     eco_title: str = Form(...),
-    part_number: str = Form(...),
+    part_number: str = Form(""),
     eco_description: str = Form(""),
     eco_status: str = Form("DRAFT"),
+    current_revision: str = Form("A"),
+    new_revision: str = Form("B"),
     change_type: str = Form(""),
+    change_detail: str = Form(""),
+    affected_bom_level: int = Form(0),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
@@ -179,11 +214,17 @@ def eco_new_submit(
     item = EngineeringChangeOrder(
         eco_number=eco_number,
         eco_title=eco_title,
-        part_number=part_number,
+        part_number=part_number or None,
         eco_description=eco_description or None,
         eco_status=eco_status or "DRAFT",
+        current_revision=current_revision or "A",
+        new_revision=new_revision or "B",
         change_type=change_type or None,
-        tenant_id=1,
+        change_detail=change_detail or None,
+        affected_bom_level=affected_bom_level or None,
+        created_by=user.user_id,
+        modified_by=user.user_id,
+        tenant_id=user.tenant_id,
     )
     db.add(item)
     db.commit()
