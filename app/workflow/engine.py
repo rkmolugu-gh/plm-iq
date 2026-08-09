@@ -490,8 +490,24 @@ def _reject_workflow(db, instance: WorkflowInstance, user: User, comment, backgr
 
 
 def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
-    """Apply the resulting status to the target object and close the workflow."""
+    """Apply the resulting status to the target object and close the workflow.
+
+    If any step in the workflow has ``action_type == "release"``, the object's
+    status is set to that step's ``key`` value. Otherwise falls back to
+    ``instance.result_status`` (or the default for the object type).
+    """
     today = _today()
+
+    # Resolve target status from the first "release" step (key = target status)
+    target_status = None
+    for stage in _stages(instance.definition):
+        for step in stage.get("steps", []):
+            if step.get("action_type") == "release":
+                target_status = step.get("key")
+                break
+        if target_status:
+            break
+
     if instance.object_type == "part":
         part = (
             db.query(Part)
@@ -499,7 +515,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
             .first()
         )
         if part:
-            part.status = instance.result_status or "RELEASED"
+            part.status = target_status or (instance.result_status or "RELEASED")
             part.in_workflow = False
             part.active_workflow_instance_id = None
             part.modified_date = today
@@ -514,7 +530,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
             .first()
         )
         if eco:
-            eco.eco_status = "APPROVED"
+            eco.eco_status = target_status or "APPROVED"
             eco.in_workflow = False
             eco.active_workflow_instance_id = None
             eco.approved_date = today

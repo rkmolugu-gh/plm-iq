@@ -189,12 +189,7 @@ def migrate_schema():
 
 
 def seed_database():
-    """Seed the database with initial data.
-
-    This executes seed.sql and then runs any additional Python-based seeding
-    that requires dynamic logic (e.g., per-tenant workflow templates).
-    """
-    # Execute seed.sql
+    """Seed the database with initial data from ``db/seed.sql``."""
     seed_file = Path(__file__).resolve().parent.parent / "db" / "seed.sql"
     if seed_file.exists():
         with engine.begin() as conn:
@@ -217,9 +212,6 @@ def seed_database():
     else:
         logger.warning("seed.sql not found at %s", seed_file)
 
-    # Seed workflow definitions for any tenants that don't have them
-    _seed_workflow_definitions_for_new_tenants()
-
     # Ensure masteradmin exists and has correct role
     _ensure_masteradmin()
 
@@ -227,70 +219,6 @@ def seed_database():
     _normalize_tenants()
 
     logger.info("Database seeding complete")
-
-
-def _seed_workflow_definitions_for_new_tenants():
-    """Idempotently seed default release definitions for new tenants."""
-    with engine.begin() as conn:
-        tenants = conn.exec_driver_sql("SELECT tenant_id, tenant_key FROM tenants").fetchall()
-    for (tid, tkey) in tenants:
-        existing = (
-            SessionLocal()
-            .query(WorkflowDefinition)
-            .filter(WorkflowDefinition.tenant_id == tid)
-            .count()
-        )
-        if existing:
-            continue
-        today = datetime.date.today().isoformat()
-        part_def = {
-            "version": 2,
-            "stages": [
-                {"name": "Engineering", "parallel": False,
-                 "steps": [{"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author",
-                            "description": "Review CAD data and BOM for manufacturability", "due_days": 3}]},
-                {"name": "Approvals", "parallel": True, "threshold": 2,
-                 "steps": [
-                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality",
-                      "description": "Verify quality standards compliance", "due_days": 5},
-                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing",
-                      "description": "Verify manufacturability and cost", "due_days": 5},
-                 ]},
-                {"name": "Release", "parallel": False,
-                 "steps": [{"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin",
-                            "description": "Final release authorization", "due_days": 2}]},
-            ]
-        }
-        eco_def = {
-            "version": 2,
-            "stages": [
-                {"name": "Review", "parallel": False,
-                 "steps": [{"key": "rev", "name": "Change Review", "assignee_type": "role", "assignee": "author",
-                            "description": "Review the change description and impact", "due_days": 3}]},
-                {"name": "Approvals", "parallel": True, "threshold": 2,
-                 "steps": [
-                     {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality",
-                      "description": "Verify quality standards compliance", "due_days": 5},
-                     {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing",
-                      "description": "Verify manufacturability and cost", "due_days": 5},
-                 ]},
-                {"name": "Release", "parallel": False,
-                 "steps": [{"key": "rel", "name": "Release Change", "assignee_type": "role", "assignee": "tenantadmin",
-                            "description": "Final release authorization", "due_days": 2}]},
-            ]
-        }
-        sess = SessionLocal()
-        try:
-            sess.add(WorkflowDefinition(name="Standard Part Release", object_type="part",
-                                      definition=part_def, is_active=True, tenant_id=tid,
-                                      tenant_key=tkey, created_at=today))
-            sess.add(WorkflowDefinition(name="Standard ECO Release", object_type="eco",
-                                      definition=eco_def, is_active=True, tenant_id=tid,
-                                      tenant_key=tkey, created_at=today))
-            sess.commit()
-        finally:
-            sess.close()
-        logger.info("Seeded default workflow definitions for tenant %s", tid)
 
 
 def _ensure_masteradmin():

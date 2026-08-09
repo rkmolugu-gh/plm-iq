@@ -16,7 +16,7 @@
       "name": "Engineering",
       "parallel": false,
       "steps": [
-        {"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author", "description": "Review CAD data and BOM for manufacturability", "due_days": 3}
+        {"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "author", "description": "Review CAD data and BOM for manufacturability", "due_days": 3, "action_type": "approval"}
       ]
     },
     {
@@ -24,15 +24,15 @@
       "parallel": true,
       "threshold": 2,
       "steps": [
-        {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality", "description": "Verify quality standards compliance", "due_days": 5},
-        {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing", "description": "Verify manufacturability and cost", "due_days": 5}
+        {"key": "qa", "name": "QA Approval", "assignee_type": "role", "assignee": "quality", "description": "Verify quality standards compliance", "due_days": 5, "action_type": "approval"},
+        {"key": "mfg", "name": "Mfg Approval", "assignee_type": "role", "assignee": "manufacturing", "description": "Verify manufacturability and cost", "due_days": 5, "action_type": "approval"}
       ]
     },
     {
       "name": "Release",
       "parallel": false,
       "steps": [
-        {"key": "rel", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin", "description": "Final release authorization", "due_days": 2}
+        {"key": "RELEASED", "name": "Release", "assignee_type": "role", "assignee": "tenantadmin", "description": "Final release authorization", "due_days": 2, "action_type": "release"}
       ]
     }
   ]
@@ -83,8 +83,12 @@
         <div class="form-text">
             Stages run <strong>in order</strong>. Each stage has a <code>name</code>, an optional
             <code>"parallel": true</code> (all steps must approve before the stage completes), and a
-            list of <code>steps</code>. Each step needs a <code>name</code> and an <code>assignee</code>
-            role — one of: {{ roles|join(', ') }}.
+            list of <code>steps</code>. Each step needs a <code>name</code>, an <code>assignee</code>
+            role — one of: {{ roles|join(', ') }}. Each step also has an <code>action_type</code>:
+            <code>"approval"</code> (default, just requires approval), <code>"release"</code> (sets the
+            object's status to the step's <code>key</code> value on completion), or <code>"none"</code>
+            (no action). Only one step should have <code>action_type: "release"</code> — typically the
+            final step.
         </div>
         <details class="mt-2">
             <summary class="small text-muted">Show example</summary>

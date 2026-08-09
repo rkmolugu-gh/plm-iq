@@ -27,6 +27,11 @@
             <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#startReleaseModal">
                 <i class="bi bi-play-circle"></i> Start Release
             </button>
+            {% if part.status == 'RELEASED' %}
+            <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#unreleaseModal">
+                <i class="bi bi-arrow-counterclockwise"></i> Unrelease
+            </button>
+            {% endif %}
             {% endif %}
             {% if release_instance %}
             <a href="/workflow/instance/{{ release_instance.id }}" class="btn btn-sm btn-outline-info"><i class="bi bi-diagram-3"></i> Workflow</a>
@@ -267,6 +272,38 @@
         </div>
     </div>
 </div>
+
+{% if part.status == 'RELEASED' and unrelease_templates %}
+<div class="modal fade" id="unreleaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/workflow/start">
+                <input type="hidden" name="object_type" value="part">
+                <input type="hidden" name="object_id" value="{{ part.part_number }}">
+                <input type="hidden" name="definition_id" value="{{ unrelease_templates[0].id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise"></i> Unrelease — {{ part.part_number }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> This will move <strong>{{ part.part_number }}</strong> from <code>RELEASED</code> back to <code>DRAFT</code>.
+                        All workflow instances will be cleared. This action cannot be easily undone.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Comment (optional)</label>
+                        <textarea class="form-control" name="comment" rows="3" placeholder="Reason for unrelease..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Unrelease</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endif %}
 
 {% endblock %}

@@ -96,6 +96,15 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
             WorkflowDefinition.is_active == True,  # noqa: E712
         ).order_by(WorkflowDefinition.name)).scalars().all()
     )
+    unrelease_templates = (
+        db.execute(select(WorkflowDefinition).where(
+            WorkflowDefinition.object_type == "part",
+            (WorkflowDefinition.is_global == True) |
+            (WorkflowDefinition.tenant_id == user.tenant_id),
+            WorkflowDefinition.is_active == True,  # noqa: E712
+            WorkflowDefinition.name == "Unrelease",
+        ).order_by(WorkflowDefinition.name)).scalars().all()
+    )
     # in_workflow flag is set on the part by the workflow engine
     release_instance = (
         db.query(WorkflowInstance).filter(
@@ -116,6 +125,7 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         avls=avls,
         cads=cads,
         release_templates=release_templates,
+        unrelease_templates=unrelease_templates,
         release_instance=release_instance,
     ))
 
