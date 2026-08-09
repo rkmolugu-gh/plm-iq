@@ -87,13 +87,13 @@ def eco_detail(request: Request, eco_number: str, db: TenantScopedSession = Depe
         (WorkflowDefinition.tenant_id == user.tenant_id),
         WorkflowDefinition.is_active == True,  # noqa: E712
     ).order_by(WorkflowDefinition.name)).scalars().all()
+    # Query global + tenant-specific Unrelease templates (applies to any object type)
     unrelease_templates = db.execute(select(WorkflowDefinition).where(
-        WorkflowDefinition.object_type == "eco",
         (WorkflowDefinition.is_global == True) |
         (WorkflowDefinition.tenant_id == user.tenant_id),
         WorkflowDefinition.is_active == True,  # noqa: E712
-        WorkflowDefinition.name == "ECO Unrelease",
-    ).order_by(WorkflowDefinition.name)).scalars().all()
+        WorkflowDefinition.name == "Unrelease",
+    )).scalars().all()
     # in_workflow flag is set on the ECO by the workflow engine
     release_instance = (
         db.query(WorkflowInstance).filter(
