@@ -14,7 +14,7 @@
         <h5 class="mb-0"><i class="bi bi-arrow-left-right"></i> {{ item.eco_number }} — {{ item.eco_title }}</h5>
         <div class="d-flex align-items-center gap-2">
             {% if current_user and current_user.role == 'author' %}
-            {% if not item.in_workflow and item.eco_status == 'DRAFT' %}
+            {% if not item.in_workflow %}
             <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#startReleaseModal">
                 <i class="bi bi-play-circle"></i> Start Release
             </button>
@@ -91,7 +91,7 @@
 {% endwith %}
 {% endif %}
 
-{% if current_user and current_user.role == 'author' and not item.in_workflow and item.eco_status == 'DRAFT' %}
+{% if current_user and current_user.role == 'author' and not item.in_workflow %}
 <div class="modal fade" id="startReleaseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">

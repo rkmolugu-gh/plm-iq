@@ -337,8 +337,6 @@ def _startable_check(db: Session, user: User, object_type: str, object_id: str) 
             return "Part not found."
         if obj.in_workflow:
             return "An active workflow already exists for this object."
-        if obj.status != "DRAFT":
-            return "Only DRAFT parts can be released."
     elif object_type == "eco":
         obj = db.query(EngineeringChangeOrder).filter(
             EngineeringChangeOrder.eco_number == object_id, EngineeringChangeOrder.tenant_id == user.tenant_id).first()
@@ -346,8 +344,6 @@ def _startable_check(db: Session, user: User, object_type: str, object_id: str) 
             return "ECO not found."
         if obj.in_workflow:
             return "An active workflow already exists for this object."
-        if obj.eco_status != "DRAFT":
-            return "Only DRAFT ECOs can be released."
     else:
         return "Unsupported object type."
     return None

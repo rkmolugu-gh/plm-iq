@@ -53,7 +53,14 @@ def _today() -> str:
 
 def _stages(definition: WorkflowDefinition) -> List[dict]:
     """Extract stages from a definition's v2 definition."""
-    return (definition.definition or {}).get("stages", []) or []
+    defn = definition.definition
+    if isinstance(defn, str):
+        import json
+        try:
+            defn = json.loads(defn)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    return (defn or {}).get("stages", []) or []
 
 
 def _link_for(object_type: str, object_id: str) -> str:
@@ -350,14 +357,14 @@ def start_workflow(
         if eco:
             eco.active_workflow_instance_id = instance.id
 
-    stages = _stages(template)
+    stages = _stages(definition)
     if not stages:
         raise WorkflowError("Workflow definition has no stages.")
 
     notify(
         db, user, "workflow_started",
         f"Release started: {object_id}",
-        f"A release workflow ('{template.name}') was started for {object_id}.",
+        f"A release workflow ('{definition.name}') was started for {object_id}.",
         link=_link_for(object_type, object_id),
         background=background,
     )
