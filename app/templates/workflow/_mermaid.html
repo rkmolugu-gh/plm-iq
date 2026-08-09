@@ -3,9 +3,6 @@
    instance progress view. #}
 <style>
   .plm-workflow-legend {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
     background: rgba(33, 37, 41, 0.9);
     border: 1px solid #495057;
     border-radius: 4px;
@@ -14,8 +11,8 @@
     color: #e9ecef;
     display: flex;
     gap: 10px;
-    flex-wrap: nowrap;
-    z-index: 10;
+    flex-wrap: wrap;
+    margin-top: 12px;
     backdrop-filter: blur(4px);
   }
   .plm-workflow-legend span {
