@@ -118,21 +118,6 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
-                            {% if current_user.role not in ('tenantadmin', 'superadmin') and current_user.role is not none %}
-                            <li class="px-3 py-2">
-                                <div class="small text-muted mb-1">Switch role</div>
-                                <div class="d-flex gap-2">
-                                    <form method="post" action="/role">
-                                        <input type="hidden" name="role" value="reader">
-                                        <button type="submit" class="btn btn-sm {% if current_user.role == 'reader' %}btn-primary{% else %}btn-outline-light{% endif %}" {% if current_user.role == 'reader' %}disabled{% endif %}>Reader</button>
-                                    </form>
-                                    <form method="post" action="/role">
-                                        <input type="hidden" name="role" value="author">
-                                        <button type="submit" class="btn btn-sm {% if current_user.role == 'author' %}btn-primary{% else %}btn-outline-light{% endif %}" {% if current_user.role == 'author' %}disabled{% endif %}>Author</button>
-                                    </form>
-                                </div>
-                            </li>
-                            {% endif %}
                             <li>
                                 <form method="post" action="/logout">
                                     <button type="submit" class="dropdown-item">

@@ -269,24 +269,6 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
-@router.post("/role", include_in_schema=False)
-def change_role(
-    request: Request,
-    role: str = Form(...),
-    db: TenantScopedSession = Depends(get_tenant_db),
-):
-    """Let the signed-in user switch their own role between 'reader' and 'author'."""
-    user = require_user(request, db)
-    back = request.headers.get("Referer", "/")
-    if role not in ("reader", "author"):
-        return RedirectResponse(url=back, status_code=303)
-    if user.role != role:
-        user.role = role
-        db.commit()
-        logger.info("User '%s' changed own role to '%s'", user.username, role)
-    return RedirectResponse(url=back, status_code=303)
-
-
 @router.post("/switch-user", include_in_schema=False)
 def switch_user(
     request: Request,
