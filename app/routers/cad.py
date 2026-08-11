@@ -536,7 +536,8 @@ def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depen
         return HTMLResponse(content=render("404.html"), status_code=404)
 
     if item.file_reference_type == "Git":
-        from app.git.tenant_gitea import fetch_bytes
+        from app.downloads.proxy import file_response
+        from app.downloads.zips import zip_cache_key, zip_response
         cfg = _gitea_cfg(request)
         manifest = []
         try:
@@ -545,57 +546,34 @@ def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depen
         except Exception:
             manifest = []
 
-        # An assembly (multiple files) is delivered as a single zip that
-        # preserves the folder structure. Files are fetched authenticated (the
-        # tenant's CAD repo is private) rather than via a public raw redirect.
+        # An assembly (multiple files) is delivered as a single zip. It is built
+        # once, cached to disk, and served with HTTP Range so the browser can
+        # pause and resume the download.
         if len(manifest) > 1:
             logger.info("DOWNLOAD [GITEA_ZIP] id=%s → zipping %d files", item_id, len(manifest))
-            try:
-                buf = io.BytesIO()
-                with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                    for entry in manifest:
-                        repo_path = f"{item.git_repo_path}/{entry['path']}"
-                        raw = entry.get("raw_url") or _gitea_raw_url(repo_path, cfg)
-                        # Fetch bytes via the private repo (auth), not the URL.
-                        content = fetch_bytes(cfg, cfg.repo_cad, repo_path)
-                        zf.writestr(entry["path"], content)
-                buf.seek(0)
-            except Exception as e:
-                logger.exception("DOWNLOAD [ZIP_FAIL] id=%s: %s", item_id, e)
-                detail = getattr(getattr(e, "response", None), "text", str(e))
-                return HTMLResponse(
-                    content=render("404.html", error=f"Failed to build zip: {detail}"),
-                    status_code=502,
-                )
-            return StreamingResponse(
-                buf,
-                media_type="application/zip",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{item.part_number}_cad.zip"'
-                },
-            )
+            entries = []
+            key_entries = []
+            for entry in manifest:
+                repo_path = f"{item.git_repo_path}/{entry['path']}"
+                arc = entry["path"]
+                entries.append((repo_path, arc))
+                key_entries.append((repo_path, arc, entry.get("sha") or ""))
+            tenant_key = getattr(request.state, "tenant_key", None) or ""
+            cache_key = zip_cache_key(tenant_key, "cad", item.id, item.git_repo_path or "", key_entries)
+            return zip_response(cfg, cfg.repo_cad, cache_key, entries,
+                                filename=f"{item.part_number}_cad.zip")
 
         if not item.git_repo_path:
             return HTMLResponse(
                 content=render("404.html", error="No Gitea path recorded."),
                 status_code=404,
             )
-        # Single file → proxy the private repo bytes through the app.
-        try:
-            content = fetch_bytes(cfg, cfg.repo_cad, item.git_repo_path)
-        except Exception as e:
-            logger.exception("DOWNLOAD [GITEA_FETCH_FAIL] id=%s: %s", item_id, e)
-            detail = getattr(getattr(e, "response", None), "text", str(e))
-            return HTMLResponse(
-                content=render("404.html", error=f"Failed to fetch file: {detail}"),
-                status_code=502,
-            )
-        return Response(
-            content=content,
-            media_type="application/octet-stream",
-            headers={
-                "Content-Disposition": f'attachment; filename="{item.cad_file_name}"'
-            },
+        # Single file → resumable (Range-aware) proxy of the private repo blob.
+        return file_response(
+            request, cfg, cfg.repo_cad, item.git_repo_path,
+            total=item.file_size or 0,
+            etag=item.git_commit_sha or "",
+            filename=item.cad_file_name or "download",
         )
 
     if item.file_reference_type != "LocalServer" or not item.file_reference_url:

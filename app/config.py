@@ -38,6 +38,9 @@ GITEA_COMMIT_EMAIL = os.environ["GITEA_COMMIT_EMAIL"]
 # Gitea repo for the standalone Document Management System.
 DOCUMENTS_GITEA_REPO = os.environ["DOCUMENTS_GITEA_REPO"]
 
+# Cached (resumable) ZIP downloads, keyed by content hash.
+DOWNLOADS_CACHE_DIR = os.getenv("DOWNLOADS_CACHE_DIR", "data/downloads")
+
 # Multi-tenant subdomains
 BASE_DOMAIN = os.environ["BASE_DOMAIN"]
 TENANT_REQUIRE_SUBDOMAIN = os.environ["TENANT_REQUIRE_SUBDOMAIN"].lower() == "true"

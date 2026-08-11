@@ -548,33 +548,28 @@ def document_download(request: Request, item_id: int, db: TenantScopedSession = 
     if not item:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
-    from app.git.tenant_gitea import fetch_bytes
+    from app.downloads.proxy import file_response
+    from app.downloads.zips import zip_cache_key, zip_response
     cfg = _gitea_doc_cfg(request)
+    safe_name = re.sub(r"[^A-Za-z0-9_.\-]", "_", item.name)
 
-    # Single file → proxy the private repo bytes through the app (no public URL).
+    # Single file → resumable (Range-aware) proxy of the private repo blob.
     if item.kind == "file":
         if not item.git_repo_path:
             return HTMLResponse(
                 content=render("404.html", **ctx, error="No Git path recorded for this file."),
                 status_code=404,
             )
-        try:
-            content = fetch_bytes(cfg, cfg.repo_docs, item.git_repo_path)
-        except Exception as e:
-            logger.exception("DOCDL [FETCH_FAIL] id=%s: %s", item_id, e)
-            detail = getattr(getattr(e, "response", None), "text", str(e))
-            return HTMLResponse(
-                content=render("404.html", **ctx, error=f"Failed to fetch file: {detail}"),
-                status_code=502,
-            )
-        safe_name = re.sub(r"[^A-Za-z0-9_.\-]", "_", item.name)
-        return Response(
-            content=content,
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        return file_response(
+            request, cfg, cfg.repo_docs, item.git_repo_path,
+            total=item.file_size_bytes or 0,
+            etag=item.git_commit_sha or "",
+            filename=safe_name,
         )
 
-    # Folder → zip all descendant files preserving the relative structure.
+    # Folder → zip all descendant files preserving the relative structure. The
+    # zip is cached to disk once and served with HTTP Range so the browser can
+    # pause and resume the download.
     descendants = _collect_file_descendants(db, item)
     if not descendants:
         return HTMLResponse(
@@ -582,29 +577,18 @@ def document_download(request: Request, item_id: int, db: TenantScopedSession = 
             status_code=404,
         )
     folder_path = _path_from_root(db, item)
-    try:
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in descendants:
-                arcname = "/".join(_path_from_root(db, f)[len(folder_path):])
-                if not f.git_repo_path:
-                    continue
-                content = fetch_bytes(cfg, cfg.repo_docs, f.git_repo_path)
-                zf.writestr(arcname, content)
-        buf.seek(0)
-    except Exception as e:
-        logger.exception("DOCDL [ZIP_FAIL] id=%s: %s", item_id, e)
-        detail = getattr(getattr(e, "response", None), "text", str(e))
-        return HTMLResponse(
-            content=render("404.html", **ctx, error=f"Failed to build zip: {detail}"),
-            status_code=502,
-        )
-    safe_name = re.sub(r"[^A-Za-z0-9_\-]", "_", item.name)
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}_documents.zip"'},
-    )
+    entries = []
+    key_entries = []
+    for f in descendants:
+        if not f.git_repo_path:
+            continue
+        arcname = "/".join(_path_from_root(db, f)[len(folder_path):])
+        entries.append((f.git_repo_path, arcname))
+        key_entries.append((f.git_repo_path, arcname, f.git_commit_sha or ""))
+    tenant_key = getattr(request.state, "tenant_key", None) or ""
+    cache_key = zip_cache_key(tenant_key, "document", item.id, folder_path, key_entries)
+    return zip_response(cfg, cfg.repo_docs, cache_key, entries,
+                        filename=f"{safe_name}_documents.zip")
 
 
 @router.get("/{item_id}/history", response_class=HTMLResponse)
