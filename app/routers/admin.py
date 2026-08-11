@@ -210,6 +210,19 @@ def admin_tenant_create(
     db.add(tenant)
     db.flush()
     db.commit()
+
+    # Best-effort: provision the tenant's isolated Gitea identity + private
+    # repos. If Gitea is unavailable this is logged and retried lazily on first
+    # use (see app/git/tenant_gitea.ensure_tenant_gitea).
+    try:
+        from app.git.tenant_gitea import provision_tenant_gitea
+        db.refresh(tenant)
+        if not provision_tenant_gitea(tenant):
+            logger.warning("TENANT_CREATE: Gitea provisioning pending for %s (%s)",
+                           tenant.tenant_key, tenant.tenant_name)
+    except Exception as e:
+        logger.warning("TENANT_CREATE: Gitea provisioning failed (will lazy-provision): %s", e)
+
     return RedirectResponse(url=f"/admin/tenant/{tenant.tenant_id}", status_code=303)
 
 

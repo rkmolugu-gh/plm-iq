@@ -18,6 +18,13 @@ class Tenant(Base):
     role = Column("role", String, default="reader")
     is_active = Column("is_active", Boolean, default=True)
 
+    # Per-tenant Gitea separation (see docs/multitenant-gitea.md).
+    git_username = Column("git_username", String, nullable=True)          # per-tenant Gitea user (owner of its repos)
+    git_secret_enc = Column("git_secret_enc", String, nullable=True)      # Fernet-encrypted Gitea password/token
+    git_cad_repo = Column("git_cad_repo", String, nullable=True)          # tenant's private CAD repo
+    git_docs_repo = Column("git_docs_repo", String, nullable=True)        # tenant's private docs repo
+    git_provisioned = Column("git_provisioned", Boolean, default=False)   # idempotent provisioning flag
+
     users = relationship("User", back_populates="tenant")
     parts = relationship("Part", back_populates="tenant")
     favorites = relationship("Favorite", back_populates="tenant")

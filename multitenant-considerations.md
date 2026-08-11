@@ -465,9 +465,22 @@ python -m db.indexing.build_all
 
 ---
 
-## 12. References
+## 12. Implemented additions (2026-08-11)
+
+- **AI search filter gateway (Option A)** — `app/aisearch/filter_gateway.py`,
+  shared index with mandatory, deny-by-default `tenant_key` filtering and a
+  single leak trap + log point. See `docs/multitenant-filter-gateway.md`.
+- **Per-tenant Gitea separation** — `app/git/tenant_gitea.py`: each tenant gets
+  its own Gitea user + private CAD/docs repos, authenticated per tenant, with an
+  offboarding export. See `docs/multitenant-gitea.md`.
+- Matching per-tenant design for git-served (Gitea) files mirrors the tenant_key
+  isolation: per-tenant identity + per-tenant repos so a tenant can be offboarded
+  with its data, without per-tenant processes or additional licenses.
+
+## 13. References
 
 - `app/models/tenant_user.py` — `Tenant`, `User` (identity tables)
+- `app/git/tenant_gitea.py` — per-tenant Gitea isolation (implemented)
 - `app/models/{parts,bom,costing,eco,aml,avl,cad,documents,workflow,queries,favorite}.py` — `tenant_key` columns added
 - `app/models/api_token.py` — **proposed** `ApiToken` model (§6.1)
 - `app/tenant/{context,scope,resolve}.py` — **proposed** shared enforcement + key resolution

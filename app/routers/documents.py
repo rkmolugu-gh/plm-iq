@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 import requests
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import TenantScopedSession
@@ -53,118 +53,70 @@ _DOC_STATUSES = ["DRAFT", "REVIEW", "APPROVED", "OBSOLETE"]
 
 # ── Git helpers ──────────────────────────────────────────────
 
-def _gitea_doc_auth():
-    return (GITEA_USERNAME, GITEA_PASSWORD)
+def _gitea_doc_cfg(request: Request):
+    """Resolve the caller's tenant-scoped Gitea config (falls back to legacy)."""
+    from app.git.tenant_gitea import resolve_config
+    tenant_key = getattr(request.state, "tenant_key", None)
+    return resolve_config(tenant_key)
 
 
-def _gitea_doc_raw_url(repo_path: str) -> str:
-    """Raw-file download URL for a path inside the documents Gitea repo."""
-    encoded = quote(repo_path, safe="/")
-    return (
-        f"{GITEA_BASE_URL}/{GITEA_OWNER}/{DOCUMENTS_GITEA_REPO}"
-        f"/raw/branch/{GITEA_BRANCH}/{encoded}"
-    )
+def _gitea_doc_auth(cfg=None):
+    from app.git.tenant_gitea import resolve_config
+    cfg = cfg or resolve_config(None)
+    return cfg.auth or (GITEA_USERNAME, GITEA_PASSWORD)
 
 
-def _gitea_doc_ensure_repo():
-    """Auto-create the documents repo (public) if it does not already exist.
+def _gitea_doc_raw_url(repo_path: str, cfg=None) -> str:
+    """Raw-file download URL for a path in the tenant's documents repo."""
+    from app.git.tenant_gitea import resolve_config
+    cfg = cfg or resolve_config(None)
+    return cfg.raw_url(cfg.repo_docs, cfg.branch, repo_path)
 
-    The repo must be public so raw-file downloads can be served by a simple
-    303 redirect to Gitea's raw URL without an auth token.
+
+def _gitea_doc_ensure_repo(cfg=None):
+    """Idempotently provision the tenant's private documents repo.
+
+    With per-tenant isolation the repo is own by the tenant's Gitea user and is
+    private (downloads are proxied through the app rather than served publicly).
+    If given no config, resolves the legacy shared repo for single-tenant/dev.
     """
-    url = f"{GITEA_BASE_URL}/api/v1/user/repos"
+    from app.git.tenant_gitea import resolve_config
+    cfg = cfg or resolve_config(None)
+    url = f"{GITEA_BASE_URL}/api/v1/repos/{cfg.owner}/{cfg.repo_docs}"
+    r = requests.get(url, auth=cfg.auth, timeout=30)
+    if r.status_code == 200:
+        return
     payload = {
-        "name": DOCUMENTS_GITEA_REPO,
-        "private": False,
+        "name": cfg.repo_docs,
+        "private": True,
         "auto_init": True,
         "default_branch": GITEA_BRANCH,
     }
-    resp = requests.post(url, auth=_gitea_doc_auth(), json=payload, timeout=30)
+    resp = requests.post(f"{GITEA_BASE_URL}/api/v1/user/repos",
+                         auth=cfg.auth, json=payload, timeout=30)
     # 201 created, 409 already exists — both fine.
     if resp.status_code not in (200, 201, 409):
         logger.warning("DOCREPO [WARN] ensure repo returned %s: %s",
                        resp.status_code, resp.text[:300])
-    # Idempotently ensure the repo is public (raw downloads need anonymous access).
-    patch = requests.patch(
-        f"{GITEA_BASE_URL}/api/v1/repos/{GITEA_OWNER}/{DOCUMENTS_GITEA_REPO}",
-        auth=_gitea_doc_auth(),
-        json={"private": False},
-        timeout=30,
-    )
-    if patch.status_code not in (200, 201, 404):
-        logger.warning("DOCREPO [WARN] set-public returned %s", patch.status_code)
 
 
-def _gitea_doc_put(content: bytes, repo_path: str):
-    """Upload one file to the documents Gitea repo at `repo_path`.
+def _gitea_doc_put(content: bytes, repo_path: str, cfg=None):
+    """Upload one file to the tenant's documents repo (upsert).
 
-    Upserts (PUT if the file already exists). Returns
-    (raw_download_url, commit_sha, size_bytes). Raises requests.HTTPError on failure.
+    Delegates to the centralized per-tenant Gitea client, authenticating as the
+    tenant so it can only write its own repo. Returns
+    (raw_download_url, commit_sha, size_bytes).
     """
-    encoded_path = quote(repo_path, safe="")
-    url = (
-        f"{GITEA_BASE_URL}/api/v1/repos/{GITEA_OWNER}/{DOCUMENTS_GITEA_REPO}"
-        f"/contents/{encoded_path}"
-    )
-    b64 = base64.b64encode(content).decode("ascii")
-    payload = {
-        "message": f"Upload {repo_path}",
-        "branch": GITEA_BRANCH,
-        "content": b64,
-        "author": {"name": GITEA_USERNAME, "email": GITEA_COMMIT_EMAIL},
-        "committer": {"name": GITEA_USERNAME, "email": GITEA_COMMIT_EMAIL},
-    }
-
-    existing_sha = None
-    head = requests.get(url, auth=_gitea_doc_auth(), timeout=30)
-    if head.status_code == 200:
-        try:
-            hdata = head.json()
-            # A single-file GET returns the blob sha at the top level ("sha");
-            # "content" is the base64 payload (a string), not a dict.
-            existing_sha = hdata.get("sha")
-            if not existing_sha and isinstance(hdata.get("content"), dict):
-                existing_sha = hdata["content"].get("sha")
-        except Exception:
-            existing_sha = None
-    elif head.status_code not in (404, 200):
-        head.raise_for_status()
-
-    if existing_sha:
-        payload["sha"] = existing_sha
-        resp = requests.put(url, auth=_gitea_doc_auth(), json=payload, timeout=60)
-    else:
-        resp = requests.post(url, auth=_gitea_doc_auth(), json=payload, timeout=60)
-    resp.raise_for_status()
-
-    data = resp.json()
-    commit_sha = (data.get("commit") or {}).get("sha")
-    return _gitea_doc_raw_url(repo_path), commit_sha, len(content)
+    from app.git.tenant_gitea import resolve_config, put_file
+    cfg = cfg or resolve_config(None)
+    return put_file(cfg, cfg.repo_docs, repo_path, content)
 
 
-def _gitea_doc_delete(repo_path: str):
-    """Best-effort delete of a file in the documents repo (GET sha then DELETE)."""
-    encoded_path = quote(repo_path, safe="")
-    url = (
-        f"{GITEA_BASE_URL}/api/v1/repos/{GITEA_OWNER}/{DOCUMENTS_GITEA_REPO}"
-        f"/contents/{encoded_path}"
-    )
-    head = requests.get(url, auth=_gitea_doc_auth(), timeout=30)
-    if head.status_code != 200:
-        return
-    hdata = head.json()
-    sha = hdata.get("sha")
-    if not sha and isinstance(hdata.get("content"), dict):
-        sha = hdata["content"].get("sha")
-    if not sha:
-        return
-    resp = requests.delete(url, auth=_gitea_doc_auth(), json={
-        "message": f"Delete {repo_path}",
-        "branch": GITEA_BRANCH,
-        "sha": sha,
-    }, timeout=30)
-    if not resp.ok:
-        logger.warning("DOCDEL [WARN] git delete %s -> %s", repo_path, resp.status_code)
+def _gitea_doc_delete(repo_path: str, cfg=None):
+    """Best-effort delete of a file in the tenant's documents repo."""
+    from app.git.tenant_gitea import resolve_config, delete_file
+    cfg = cfg or resolve_config(None)
+    delete_file(cfg, cfg.repo_docs, repo_path)
 
 
 # ── Hierarchy helpers ───────────────────────────────────────
@@ -509,9 +461,16 @@ async def upload_documents(
     cat = doc_category if doc_category in _DOC_CATEGORIES else "OTHER"
     st = status if status in _DOC_STATUSES else "DRAFT"
 
-    # Ensure the Gitea repo exists before pushing.
+    # Ensure the tenant's Gitea docs repo exists before pushing (and provision
+    # the tenant's isolated Gitea identity on first use). Fall back to the
+    # resolved (legacy/dev) config if provisioning cannot complete so uploads
+    # still work and the non-isolation is visible in logs.
+    from app.git.tenant_gitea import ensure_tenant_gitea, resolve_config
+    tenant_key = getattr(request.state, "tenant_key", None)
+    doc_cfg = resolve_config(tenant_key)
     try:
-        await asyncio.to_thread(_gitea_doc_ensure_repo)
+        doc_cfg = ensure_tenant_gitea(tenant_key or "")
+        await asyncio.to_thread(_gitea_doc_ensure_repo, doc_cfg)
     except Exception as e:
         logger.warning("DOCUP [REPO_WARN] %s", e)
 
@@ -558,7 +517,9 @@ async def upload_documents(
             db.flush()
 
             repo_path = _compute_repo_path(db, file_doc)
-            raw_url, commit_sha, size = await asyncio.to_thread(_gitea_doc_put, content, repo_path)
+            raw_url, commit_sha, size = await asyncio.to_thread(
+                _gitea_doc_put, content, repo_path, doc_cfg
+            )
             file_doc.git_repo_path = repo_path
             file_doc.git_commit_sha = commit_sha
             file_doc.file_size_bytes = size
@@ -587,14 +548,31 @@ def document_download(request: Request, item_id: int, db: TenantScopedSession = 
     if not item:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
-    # Single file → redirect to the raw Gitea URL.
+    from app.git.tenant_gitea import fetch_bytes
+    cfg = _gitea_doc_cfg(request)
+
+    # Single file → proxy the private repo bytes through the app (no public URL).
     if item.kind == "file":
         if not item.git_repo_path:
             return HTMLResponse(
                 content=render("404.html", **ctx, error="No Git path recorded for this file."),
                 status_code=404,
             )
-        return RedirectResponse(url=_gitea_doc_raw_url(item.git_repo_path), status_code=303)
+        try:
+            content = fetch_bytes(cfg, cfg.repo_docs, item.git_repo_path)
+        except Exception as e:
+            logger.exception("DOCDL [FETCH_FAIL] id=%s: %s", item_id, e)
+            detail = getattr(getattr(e, "response", None), "text", str(e))
+            return HTMLResponse(
+                content=render("404.html", **ctx, error=f"Failed to fetch file: {detail}"),
+                status_code=502,
+            )
+        safe_name = re.sub(r"[^A-Za-z0-9_.\-]", "_", item.name)
+        return Response(
+            content=content,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        )
 
     # Folder → zip all descendant files preserving the relative structure.
     descendants = _collect_file_descendants(db, item)
@@ -609,12 +587,10 @@ def document_download(request: Request, item_id: int, db: TenantScopedSession = 
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in descendants:
                 arcname = "/".join(_path_from_root(db, f)[len(folder_path):])
-                raw_url = _gitea_doc_raw_url(f.git_repo_path) if f.git_repo_path else None
-                if not raw_url:
+                if not f.git_repo_path:
                     continue
-                resp = requests.get(raw_url, timeout=60)
-                resp.raise_for_status()
-                zf.writestr(arcname, resp.content)
+                content = fetch_bytes(cfg, cfg.repo_docs, f.git_repo_path)
+                zf.writestr(arcname, content)
         buf.seek(0)
     except Exception as e:
         logger.exception("DOCDL [ZIP_FAIL] id=%s: %s", item_id, e)
@@ -641,18 +617,10 @@ def document_history(request: Request, item_id: int, db: TenantScopedSession = D
 
     commits = []
     if item.kind == "file" and item.git_repo_path:
-        url = (
-            f"{GITEA_BASE_URL}/api/v1/repos/{GITEA_OWNER}/{DOCUMENTS_GITEA_REPO}/commits"
-        )
+        from app.git.tenant_gitea import list_commits
+        cfg = _gitea_doc_cfg(request)
         try:
-            resp = requests.get(
-                url,
-                auth=_gitea_doc_auth(),
-                params={"path": item.git_repo_path, "sha": GITEA_BRANCH, "limit": 50},
-                timeout=30,
-            )
-            if resp.ok:
-                commits = resp.json() if isinstance(resp.json(), list) else []
+            commits = list_commits(cfg, cfg.repo_docs, item.git_repo_path)
         except Exception as e:
             logger.warning("DOCHIST [WARN] %s", e)
 
@@ -682,11 +650,12 @@ def document_delete(
             db.query(Document).filter(Document.parent_id == item.id).all()
             if item.kind == "folder" else []
         )
-        # Best-effort Git cleanup for files.
+        # Best-effort Git cleanup for files (tenant's docs repo).
+        doc_cfg = _gitea_doc_cfg(request)
         for f in descendants:
             if f.git_repo_path:
                 try:
-                    _gitea_doc_delete(f.git_repo_path)
+                    _gitea_doc_delete(f.git_repo_path, doc_cfg)
                 except Exception as e:
                     logger.warning("DOCDEL [GIT_WARN] %s: %s", f.git_repo_path, e)
         # Delete files first, then empty subfolders, then the node itself.

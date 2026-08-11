@@ -20,7 +20,13 @@ CREATE TABLE IF NOT EXISTS tenants (
     description TEXT,
     created_date DATE,
     role        TEXT NOT NULL DEFAULT 'reader',
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE
+    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+    -- Per-tenant Gitea separation (docs/multitenant-gitea.md)
+    git_username   TEXT,
+    git_secret_enc TEXT,
+    git_cad_repo   TEXT,
+    git_docs_repo  TEXT,
+    git_provisioned BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS users (

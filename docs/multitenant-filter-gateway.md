@@ -165,9 +165,10 @@ denies instead of leaking.
 
 - Per-tenant indices / DLS / per-tenant ES users (rejected: Option B) —
   requires licensing or index proliferation.
-- Git/Gitea per-tenant storage (separate workstream — documents are stored in a
-  Gitea repo; a matching per-tenant scheme for repo/credentials can be planned
-  separately).
+- Git/Gitea per-tenant storage — **handled separately:** see
+  `docs/multitenant-gitea.md` (per-tenant Gitea user + private repos for CAD and
+  documents, with a parallel offboarding path). This gateway covers the AI-search
+  index; Gitea covers binary file storage.
 
 ---
 

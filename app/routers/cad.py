@@ -16,7 +16,7 @@ import requests
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 
 from app.database import TenantScopedSession
 from app.models import CadMetadata, User
@@ -69,77 +69,53 @@ def _is_allowed_file(filename: str, ref_type: str = "LocalServer") -> bool:
     return ext in ALLOWED_UPLOAD_EXTENSIONS
 
 
-def _gitea_raw_url(repo_path: str) -> str:
-    """Build the raw-file download URL for a path inside the Gitea repo."""
-    encoded = quote(repo_path, safe="/")
-    return (
-        f"{GITEA_BASE_URL}/{GITEA_OWNER}/{GITEA_REPO}"
-        f"/raw/branch/{GITEA_BRANCH}/{encoded}"
-    )
+def _gitea_cfg(request: Request):
+    """Resolve the caller's tenant-scoped Gitea config (falls back to legacy)."""
+    from app.git.tenant_gitea import resolve_config
+    tenant_key = getattr(request.state, "tenant_key", None)
+    return resolve_config(tenant_key)
 
 
-def _gitea_put_file(content: bytes, repo_path: str):
-    """Upload a single file to the Gitea repo at `repo_path` via the contents API.
+def _gitea_raw_url(repo_path: str, cfg=None) -> str:
+    """Build the raw-file download URL for a path in the tenant's CAD repo."""
+    from app.git.tenant_gitea import resolve_config
+    cfg = cfg or resolve_config(None)
+    return cfg.raw_url(cfg.repo_cad, cfg.branch, repo_path)
 
-    Upserts (PUT if the file already exists). Returns
-    (raw_download_url, commit_sha, size_bytes). Raises requests.HTTPError on failure.
 
-    Note: Gitea 1.27's API forbids advancing an existing branch ref, so a folder
-    cannot be committed atomically — each file becomes its own commit.
+def _gitea_put_file(content: bytes, repo_path: str, cfg=None):
+    """Upload a single file to the tenant's CAD repo via the contents API.
+
+    Delegates to the centralized per-tenant Gitea client (upsert semantics).
+    Returns (raw_download_url, commit_sha, size_bytes), authenticating as the
+    tenant so it can only write its own repo.
+
+    Note: Gitea forbids advancing an existing branch ref, so a folder cannot be
+    committed atomically — each file becomes its own commit.
     """
-    encoded_path = quote(repo_path, safe="")
-    url = (
-        f"{GITEA_BASE_URL}/api/v1/repos/{GITEA_OWNER}/{GITEA_REPO}"
-        f"/contents/{encoded_path}"
-    )
-    auth = (GITEA_USERNAME, GITEA_PASSWORD)
-    b64 = base64.b64encode(content).decode("ascii")
-    payload = {
-        "message": f"Upload {repo_path}",
-        "branch": GITEA_BRANCH,
-        "content": b64,
-        "author": {"name": GITEA_USERNAME, "email": GITEA_COMMIT_EMAIL},
-        "committer": {"name": GITEA_USERNAME, "email": GITEA_COMMIT_EMAIL},
-    }
-
-    # Upsert: if the file already exists, Gitea needs its current sha to update.
-    existing_sha = None
-    head = requests.get(url, auth=auth, timeout=30)
-    if head.status_code == 200:
-        try:
-            existing_sha = head.json().get("content", {}).get("sha")
-        except Exception:
-            existing_sha = None
-    elif head.status_code not in (404, 200):
-        head.raise_for_status()
-
-    if existing_sha:
-        payload["sha"] = existing_sha
-        resp = requests.put(url, auth=auth, json=payload, timeout=60)
-    else:
-        resp = requests.post(url, auth=auth, json=payload, timeout=60)
-    resp.raise_for_status()
-
-    data = resp.json()
-    commit_sha = (data.get("commit") or {}).get("sha")
-    return _gitea_raw_url(repo_path), commit_sha, len(content)
+    from app.git.tenant_gitea import resolve_config, put_file
+    cfg = cfg or resolve_config(None)
+    return put_file(cfg, cfg.repo_cad, repo_path, content)
 
 
-def _upload_gitea_folder(entries, username: str, part_number: str) -> dict:
+def _upload_gitea_folder(entries, username: str, part_number: str, cfg=None) -> dict:
     """Upload a list of (rel_path, content_bytes) files as an assembly under
-    {username}/{part_number}/files/, preserving nested relative paths.
+    {username}/{part_number}/files/ in the tenant's CAD repo, preserving nested
+    relative paths.
 
-    Each file is committed individually (Gitea ref API limitation). Returns a
-    dict with folder_path, the last commit sha, the primary file's raw URL,
-    a manifest list, and total size.
+    Authenticates as the tenant (via ``cfg``), so files land only in that
+    tenant's private repo. Returns a dict with folder_path, the last commit sha,
+    the primary file's raw URL, a manifest list, and total size.
     """
+    from app.git.tenant_gitea import resolve_config
+    cfg = cfg or resolve_config(None)
     folder_path = f"{username}/{part_number}/files"
     manifest = []
     last_commit = None
     total_size = 0
     for rel_path, content in entries:
         repo_path = f"{folder_path}/{rel_path}"
-        raw_url, commit_sha, size = _gitea_put_file(content, repo_path)
+        raw_url, commit_sha, size = _gitea_put_file(content, repo_path, cfg)
         manifest.append({
             "path": rel_path,
             "name": Path(rel_path).name,
@@ -429,8 +405,9 @@ async def cad_upload(
         _log_request_dump(part_number, display, file_reference_type, file_size, "GITEA_BEGIN")
         try:
             entries = [( _relative_path(f.filename), await f.read()) for f in files]
+            cfg = _gitea_cfg(request)
             result = await asyncio.to_thread(
-                _upload_gitea_folder, entries, username, part_number
+                _upload_gitea_folder, entries, username, part_number, cfg
             )
             git_repo_path = result["folder_path"]
             git_commit_sha = result["commit_sha"]
@@ -559,6 +536,8 @@ def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depen
         return HTMLResponse(content=render("404.html"), status_code=404)
 
     if item.file_reference_type == "Git":
+        from app.git.tenant_gitea import fetch_bytes
+        cfg = _gitea_cfg(request)
         manifest = []
         try:
             if item.git_manifest:
@@ -567,19 +546,19 @@ def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depen
             manifest = []
 
         # An assembly (multiple files) is delivered as a single zip that
-        # preserves the folder structure.
+        # preserves the folder structure. Files are fetched authenticated (the
+        # tenant's CAD repo is private) rather than via a public raw redirect.
         if len(manifest) > 1:
             logger.info("DOWNLOAD [GITEA_ZIP] id=%s → zipping %d files", item_id, len(manifest))
             try:
                 buf = io.BytesIO()
                 with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
                     for entry in manifest:
-                        raw = entry.get("raw_url") or _gitea_raw_url(
-                            f"{item.git_repo_path}/{entry['path']}"
-                        )
-                        resp = requests.get(raw, timeout=60)
-                        resp.raise_for_status()
-                        zf.writestr(entry["path"], resp.content)
+                        repo_path = f"{item.git_repo_path}/{entry['path']}"
+                        raw = entry.get("raw_url") or _gitea_raw_url(repo_path, cfg)
+                        # Fetch bytes via the private repo (auth), not the URL.
+                        content = fetch_bytes(cfg, cfg.repo_cad, repo_path)
+                        zf.writestr(entry["path"], content)
                 buf.seek(0)
             except Exception as e:
                 logger.exception("DOWNLOAD [ZIP_FAIL] id=%s: %s", item_id, e)
@@ -596,13 +575,28 @@ def cad_download(request: Request, item_id: int, db: TenantScopedSession = Depen
                 },
             )
 
-        if not item.file_reference_url:
+        if not item.git_repo_path:
             return HTMLResponse(
-                content=render("404.html", error="No Gitea download URL recorded."),
+                content=render("404.html", error="No Gitea path recorded."),
                 status_code=404,
             )
-        logger.info("DOWNLOAD [GITEA] redirect id=%s → %s", item_id, item.file_reference_url)
-        return RedirectResponse(url=item.file_reference_url, status_code=303)
+        # Single file → proxy the private repo bytes through the app.
+        try:
+            content = fetch_bytes(cfg, cfg.repo_cad, item.git_repo_path)
+        except Exception as e:
+            logger.exception("DOWNLOAD [GITEA_FETCH_FAIL] id=%s: %s", item_id, e)
+            detail = getattr(getattr(e, "response", None), "text", str(e))
+            return HTMLResponse(
+                content=render("404.html", error=f"Failed to fetch file: {detail}"),
+                status_code=502,
+            )
+        return Response(
+            content=content,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{item.cad_file_name}"'
+            },
+        )
 
     if item.file_reference_type != "LocalServer" or not item.file_reference_url:
         return HTMLResponse(
