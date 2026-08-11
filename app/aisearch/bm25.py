@@ -14,6 +14,7 @@ from typing import Optional
 
 from .config import ALL_INDICES, SEARCH_DEFAULT_SIZE, SEARCH_MAX_SIZE
 from .es_client import get_es
+from .filter_gateway import gate_query, gate_results, require_tenant_key, TenantFilterDenied
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,14 @@ def build_bm25_body(query: str, tenant_key: Optional[str] = None) -> dict:
 
     Args:
         query: The user's search query string.
-        tenant_key: Optional tenant key to filter results (multi-tenant isolation).
+        tenant_key: The server-derived tenant key (deny-by-default if missing).
 
     Returns:
-        An Elasticsearch query body dict for BM25 search.
+        An Elasticsearch query body dict for BM25 search, with the mandatory
+        tenant filter injected by the filter gateway.
+
+    Raises:
+        TenantFilterDenied: if ``tenant_key`` is missing.
     """
     body = {
         "query": {
@@ -41,10 +46,8 @@ def build_bm25_body(query: str, tenant_key: Optional[str] = None) -> dict:
             }
         }
     }
-    # Add tenant filter for multi-tenant isolation
-    if tenant_key is not None:
-        body["query"]["bool"]["filter"] = [{"term": {"tenant_key": tenant_key}}]
-    return body
+    # The filter gateway is the single place that injects the tenant term.
+    return gate_query(body, tenant_key, caller="bm25.build_bm25_body")
 
 
 def bm25_search(
@@ -75,6 +78,12 @@ def bm25_search(
             timing:   dict with timing breakdown
     """
     t_start = time.time()
+
+    # Deny-by-default: no tenant key => no query (logged by the gateway).
+    try:
+        require_tenant_key(tenant_key, caller="bm25.bm25_search")
+    except TenantFilterDenied:
+        return _denied_result(query, entity_type, page, size, t_start)
 
     # Fail fast if ES is not reachable
     try:
@@ -119,9 +128,12 @@ def bm25_search(
 
     t_search_elapsed = time.time() - t_search_start
 
+    # Defense-in-depth: keep only hits belonging to the caller's tenant.
+    all_results = gate_results(all_results, tenant_key, caller="bm25.bm25_search")
+
     # Sort by score descending and paginate
     all_results.sort(key=lambda h: h.get("_score", 0), reverse=True)
-    total = true_total
+    total = len(all_results)
     paginated = all_results[from_idx:from_idx + size]
 
     t_elapsed = time.time() - t_start
@@ -136,6 +148,24 @@ def bm25_search(
             "total_seconds": round(t_elapsed, 3),
             "search_seconds": round(t_search_elapsed, 3),
         },
+    }
+
+
+def _denied_result(query: str, entity_type: Optional[str], page: int, size: int, t_start: float) -> dict:
+    """Return an empty result for deny-by-default when no tenant key is present.
+
+    Flags ``denied`` so the caller can distinguish a tenancy denial from a
+    genuine "no results" without revealing anything about other tenants.
+    """
+    return {
+        "results": [],
+        "total": 0,
+        "page": page,
+        "pages": 0,
+        "query": query,
+        "entity_type": entity_type or "",
+        "denied": True,
+        "timing": {"total_seconds": round(time.time() - t_start, 3)},
     }
 
 
