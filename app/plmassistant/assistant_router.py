@@ -196,7 +196,7 @@ async def assistant_send(
     vision-aware LLM path; text-only queries use the tool-calling ReAct loop.
     """
     user = require_user(request, db)
-    tenant_key = get_tenant_key(request)
+    tenant_key = get_tenant_key(request, db)
     session_id, session_data = _get_or_create_session(request.cookies.get("assistant_session"))
     msgs = session_data["messages"]
 

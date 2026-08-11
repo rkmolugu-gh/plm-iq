@@ -387,10 +387,8 @@ def _resolve_user_id(db, candidate) -> Optional[int]:
         if user:
             return user.user_id
 
-    # Safe fallback: first active user
-    fallback = db.query(User).filter(User.is_active.is_(True)).order_by(User.user_id).first()
-    if fallback:
-        return fallback.user_id
+    # Deny attribution rather than falling back to an arbitrary (possibly
+    # cross-tenant) user.
     return None
 
 
@@ -409,15 +407,26 @@ def _resolve_tenant_id(db, candidate) -> Optional[int]:
         if tenant:
             return tenant.tenant_id
 
-    fallback = db.query(Tenant).filter(Tenant.is_active.is_(True)).order_by(Tenant.tenant_id).first()
-    if fallback:
-        return fallback.tenant_id
+    # Deny rather than falling back to an arbitrary (possibly cross-tenant)
+    # tenant id.
     return None
 
 
+_DENIED_MSG = "Error: part not found or access denied."
+
+
 def execute_tool(tool_name: str, arguments: dict, tenant_key: str | None = None) -> str:
-    """Execute a tool by name with the given arguments and return a result string."""
+    """Execute a tool by name with the given arguments and return a result string.
+
+    Deny-by-default: without a tenant key the tools would query every tenant, so
+    a missing/blank key is refused with a generic, information-free error (it
+    never reveals whether another tenant's data exists).
+    """
     logger.info(f"[plmassistant] Executing tool: {tool_name}({arguments})")
+
+    if not tenant_key or not str(tenant_key).strip():
+        logger.warning("TENANT_GUARD DENY tool=%s called without a tenant_key", tool_name)
+        return _DENIED_MSG
 
     fn = TOOL_REGISTRY.get(tool_name)
     if fn is None:
@@ -504,14 +513,10 @@ def _execute_create_part(
         now_str = datetime.now().strftime("%d-%m-%Y")
         resolved_created_by = _resolve_user_id(db, template.created_by)
         resolved_modified_owner = _resolve_user_id(db, template.modified_owner)
-        resolved_tenant_id = _resolve_tenant_id(db, template.tenant_id)
 
-        if resolved_tenant_id is None:
-            return (
-                "Error creating part: No valid tenant found for foreign key "
-                "(tenants.tenant_id)."
-            )
-
+        # The template came from a tenant-scoped query, so it already belongs to
+        # the current tenant — carry its tenant identity over verbatim (never
+        # fall back to an arbitrary tenant).
         new_part = Part(
             part_number=new_part_number,
             part_revision=overrides.get("part_revision", template.part_revision),
@@ -525,8 +530,8 @@ def _execute_create_part(
             modified_date=now_str,
             modified_owner=resolved_modified_owner,
             created_by=resolved_created_by,
-            tenant_id=resolved_tenant_id,
-            tenant_key=tenant_key or template.tenant_key,
+            tenant_id=template.tenant_id,
+            tenant_key=template.tenant_key or tenant_key,
         )
 
         db.add(new_part)

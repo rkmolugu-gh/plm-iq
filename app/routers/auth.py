@@ -17,13 +17,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_tenant_key(request: Request) -> Optional[str]:
-    """Return the tenant_key from request state (set by tenant middleware).
+def get_tenant_key(request: Request, db: Optional[Session] = None) -> Optional[str]:
+    """Return the tenant_key for the current request.
 
-    Returns None for apex-domain / single-tenant requests where no
-    subdomain is used.
+    Resolution order:
+    1. Subdomain (from request.state, set by the tenant middleware)
+    2. Logged-in user's tenant_key (when on the apex domain / no subdomain)
+
+    Returns None only when neither a subdomain nor a logged-in user resolves —
+    callers must treat None as deny (never query unscoped).
     """
-    return getattr(request.state, "tenant_key", None)
+    tenant_key = getattr(request.state, "tenant_key", None)
+    if tenant_key is None and db is not None:
+        user_id = request.session.get("user_id")
+        if user_id is not None:
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if user and user.tenant_key:
+                tenant_key = user.tenant_key
+    return tenant_key
 
 
 def get_tenant_db(request: Request, db: Session = Depends(get_db)) -> TenantScopedSession:
@@ -37,16 +48,7 @@ def get_tenant_db(request: Request, db: Session = Depends(get_db)) -> TenantScop
     1. Subdomain (from request state, set by middleware)
     2. Logged-in user's tenant_key (when on apex domain)
     """
-    tenant_key = get_tenant_key(request)
-
-    # If no subdomain (apex domain), try to resolve from logged-in user
-    if tenant_key is None:
-        user_id = request.session.get("user_id")
-        if user_id is not None:
-            user = db.query(User).filter(User.user_id == user_id).first()
-            if user and user.tenant_key:
-                tenant_key = user.tenant_key
-
+    tenant_key = get_tenant_key(request, db)
     return TenantScopedSession(db, tenant_key)
 
 

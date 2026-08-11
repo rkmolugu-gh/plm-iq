@@ -58,9 +58,18 @@ import anyio
 import json
 
 # ── Import PLM tools ────────────────────────────────────────────────
-from app.plmassistant.plm_tools import TOOL_REGISTRY
+# All tools execute through plm_tools.execute_tool, which enforces tenant
+# isolation (deny-by-default) — never call TOOL_REGISTRY directly.
+from app.plmassistant.plm_tools import execute_tool
 
 logger = logging.getLogger(__name__)
+
+# ── Tenant resolution ───────────────────────────────────────────────
+# Tenant key for THIS MCP instance. Over stdio (local dev) it comes from the
+# MCP_TENANT_KEY env var; a production HTTP transport resolves it per-request
+# from the Authorization bearer. A missing key means the tools deny (they never
+# run unscoped), so an unconfigured server cannot leak cross-tenant data.
+_MCP_TENANT_KEY = os.environ.get("MCP_TENANT_KEY") or None
 
 # ── MCP Server ──────────────────────────────────────────────────────
 server = Server("plm-iq")
@@ -228,19 +237,18 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: Any) -> list[types.TextContent]:
-    """Execute a PLM tool by name with the given arguments."""
+    """Execute a PLM tool by name with the given arguments (tenant-scoped)."""
     logger.info(f"[mcp] Tool call: {name}({arguments})")
-
-    if name not in TOOL_REGISTRY:
-        raise ValueError(f"Unknown tool: {name}. Available: {list(TOOL_REGISTRY.keys())}")
 
     try:
         # Parse arguments if they're a string
         if isinstance(arguments, str):
-            arguments = json.loads(arguments)
+            arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
 
-        # Execute the tool
-        result = TOOL_REGISTRY[name](**arguments)
+        # execute_tool applies deny-by-default tenant isolation; a missing
+        # MCP_TENANT_KEY yields a generic "access denied", never a cross-tenant
+        # read or write.
+        result = execute_tool(name, arguments, tenant_key=_MCP_TENANT_KEY)
 
         return [types.TextContent(type="text", text=result)]
     except Exception as e:
