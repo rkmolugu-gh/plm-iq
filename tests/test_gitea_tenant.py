@@ -8,8 +8,10 @@ request shapes used for that isolation.
 
 import base64
 import json
+import socket
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -29,6 +31,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        # Force connection close so urllib3 never reuses a socket across the
+        # stub's shutdown (avoids flaky aborted-connection errors).
+        self.send_header("Connection", "close")
         self.end_headers()
         if body:
             self.wfile.write(body)
@@ -93,6 +98,14 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, {"sha": f["sha"], "content": f["b64"], "encoding": "base64"})
 
     def do_DELETE(self):
+        # Drain the request body (the client sends a JSON payload) so the
+        # server never closes with unread data, which would RST the socket.
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            if length:
+                self.rfile.read(length)
+        except Exception:
+            pass
         parsed = self._parse(self.path)
         if not parsed:
             self._send(404, {"message": "not found"})
@@ -106,17 +119,28 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _free_port() -> int:
+    """Bind an ephemeral port then release it (avoids Windows port reuse races)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
 @pytest.fixture()
 def gitea_stub():
     _Handler.files = {}
     _Handler.log = []
     _Handler._seq = 0
-    server = HTTPServer(("127.0.0.1", 0), _Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", _free_port()), _Handler)
     port = server.server_address[1]
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     yield port
     server.shutdown()
+    server.server_close()
+    time.sleep(0.05)  # let the listening socket fully release
 
 
 def _cfg(port: int) -> tg.GiteaConfig:

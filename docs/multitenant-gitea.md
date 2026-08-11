@@ -93,11 +93,16 @@ Central, dependency-light a `GiteaConfig` and the Gitea operations:
 
 ## 6. Provisioning
 
-- `admin_tenant_create` ([admin.py:169](app/routers/admin.py#L169)): after
-  `db.commit()`, best-effort call `provision_tenant_gitea` (Gitea must be up; a
-  failure is logged and left for lazy `ensure_tenant_gitea` on first upload).
-- Standalone (idempotent, re-runnable) script:
-  `python -m app.git.provision --tenant <key>`.
+- **Runs automatically on tenant creation in the UI** — `admin_tenant_create`
+  ([admin.py:169](app/routers/admin.py#L169)) calls `_provision_tenant_git` right
+  after commit (best-effort; a failure is logged and left for lazy
+  `ensure_tenant_gitea` on first upload).
+- **JSON API** (idempotent, re-runnable):
+  `POST /admin/tenant/{tid}/provision-git` (require superuser) →
+  `{provisioned, tenant_id, tenant_key, git_username, git_cad_repo, git_docs_repo}`,
+  or `502` with an error if provisioning is pending/failed.
+- **Standalone CLI** (idempotent, re-runnable):
+  `python -m app.git.provision --tenant <key>` / `--all`.
 
 ## 7. Offboarding
 

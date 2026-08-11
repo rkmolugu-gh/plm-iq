@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.orm import Session
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.database import TenantScopedSession
 from app.models import Tenant, User, Part, AppSetting
@@ -33,6 +33,26 @@ def _today() -> str:
 def _valid_role(db: Session, role: str) -> str:
     """Return `role` if it exists in the catalog, else the default 'reader'."""
     return role if role in set(role_names(db)) else "reader"
+
+
+def _provision_tenant_git(tenant) -> bool:
+    """Provision the tenant's isolated Gitea identity + private repos.
+
+    Returns True on success. Never raises: failures are logged and surface as a
+    non-provisioned tenant so lazy provisioning can retry on first use.
+    """
+    try:
+        from app.git.tenant_gitea import provision_tenant_gitea
+        ok = provision_tenant_gitea(tenant)
+    except Exception as e:
+        logger.warning("TENANT_GIT_PROVISION failed tenant=%s: %s",
+                       getattr(tenant, "tenant_key", "?"), e)
+        return False
+    if not ok:
+        logger.warning("TENANT_GIT_PROVISION returned failure tenant=%s "
+                       "(Gitea may be down; will lazy-provision on first use)",
+                       getattr(tenant, "tenant_key", "?"))
+    return ok
 
 
 def _tenant_admins(db: Session, tenant_id: int, active_only: bool = True):
@@ -211,19 +231,57 @@ def admin_tenant_create(
     db.flush()
     db.commit()
 
-    # Best-effort: provision the tenant's isolated Gitea identity + private
-    # repos. If Gitea is unavailable this is logged and retried lazily on first
-    # use (see app/git/tenant_gitea.ensure_tenant_gitea).
-    try:
-        from app.git.tenant_gitea import provision_tenant_gitea
-        db.refresh(tenant)
-        if not provision_tenant_gitea(tenant):
-            logger.warning("TENANT_CREATE: Gitea provisioning pending for %s (%s)",
-                           tenant.tenant_key, tenant.tenant_name)
-    except Exception as e:
-        logger.warning("TENANT_CREATE: Gitea provisioning failed (will lazy-provision): %s", e)
+    # Run Gitea provisioning on tenant creation (best-effort; retried lazily on
+    # first use if Gitea is unavailable, or manually via the API endpoint
+    # POST /admin/tenant/{tid}/provision-git).
+    db.refresh(tenant)
+    _provision_tenant_git(tenant)
 
     return RedirectResponse(url=f"/admin/tenant/{tenant.tenant_id}", status_code=303)
+
+
+@router.post("/tenant/{tid}/provision-git", response_class=JSONResponse)
+def admin_tenant_provision_git(
+    request: Request,
+    tid: int,
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_superuser),
+):
+    """JSON API — provision a tenant's isolated Gitea user + private repos.
+
+    Idempotent: safe to call again (returns current state if already provisioned).
+    Also invoked automatically when a tenant is created in the UI.
+
+    Returns:
+        JSON: {Provisioned, tenant_id, git_username, git_cad_repo, git_docs_repo}
+        or an error body with an appropriate status code.
+    """
+    tenant = _load_tenant(db, tid)
+    if not tenant:
+        return JSONResponse({"provisioned": False, "error": "tenant not found"}, status_code=404)
+
+    ok = _provision_tenant_git(tenant)
+    db.refresh(tenant)
+    if not ok:
+        return JSONResponse(
+            {
+                "provisioned": False,
+                "tenant_id": tenant.tenant_id,
+                "tenant_key": tenant.tenant_key,
+                "error": "Gitea provisioning failed or is pending; check Gitea/API logs",
+            },
+            status_code=502,
+        )
+    return JSONResponse(
+        {
+            "provisioned": True,
+            "tenant_id": tenant.tenant_id,
+            "tenant_key": tenant.tenant_key,
+            "git_username": tenant.git_username,
+            "git_cad_repo": tenant.git_cad_repo,
+            "git_docs_repo": tenant.git_docs_repo,
+        }
+    )
 
 
 @router.post("/tenant/{tid}/edit", response_class=HTMLResponse)
