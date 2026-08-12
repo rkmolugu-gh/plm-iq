@@ -66,7 +66,7 @@ def eco_new_form(
     """Show ECO creation form."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE"]
+    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE", "MATERIAL_CHANGE", "SUPPLIER_CHANGE", "SOFTWARE_CHANGE", "CALIBRATION_CHANGE", "TOOLING_CHANGE"]
     return HTMLResponse(content=render(
         "eco/new.html", **ctx,
         statuses=["DRAFT", "REVIEW", "APPROVED"],
@@ -142,7 +142,7 @@ def eco_edit_form(
         User.is_active == True,  # noqa: E712
     ).order_by(User.username).all()
 
-    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE"]
+    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE", "MATERIAL_CHANGE", "SUPPLIER_CHANGE", "SOFTWARE_CHANGE", "CALIBRATION_CHANGE", "TOOLING_CHANGE"]
 
     return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=["DRAFT", "REVIEW", "APPROVED"], is_favorite=is_favorite, users=users_for_select, change_types=change_types))
 

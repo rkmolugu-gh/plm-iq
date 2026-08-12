@@ -171,7 +171,7 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     current_revision TEXT,
     new_revision    TEXT,
     affected_bom_level INTEGER CHECK (affected_bom_level >= 0),
-    change_type     TEXT    CHECK (change_type IN ('DESIGN_CHANGE', 'MFG_CHANGE', 'ASSEMBLY_CHANGE')),
+    change_type     TEXT    CHECK (change_type IN ('DESIGN_CHANGE', 'MFG_CHANGE', 'ASSEMBLY_CHANGE', 'MATERIAL_CHANGE', 'SUPPLIER_CHANGE', 'SOFTWARE_CHANGE', 'CALIBRATION_CHANGE', 'TOOLING_CHANGE')),
     change_detail   TEXT,
     change_drafter  INTEGER,
     change_approver INTEGER,
