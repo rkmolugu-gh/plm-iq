@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.database import TenantScopedSession
 from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, User, WorkflowDefinition, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 router = APIRouter(prefix="/parts")
@@ -52,7 +52,7 @@ def list_parts(
         pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
         q=q or "",
         status_filter=status or "",
-        statuses=["DRAFT", "RELEASED", "OBSOLETED"],
+        statuses=get_settings(request).PART_STATUSES,
     ))
 
 
@@ -67,7 +67,7 @@ def part_new_form(
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
         "parts/new.html", **ctx,
-        statuses=["DRAFT", "RELEASED", "OBSOLETED"],
+        statuses=get_settings(request).PART_STATUSES,
     ))
 
 
@@ -153,7 +153,7 @@ def part_edit_form(
     return HTMLResponse(content=render(
         "parts/edit.html", **ctx,
         part=part,
-        statuses=["DRAFT", "RELEASED", "OBSOLETED"],
+        statuses=get_settings(request).PART_STATUSES,
         is_favorite=is_favorite,
     ))
 

@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 
 from app.database import TenantScopedSession
 from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, Document, Favorite
-from app.routers.auth import require_user, auth_context, get_tenant_db
+from app.routers.auth import require_user, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 router = APIRouter()
@@ -126,7 +126,7 @@ def dashboard(request: Request, db: TenantScopedSession = Depends(get_tenant_db)
         status_breakdown=status_breakdown,
         eco_status=eco_status,
         total_cost=total_cost,
-        statuses=["DRAFT", "RELEASED", "OBSOLETED"],
-        eco_statuses=["DRAFT", "REVIEW", "APPROVED"],
+        statuses=get_settings(request).PART_STATUSES,
+        eco_statuses=get_settings(request).ECO_STATUSES,
         favorites=enriched_favorites,
     ))

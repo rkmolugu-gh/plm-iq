@@ -26,8 +26,9 @@
                 <div class="col-md-3">
                     <label class="form-label">Preferred</label>
                     <select name="preferred_flag" class="form-select">
-                        <option value="No" {% if item.preferred_flag != 'Yes' %}selected{% endif %}>No</option>
-                        <option value="Yes" {% if item.preferred_flag == 'Yes' %}selected{% endif %}>Yes</option>
+                        {% for pf in settings.PREFERRED_FLAGS %}
+                        <option value="{{ pf }}" {% if item.preferred_flag == pf %}selected{% endif %}>{{ pf }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -45,8 +46,9 @@
                 <div class="col-md-3">
                     <label class="form-label">ISO Certified</label>
                     <select name="iso_certified" class="form-select">
-                        <option value="">No</option>
-                        <option value="Yes" {% if item.iso_certified == 'Yes' %}selected{% endif %}>Yes</option>
+                        {% for ic in settings.ISO_CERTIFIED %}
+                        <option value="{{ ic }}" {% if item.iso_certified == ic %}selected{% endif %}>{{ ic }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-9">

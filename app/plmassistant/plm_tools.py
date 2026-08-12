@@ -22,6 +22,7 @@ from app.models.aml import ApprovedManufacturer
 from app.models.avl import ApprovedVendor
 from app.models.cad import CadMetadata
 from app.models.tenant_user import User, Tenant
+from app.settings import DEFAULT_SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ SEARCH_PARTS_TOOL = {
                 "status": {
                     "type": "string",
                     "description": "Optional status filter: DRAFT, RELEASED, or OBSOLETED",
-                    "enum": ["DRAFT", "RELEASED", "OBSOLETED"],
+                    "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]),
                 },
             },
             "required": ["query"],
@@ -123,7 +124,7 @@ UPDATE_PART_STATUS_TOOL = {
                 "status": {
                     "type": "string",
                     "description": "New status value",
-                    "enum": ["DRAFT", "RELEASED", "OBSOLETED"],
+                    "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]),
                 },
             },
             "required": ["part_number", "status"],
@@ -147,7 +148,7 @@ LIST_PARTS_TOOL = {
                 "status": {
                     "type": "string",
                     "description": "Filter by status: DRAFT, RELEASED, or OBSOLETED",
-                    "enum": ["DRAFT", "RELEASED", "OBSOLETED"],
+                    "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]),
                 },
                 "sort": {
                     "type": "string",
@@ -176,7 +177,7 @@ GET_BOM_TOOL = {
                 "bom_type": {
                     "type": "string",
                     "description": "Optional BOM type filter: DESIGN, AS_BUILT, AS_SHIPPED, or AS_MAINTAINED",
-                    "enum": ["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+                    "enum": list(DEFAULT_SETTINGS["BOM_TYPES"]),
                 },
             },
             "required": ["part_number"],
@@ -238,7 +239,7 @@ SEARCH_ECOS_TOOL = {
                 "status": {
                     "type": "string",
                     "description": "Optional status filter: DRAFT, REVIEW, or APPROVED",
-                    "enum": ["DRAFT", "REVIEW", "APPROVED"],
+                    "enum": list(DEFAULT_SETTINGS["ECO_STATUSES"]),
                 },
             },
             "required": [],

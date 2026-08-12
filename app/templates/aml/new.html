@@ -29,15 +29,17 @@
                 <div class="col-md-4">
                     <label class="form-label">Source Type</label>
                     <select name="source_type" class="form-select">
-                        <option value="FABRICATED">FABRICATED</option>
-                        <option value="PURCHASED">PURCHASED</option>
+                        {% for st in settings.SOURCE_TYPES %}
+                        <option value="{{ st }}">{{ st }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Preferred</label>
                     <select name="preferred_flag" class="form-select">
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
+                        {% for pf in settings.PREFERRED_FLAGS %}
+                        <option value="{{ pf }}">{{ pf }}</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>

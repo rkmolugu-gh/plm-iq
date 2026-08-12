@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.database import TenantScopedSession
 from app.models import EngineeringChangeOrder, User, WorkflowDefinition, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 router = APIRouter(prefix="/eco")
@@ -52,7 +52,7 @@ def list_ecos(
         pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
         q=q or "",
         status_filter=status or "",
-        statuses=["DRAFT", "REVIEW", "APPROVED"],
+        statuses=get_settings(request).ECO_STATUSES,
     ))
 
 
@@ -66,10 +66,10 @@ def eco_new_form(
     """Show ECO creation form."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE", "MATERIAL_CHANGE", "SUPPLIER_CHANGE", "SOFTWARE_CHANGE", "CALIBRATION_CHANGE", "TOOLING_CHANGE"]
+    change_types = get_settings(request).ECO_CHANGE_TYPES
     return HTMLResponse(content=render(
         "eco/new.html", **ctx,
-        statuses=["DRAFT", "REVIEW", "APPROVED"],
+        statuses=get_settings(request).ECO_STATUSES,
         change_types=change_types,
         form_change_type=q or "",
     ))
@@ -142,9 +142,9 @@ def eco_edit_form(
         User.is_active == True,  # noqa: E712
     ).order_by(User.username).all()
 
-    change_types = ["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE", "MATERIAL_CHANGE", "SUPPLIER_CHANGE", "SOFTWARE_CHANGE", "CALIBRATION_CHANGE", "TOOLING_CHANGE"]
+    change_types = get_settings(request).ECO_CHANGE_TYPES
 
-    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=["DRAFT", "REVIEW", "APPROVED"], is_favorite=is_favorite, users=users_for_select, change_types=change_types))
+    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=get_settings(request).ECO_STATUSES, is_favorite=is_favorite, users=users_for_select, change_types=change_types))
 
 
 @router.post("/{eco_number}/edit", response_class=HTMLResponse)

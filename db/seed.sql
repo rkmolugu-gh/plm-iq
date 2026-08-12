@@ -363,12 +363,33 @@ INSERT OR IGNORE INTO saved_queries (id, name, description, mode, definition, cr
     (3, 'Recent ECOs', 'ECOs created in the last 30 days', 'guided', '{"filters": [{"field": "created_date", "op": ">=", "value": "last_30_days"}]}', 2, '2024-01-03', TRUE, 1, 'tk_bicycleco_a1b2c3d4');
 
 -- app_settings (sample application settings)
-INSERT OR IGNORE INTO app_settings (key, value) VALUES
-    ('default_tenant_id', '1'),
-    ('max_upload_size_mb', '10'),
-    ('enable_elasticsearch', 'true'),
-    ('llm_model', 'notset'),
-    ('maintenance_mode', 'false');
+-- tenant_key 'plm-iq' holds the global defaults; the domain option lists below
+-- are the single source of truth referenced by app/settings.py DEFAULT_SETTINGS.
+INSERT OR IGNORE INTO app_settings (tenant_key, key, value) VALUES
+    ('plm-iq', 'default_tenant_id', '1'),
+    ('plm-iq', 'max_upload_size_mb', '10'),
+    ('plm-iq', 'enable_elasticsearch', 'true'),
+    ('plm-iq', 'llm_model', 'notset'),
+    ('plm-iq', 'maintenance_mode', 'false'),
+    -- Domain option lists (JSON-encoded, mirrors DEFAULT_SETTINGS)
+    ('plm-iq', 'PART_STATUSES', '["DRAFT", "RELEASED", "OBSOLETED"]'),
+    ('plm-iq', 'ECO_STATUSES', '["DRAFT", "REVIEW", "APPROVED"]'),
+    ('plm-iq', 'ECO_CHANGE_TYPES', '["DESIGN_CHANGE", "MFG_CHANGE", "ASSEMBLY_CHANGE", "MATERIAL_CHANGE", "SUPPLIER_CHANGE", "SOFTWARE_CHANGE", "CALIBRATION_CHANGE", "TOOLING_CHANGE"]'),
+    ('plm-iq', 'ECO_NEW_STATUSES', '["DRAFT", "RELEASED", "OBSOLETED"]'),
+    ('plm-iq', 'BOM_TYPES', '["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"]'),
+    ('plm-iq', 'COST_TYPES', '["ASSEMBLY", "LEAF"]'),
+    ('plm-iq', 'DOC_STATUSES', '["DRAFT", "REVIEW", "APPROVED", "OBSOLETE"]'),
+    ('plm-iq', 'MANUFACTURER_STATUSES', '["PREFERRED", "APPROVED"]'),
+    ('plm-iq', 'VENDOR_STATUSES', '["PREFERRED", "APPROVED"]'),
+    ('plm-iq', 'SOURCE_TYPES', '["FABRICATED", "PURCHASED"]'),
+    ('plm-iq', 'QUALITY_RATINGS', '["A", "B", "C", "D"]'),
+    ('plm-iq', 'PREFERRED_FLAGS', '["Yes", "No"]'),
+    ('plm-iq', 'ISO_CERTIFIED', '["Yes", "No"]'),
+    ('plm-iq', 'FILE_REFERENCE_TYPES', '["LocalServer", "AWS S3", "Git", "NetworkDrive"]'),
+    ('plm-iq', 'OBJECT_TYPES', '["part", "eco", "document"]'),
+    ('plm-iq', 'DEFAULT_ROLES', '["reader", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver", "superadmin"]'),
+    ('plm-iq', 'WORKFLOW_INSTANCE_STATUSES', '["DRAFT", "IN_PROGRESS", "APPROVED", "REJECTED", "COMPLETED"]'),
+    ('plm-iq', 'WORKFLOW_TASK_STATUSES', '["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]');
 
 -- workflow_definitions (sample workflow definitions in v2 format)
 -- Using industry-appropriate roles: design_engineer, quality, manufacturing, release_engineer

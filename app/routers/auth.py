@@ -172,18 +172,50 @@ def _check_password(password: str, password_hash: str) -> bool:
 # every render() call.  All routers should use this.
 # ---------------------------------------------------------------------------
 
+def resolve_tenant_key(tenant) -> Optional[str]:
+    """Return the tenant_key for a Tenant object (or None)."""
+    return tenant.tenant_key if tenant is not None else None
+
+
+def get_settings(request: Request) -> "TenantSettings":
+    """Return the TenantSettings resolved for this request.
+
+    Populated by auth_context() (see below) onto request.state. Never raises:
+    falls back to global defaults when not yet resolved.
+    """
+    from app.settings import TenantSettings
+
+    settings = getattr(request.state, "settings", None)
+    if settings is None:
+        return TenantSettings({})
+    return settings
+
+
 def auth_context(request: Request, db: TenantScopedSession) -> dict:
-    """Return dict with current_user and current_tenant for template context.
+    """Return dict with current_user, current_tenant and settings for templates.
 
     The tenant_key is also stored on request.state by the tenant resolution
     middleware so that all routes (including API routes) can access it.
+
+    ``TenantSettings`` (the centralised domain option lists) is loaded here for
+    the resolved tenant, stored on ``request.state.settings`` for backend
+    modules, and included in the template context as ``settings`` and as the
+    individual constant lists (``statuses``, ``change_types``, etc.) so
+    templates keep using the same names.
     """
+    from app.settings import load_tenant_settings
+
     user = get_current_user(request, db)
     tenant = getattr(request.state, "tenant", None)
     # Fall back to a DB lookup by user.tenant_id when request.state.tenant
     # is not set (e.g. apex-host / single-tenant local dev usage).
     if tenant is None and user is not None:
         tenant = db.query(Tenant).filter(Tenant.tenant_id == user.tenant_id).first()
+
+    tenant_key = resolve_tenant_key(tenant)
+    settings = load_tenant_settings(db, tenant_key)
+    request.state.settings = settings
+
     inbox_count = 0
     unread_count = 0
     all_users = None
@@ -193,16 +225,19 @@ def auth_context(request: Request, db: TenantScopedSession) -> dict:
         inbox_count, unread_count = inbox_counts(db, user)
         all_users = db.query(User).order_by(User.username).all()
         user_map = {u.user_id: u.full_name for u in all_users}
-    return {
+
+    ctx = {
         "current_user": user,
         "current_tenant": tenant,
-        "tenant_key": tenant.tenant_key if tenant else None,
+        "tenant_key": tenant_key,
         "tenant_secret": tenant.tenant_secret if tenant else None,
         "inbox_count": inbox_count,
         "unread_count": unread_count,
         "all_users": all_users,
         "user_map": user_map,
+        "settings": settings,
     }
+    return ctx
 
 
 # ---------------------------------------------------------------------------

@@ -492,11 +492,12 @@ CREATE INDEX idx_saved_query_tenant_key ON saved_queries(tenant_key);
 
 -- ----------------------------------------------------------------------------
 -- 11. APP SETTINGS
--- Application-level key-value settings.
+-- Application-level key-value settings, stored per tenant.
+-- tenant_key 'plm-iq' holds the global defaults; other tenants' rows override.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS app_settings (
-    key    TEXT    PRIMARY KEY,
-    value  TEXT    NOT NULL DEFAULT ''
+    tenant_key TEXT    NOT NULL DEFAULT 'plm-iq',
+    key        TEXT    NOT NULL,
+    value      TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (tenant_key, key)
 );
-
-CREATE INDEX idx_app_settings_key ON app_settings(key);

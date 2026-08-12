@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from app.database import TenantScopedSession
 from app.models import BomItem, User, Part
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 router = APIRouter(prefix="/bom")
@@ -59,7 +59,7 @@ def list_bom(
         q=q or "",
         bom_type_filter=bom_type or "",
         view_mode=view or "tree",
-        bom_types=["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+        bom_types=get_settings(request).BOM_TYPES,
     ))
 
 
@@ -74,7 +74,7 @@ def bom_new_form(
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
         "bom/new.html", **ctx,
-        bom_types=["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+        bom_types=get_settings(request).BOM_TYPES,
     ))
 
 
@@ -198,7 +198,7 @@ def bom_hierarchy_form(
     ctx = auth_context(request, db)
     return HTMLResponse(content=render(
         "bom/hierarchy.html", **ctx,
-        bom_types=["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+        bom_types=get_settings(request).BOM_TYPES,
     ))
 
 
@@ -225,7 +225,7 @@ def bom_hierarchy_submit(
     if errors:
         return HTMLResponse(content=render(
             "bom/hierarchy.html", **ctx,
-            bom_types=["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+            bom_types=get_settings(request).BOM_TYPES,
             error=errors,
             submitted=bom_text,
         ))
@@ -299,7 +299,7 @@ def bom_edit_form(
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
     return HTMLResponse(content=render(
         "bom/edit.html", **ctx, item=item,
-        bom_types=["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"],
+        bom_types=get_settings(request).BOM_TYPES,
     ))
 
 

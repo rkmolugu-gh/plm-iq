@@ -18,7 +18,7 @@ from app.models import (
     WorkflowDefinition, WorkflowInstance, WorkflowTask, Notification, User, Part, EngineeringChangeOrder,
 )
 from app.models.role import role_names
-from app.routers.auth import require_user, require_role, require_superuser, is_superuser, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, require_superuser, is_superuser, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 from app.workflow.engine import start_workflow, decide_task, active_instance, WorkflowError
 from app.notifications import inbox_counts
@@ -29,7 +29,11 @@ router = APIRouter(prefix="/workflow")
 
 # Roles offered in the template builder come from the dynamic role catalog
 # (see app/routers/roles.py); User.role is free-text, matched against Role.name.
-OBJECT_TYPES = ["part", "eco"]
+from app.settings import DEFAULT_SETTINGS
+
+# Centralised object types (global default; templates receive `object_types`
+# via auth_context). Validation below uses this global default list.
+OBJECT_TYPES = DEFAULT_SETTINGS["OBJECT_TYPES"]
 
 
 # --------------------------------------------------------------------------- #

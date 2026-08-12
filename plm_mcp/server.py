@@ -61,6 +61,7 @@ import json
 # All tools execute through plm_tools.execute_tool, which enforces tenant
 # isolation (deny-by-default) — never call TOOL_REGISTRY directly.
 from app.plmassistant.plm_tools import execute_tool
+from app.settings import DEFAULT_SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ PLM_TOOLS = [
             "type": "object",
             "properties": {
                 "limit": {"type": "integer", "description": "Maximum number of parts to return (default: 10, max: 50)"},
-                "status": {"type": "string", "enum": ["DRAFT", "RELEASED", "OBSOLETED"], "description": "Filter by status"},
+                "status": {"type": "string", "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]), "description": "Filter by status"},
                 "sort": {"type": "string", "enum": ["created_date", "modified_date", "part_number"], "description": "Sort order"},
             },
             "required": [],
@@ -113,7 +114,7 @@ PLM_TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search term — matches against part_number, part_name, and material"},
-                "status": {"type": "string", "enum": ["DRAFT", "RELEASED", "OBSOLETED"], "description": "Optional status filter"},
+                "status": {"type": "string", "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]), "description": "Optional status filter"},
             },
             "required": ["query"],
         },
@@ -138,7 +139,7 @@ PLM_TOOLS = [
             "type": "object",
             "properties": {
                 "part_number": {"type": "string", "description": "The part number to update (e.g. BB-001)"},
-                "status": {"type": "string", "enum": ["DRAFT", "RELEASED", "OBSOLETED"], "description": "New status value"},
+                "status": {"type": "string", "enum": list(DEFAULT_SETTINGS["PART_STATUSES"]), "description": "New status value"},
             },
             "required": ["part_number", "status"],
         },
@@ -150,7 +151,7 @@ PLM_TOOLS = [
             "type": "object",
             "properties": {
                 "part_number": {"type": "string", "description": "The part number to look up the BOM for (e.g. BB-001)"},
-                "bom_type": {"type": "string", "enum": ["DESIGN", "AS_BUILT", "AS_SHIPPED", "AS_MAINTAINED"], "description": "Optional BOM type filter"},
+                "bom_type": {"type": "string", "enum": list(DEFAULT_SETTINGS["BOM_TYPES"]), "description": "Optional BOM type filter"},
             },
             "required": ["part_number"],
         },
@@ -184,7 +185,7 @@ PLM_TOOLS = [
             "type": "object",
             "properties": {
                 "part_number": {"type": "string", "description": "Optional part number to find ECOs affecting this part"},
-                "status": {"type": "string", "enum": ["DRAFT", "REVIEW", "APPROVED"], "description": "Optional status filter"},
+                "status": {"type": "string", "enum": list(DEFAULT_SETTINGS["ECO_STATUSES"]), "description": "Optional status filter"},
             },
             "required": [],
         },

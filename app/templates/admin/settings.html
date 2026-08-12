@@ -26,11 +26,17 @@
 <div class="card">
     <div class="card-header">
         <i class="bi bi-toggles"></i> Configuration
+        {% if is_global_editor %}
+        <span class="badge bg-primary ms-2">Global defaults (plm-iq)</span>
+        {% else %}
+        <span class="badge bg-secondary ms-2">Tenant overrides for {{ editing_tenant_key }}</span>
+        {% endif %}
     </div>
     <div class="card-body">
         <p class="text-muted small mb-3">
             These settings act like a user-managed <code>.env</code> file, stored in the database.
-            Changes take effect immediately.
+            Saving writes overrides for the current tenant; values you don't set here inherit the
+            <code>plm-iq</code> global defaults. Changes take effect immediately.
         </p>
         <form method="POST" action="/admin/settings">
             <div class="table-responsive">
@@ -39,10 +45,11 @@
                         <tr>
                             <th style="width: 250px;">Setting</th>
                             <th>Value</th>
+                            <th style="width: 130px;">Source</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for s in settings %}
+                        {% for s in setting_rows %}
                         <tr>
                             <td><code>{{ s.key }}</code></td>
                             <td>
@@ -55,10 +62,19 @@
                                 <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm">
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if s.source == "tenant" %}
+                                <span class="badge bg-success">overridden</span>
+                                {% elif s.source == "global" %}
+                                <span class="badge bg-info text-dark">global</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">default</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="2" class="text-center text-muted py-3">
+                            <td colspan="3" class="text-center text-muted py-3">
                                 No settings yet. Add one below.
                             </td>
                         </tr>

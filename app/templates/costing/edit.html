@@ -46,8 +46,9 @@
                 <div class="col-md-4">
                     <label class="form-label">Cost Type</label>
                     <select name="cost_type" class="form-select">
-                        <option value="LEAF" {% if item.cost_type == 'LEAF' %}selected{% endif %}>LEAF</option>
-                        <option value="ASSEMBLY" {% if item.cost_type == 'ASSEMBLY' %}selected{% endif %}>ASSEMBLY</option>
+                        {% for ct in settings.COST_TYPES %}
+                        <option value="{{ ct }}" {% if item.cost_type == ct %}selected{% endif %}>{{ ct }}</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>

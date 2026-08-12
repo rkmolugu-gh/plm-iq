@@ -17,6 +17,7 @@ from app.database import TenantScopedSession
 from app.models import Role, User, WorkflowDefinition
 from app.routers.auth import require_user, require_role, require_superuser, auth_context, get_tenant_db
 from app.routers.admin import _render_tree
+from app.settings import DEFAULT_SETTINGS
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/roles")
 
 _NAME_RE = re.compile(r"^[a-z0-9_]+$")
-_DEFAULT_ROLES = ["reader", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver", "superadmin"]
+_DEFAULT_ROLES = DEFAULT_SETTINGS["DEFAULT_ROLES"]
 
 
 @router.post("", response_class=HTMLResponse)

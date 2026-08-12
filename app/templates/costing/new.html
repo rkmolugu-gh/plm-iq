@@ -53,8 +53,9 @@
                 <div class="col-md-4">
                     <label class="form-label">Cost Type</label>
                     <select name="cost_type" class="form-select">
-                        <option value="LEAF">LEAF</option>
-                        <option value="ASSEMBLY">ASSEMBLY</option>
+                        {% for ct in settings.COST_TYPES %}
+                        <option value="{{ ct }}">{{ ct }}</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>

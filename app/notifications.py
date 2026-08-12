@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import SMTP_ENABLED, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, SMTP_TLS
 from app.models import Notification
+from app.settings import STATUS_PENDING
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def inbox_counts(db: Session, user) -> tuple[int, int]:
         .filter(
             WorkflowTask.assigned_to == user.user_id,
             WorkflowTask.tenant_id == user.tenant_id,
-            WorkflowTask.status == "PENDING",
+            WorkflowTask.status == STATUS_PENDING,
         )
         .count()
     )

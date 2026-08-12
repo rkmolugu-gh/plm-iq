@@ -62,6 +62,12 @@ async def check_database():
     logger = logging.getLogger(__name__)
     sess = SessionLocal()
     try:
+        # Ensure the plm-iq global default settings rows exist (idempotent).
+        from app.settings import ensure_global_settings
+        try:
+            ensure_global_settings(sess)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning("Could not ensure global settings: %s", e)
         # Check if masteradmin exists
         admin = sess.query(User).filter(User.username == "masteradmin").first()
         if not admin:

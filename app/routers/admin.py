@@ -18,6 +18,7 @@ from app.database import TenantScopedSession
 from app.models import Tenant, User, Part, AppSetting
 from app.models.role import role_names, role_rows
 from app.routers.auth import require_user, require_role, require_superuser, auth_context, is_superuser, _hash_password, get_tenant_db
+from app.settings import GLOBAL_TENANT_KEY, invalidate_tenant_settings
 from app.template_utils import render
 from app.config import BASE_DOMAIN
 
@@ -663,15 +664,64 @@ def admin_user_delete(
 
 
 # ── App Settings ──────────────────────────────────────────
-# Key-value configuration managed from the UI. Settings are stored in the
-# `app_settings` table and exposed as `show_inactive_users` (and future keys)
-# in the template context.
+# Per-tenant key-value configuration managed from the UI. Settings are stored
+# in the `app_settings` table, scoped by tenant_key. The tenant 'plm-iq' holds
+# the global defaults; every other tenant's rows override them.
 
 
-def _all_settings(db: Session):
-    """Return all settings as a list of (key, value) tuples."""
-    rows = db.query(AppSetting).order_by(AppSetting.key).all()
-    return [{"key": r.key, "value": r.value} for r in rows]
+def _current_tenant_key(request: Request, db) -> Optional[str]:
+    """Resolve the tenant_key of the user editing settings."""
+    tkey = getattr(request.state, "tenant_key", None)
+    if tkey:
+        return tkey
+    user_id = request.session.get("user_id")
+    if user_id is not None:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if user:
+            return user.tenant_key
+    return GLOBAL_TENANT_KEY
+
+
+def _all_settings(db: Session, tenant_key: str):
+    """Return the merged settings for a tenant as a list of row dicts.
+
+    Each row is {'key', 'value', 'source'} where source is one of:
+      'tenant'  - overridden locally by this tenant
+      'global'  - inherited from the 'plm-iq' global defaults
+      'default' - from the in-code DEFAULT_SETTINGS fallback
+    Note: when the editing tenant IS 'plm-iq', its rows are the globals.
+    """
+    from app.settings import (
+        DEFAULT_SETTINGS, GLOBAL_TENANT_KEY as _GTK, _encode,
+    )
+    from app.settings import load_tenant_settings
+
+    raw = db._db if isinstance(db, TenantScopedSession) else db
+
+    global_rows = {r.key: r for r in raw.query(AppSetting).filter(AppSetting.tenant_key == _GTK).all()}
+    tenant_rows = {r.key: r for r in raw.query(AppSetting).filter(AppSetting.tenant_key == tenant_key).all()} if tenant_key != _GTK else {}
+
+    # Start from DEFAULT_SETTINGS so every constant is shown even if unseeded.
+    out = []
+    for key in DEFAULT_SETTINGS:
+        if key in tenant_rows:
+            out.append({"key": key, "value": tenant_rows[key].value, "source": "tenant"})
+        elif key in global_rows:
+            out.append({"key": key, "value": global_rows[key].value, "source": "global"})
+        else:
+            out.append({"key": key, "value": _encode(DEFAULT_SETTINGS[key]), "source": "default"})
+
+    # Add any DB-only keys not in DEFAULT_SETTINGS (e.g. legacy scalar settings).
+    known = set(DEFAULT_SETTINGS)
+    for key, row in global_rows.items():
+        if key not in known:
+            out.append({"key": key, "value": row.value, "source": "global"})
+    for key, row in tenant_rows.items():
+        if key not in known:
+            out.append({"key": key, "value": row.value, "source": "tenant"})
+
+    out.sort(key=lambda r: r["key"])
+    return out
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -681,12 +731,16 @@ def admin_settings(
     _role: User = Depends(require_role(["tenantadmin"])),
     error: str = "",
 ):
-    """Show all app settings in an editable form."""
+    """Show all app settings in an editable form (merged global + tenant)."""
+    tkey = _current_tenant_key(request, db)
+    ctx = auth_context(request, db)
+    ctx["setting_rows"] = _all_settings(db, tkey)
+    ctx["editing_tenant_key"] = tkey
+    ctx["is_global_editor"] = (tkey == GLOBAL_TENANT_KEY)
+    ctx["error"] = error
     return HTMLResponse(content=render(
         "admin/settings.html",
-        **auth_context(request, db),
-        settings=_all_settings(db),
-        error=error,
+        **ctx,
     ))
 
 
@@ -696,15 +750,25 @@ async def admin_settings_save(
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
-    """Save all setting key-value pairs from the form."""
+    """Save all setting key-value pairs for the current tenant as overrides."""
+    from app.settings import GLOBAL_TENANT_KEY as _GTK
+
+    tkey = _current_tenant_key(request, db)
+    raw = db._db if isinstance(db, TenantScopedSession) else db
+
     form = await request.form()
     for key, value in form.items():
         if key.startswith("setting__"):
             setting_key = key[len("setting__"):]
-            row = db.query(AppSetting).filter(AppSetting.key == setting_key).first()
+            row = raw.query(AppSetting).filter(
+                AppSetting.tenant_key == tkey,
+                AppSetting.key == setting_key,
+            ).first()
             if row:
                 row.value = value
             else:
-                db.add(AppSetting(key=setting_key, value=value))
+                raw.add(AppSetting(tenant_key=tkey, key=setting_key, value=value))
     db.commit()
+    # Invalidate any cached settings for this tenant so the next request re-reads.
+    invalidate_tenant_settings(tkey)
     return RedirectResponse(url="/admin/settings", status_code=303)

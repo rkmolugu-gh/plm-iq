@@ -28,6 +28,11 @@ import logging
 from typing import List, Optional
 
 from sqlalchemy import or_
+
+from app.settings import (
+    STATUS_PENDING, STATUS_APPROVED, STATUS_REJECTED, STATUS_SUPERSEDED,
+    STATUS_IN_PROGRESS, STATUS_COMPLETED, STATUS_RELEASED,
+)
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -158,7 +163,7 @@ def _ensure_step_tasks(
                 step_key=step_key,
                 step_name=step_name,
                 assigned_to=u.user_id,
-                status="PENDING",
+                status=STATUS_PENDING,
                 action="approve",
                 due_date=step_due_date or instance.due_date,
                 tenant_id=instance.tenant_id,
@@ -188,7 +193,7 @@ def _ensure_step_tasks(
             step_key=step_key,
             step_name=step_name,
             assigned_to=None,
-            status="APPROVED",
+            status=STATUS_APPROVED,
             comment="Auto-approved: no users in the assigned role.",
             completed_at=_today(),
             tenant_id=instance.tenant_id,
@@ -212,7 +217,7 @@ def _current_sequential_step_index(instance: WorkflowInstance, steps: List[dict]
         q = _tasks_for_step(db, instance, instance.current_stage, key)
         if q.count() == 0:
             return idx
-        if q.filter(WorkflowTask.status == "PENDING").count() > 0:
+        if q.filter(WorkflowTask.status == STATUS_PENDING).count() > 0:
             return idx
         # all approved -> move on
     return len(steps)
@@ -239,13 +244,13 @@ def _progress_stage(db: Session, instance: WorkflowInstance, stage: dict, backgr
         if threshold is not None:
             approved_steps = set()
             for t in all_tasks:
-                if t.status == "APPROVED":
+                if t.status == STATUS_APPROVED:
                     approved_steps.add(t.step_key)
             if len(approved_steps) >= int(threshold):
                 # Threshold reached: supersede remaining PENDING tasks
                 for t in all_tasks:
-                    if t.status == "PENDING":
-                        t.status = "SUPERSEDED"
+                    if t.status == STATUS_PENDING:
+                        t.status = STATUS_SUPERSEDED
                         t.completed_at = _today()
                         t.comment = "Superseded: approval threshold reached."
                 db.flush()
@@ -253,7 +258,7 @@ def _progress_stage(db: Session, instance: WorkflowInstance, stage: dict, backgr
             # Not enough approvals yet — stage still in progress
             return False
         # v1 behavior: stage complete if all tasks are in a terminal state (not PENDING)
-        return all(t.status != "PENDING" for t in all_tasks)
+        return all(t.status != STATUS_PENDING for t in all_tasks)
 
     # sequential: advance through steps until one has pending tasks or all done
     while True:
@@ -262,7 +267,7 @@ def _progress_stage(db: Session, instance: WorkflowInstance, stage: dict, backgr
             return True
         _ensure_step_tasks(db, instance, stage_index, steps[idx], background)
         step_key = _get_step_key(steps[idx])
-        if _tasks_for_step(db, instance, stage_index, step_key).filter(WorkflowTask.status == "PENDING").count() > 0:
+        if _tasks_for_step(db, instance, stage_index, step_key).filter(WorkflowTask.status == STATUS_PENDING).count() > 0:
             return False  # awaiting human approval
         # this step is fully approved (placeholder or all approved) -> next
 
@@ -278,7 +283,7 @@ def active_instance(db: Session, object_type: str, object_id: str) -> Optional[W
         .filter(
             WorkflowInstance.object_type == object_type,
             WorkflowInstance.object_id == object_id,
-            WorkflowInstance.status == "IN_PROGRESS",
+            WorkflowInstance.status == STATUS_IN_PROGRESS,
         )
         .first()
     )
@@ -316,13 +321,13 @@ def start_workflow(
         raise WorkflowError(f"{object_type} '{object_id}' already has an active workflow.")
 
     if object_type == "part":
-        result_status = result_status or "RELEASED"
+        result_status = result_status or STATUS_RELEASED
         # Set in_workflow flag on the part
         part = db.query(Part).filter(Part.part_number == object_id, Part.tenant_id == user.tenant_id).first()
         if part:
             part.in_workflow = True
     elif object_type == "eco":
-        result_status = result_status or "APPROVED"
+        result_status = result_status or STATUS_APPROVED
         # Set in_workflow flag on the ECO
         eco = db.query(EngineeringChangeOrder).filter(
             EngineeringChangeOrder.eco_number == object_id, EngineeringChangeOrder.tenant_id == user.tenant_id
@@ -336,7 +341,7 @@ def start_workflow(
         definition_id=definition.id,
         object_type=object_type,
         object_id=object_id,
-        status="IN_PROGRESS",
+        status=STATUS_IN_PROGRESS,
         current_stage=0,
         started_by=user.user_id,
         started_at=_today(),
@@ -405,18 +410,18 @@ def decide_task(
     background=None,
 ) -> WorkflowInstance:
     """Record a decision on a task and advance the workflow."""
-    if task.status != "PENDING":
+    if task.status != STATUS_PENDING:
         raise WorkflowError("This task has already been decided.")
     if not (task.assigned_to == user.user_id or is_superuser(user) or user.role == "tenantadmin"):
         raise WorkflowError("You are not authorized to act on this task.")
 
     instance = task.instance
-    if instance.status != "IN_PROGRESS":
+    if instance.status != STATUS_IN_PROGRESS:
         raise WorkflowError("This workflow is not active.")
 
     task.comment = comment
     task.completed_at = _today()
-    task.status = "APPROVED" if decision == "approve" else "REJECTED"
+    task.status = STATUS_APPROVED if decision == "approve" else STATUS_REJECTED
     db.flush()
 
     if decision == "reject":
@@ -444,11 +449,11 @@ def _supersede_peer_tasks(
         WorkflowTask.instance_id == approved_task.instance_id,
         WorkflowTask.stage_index == approved_task.stage_index,
         WorkflowTask.step_key == approved_task.step_key,
-        WorkflowTask.status == "PENDING",
+        WorkflowTask.status == STATUS_PENDING,
         WorkflowTask.id != approved_task.id,
     ).all()
     for peer in peer_tasks:
-        peer.status = "SUPERSEDED"
+        peer.status = STATUS_SUPERSEDED
         peer.completed_at = _today()
         peer.comment = f"Superseded: another user approved this step."
         db.flush()
@@ -466,7 +471,7 @@ def _supersede_peer_tasks(
 
 
 def _reject_workflow(db, instance: WorkflowInstance, user: User, comment, background=None) -> None:
-    instance.status = "REJECTED"
+    instance.status = STATUS_REJECTED
     instance.completed_at = _today()
     # Clear the in_workflow flag on the target object
     if instance.object_type == "part":
@@ -515,7 +520,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
             .first()
         )
         if part:
-            part.status = target_status or (instance.result_status or "RELEASED")
+            part.status = target_status or (instance.result_status or STATUS_RELEASED)
             part.in_workflow = False
             part.active_workflow_instance_id = None
             part.modified_date = today
@@ -530,7 +535,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
             .first()
         )
         if eco:
-            eco.eco_status = target_status or "APPROVED"
+            eco.eco_status = target_status or STATUS_APPROVED
             eco.in_workflow = False
             eco.active_workflow_instance_id = None
             eco.approved_date = today
@@ -548,7 +553,7 @@ def _finalize(db: Session, instance: WorkflowInstance, background=None) -> None:
                         part.part_revision = eco.new_revision
                     part.modified_date = today
 
-    instance.status = "COMPLETED"
+    instance.status = STATUS_COMPLETED
     instance.completed_at = today
     db.flush()
     _notify_participants(

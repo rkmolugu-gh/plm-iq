@@ -31,7 +31,7 @@ from app.config import (
     GITEA_BRANCH,
     GITEA_COMMIT_EMAIL,
 )
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,6 @@ GIT_ALLOWED_UPLOAD_EXTENSIONS = {
     ".stl", ".3mf", ".iges", ".igs", ".catpart", ".catproduct",
     ".x_t", ".x_b", ".prt", ".asm",
 }
-_REF_TYPES = ["LocalServer", "AWS S3", "Git"]
 
 
 def _is_allowed_file(filename: str, ref_type: str = "LocalServer") -> bool:
@@ -188,7 +187,7 @@ def list_cad(
         q=q or "",
         format_filter=file_format or "",
         formats=["SLDASM", "SLDPRT", "STEP", "STP", "DWG", "DXF", "STL", "3MF", "PDF"],
-        ref_types=_REF_TYPES,
+        ref_types=get_settings(request).FILE_REFERENCE_TYPES,
     ))
 
 
@@ -204,7 +203,7 @@ def cad_new_form(
     return HTMLResponse(content=render(
         "cad/new.html", **ctx,
         formats=["SLDASM", "SLDPRT", "STEP", "STP", "DWG", "DXF", "STL", "3MF", "PDF"],
-        ref_types=_REF_TYPES,
+        ref_types=get_settings(request).FILE_REFERENCE_TYPES,
     ))
 
 

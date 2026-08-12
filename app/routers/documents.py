@@ -40,7 +40,7 @@ from app.config import (
     GITEA_COMMIT_EMAIL,
     DOC_ALLOWED_EXTENSIONS,
 )
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents")
 
 _DOC_CATEGORIES = ["SPEC", "MANUAL", "CERT", "CONTRACT", "STANDARD", "DRAWING", "OTHER"]
-_DOC_STATUSES = ["DRAFT", "REVIEW", "APPROVED", "OBSOLETE"]
+from app.settings import DEFAULT_SETTINGS
+
+# Domain list from centralised settings; used for validation in routes that
+# don't have a Request. Dropdowns use get_settings(request).DOC_STATUSES.
+_DOC_STATUSES = DEFAULT_SETTINGS["DOC_STATUSES"]
 
 
 # ── Git helpers ──────────────────────────────────────────────
@@ -299,7 +303,7 @@ def list_documents(
         total=total,
         pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
         categories=_DOC_CATEGORIES,
-        statuses=_DOC_STATUSES,
+        statuses=get_settings(request).DOC_STATUSES,
     ))
 
 
@@ -384,7 +388,7 @@ def document_edit_form(
         **ctx,
         item=item,
         categories=_DOC_CATEGORIES,
-        statuses=_DOC_STATUSES,
+        statuses=get_settings(request).DOC_STATUSES,
         is_favorite=is_favorite,
     ))
 
