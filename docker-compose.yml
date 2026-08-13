@@ -20,6 +20,40 @@ services:
       retries: 20
       start_period: 20s
 
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-plmiq}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-plmiq}"
+      POSTGRES_DB: "${POSTGRES_DB:-plmiq}"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  smtp:
+    image: axllent/mailpit:${MAILPIT_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      MP_SMTP_BIND_ADDR: "0.0.0.0:1025"
+      MP_UI_BIND_ADDR: "0.0.0.0:8025"
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    volumes:
+      - "${MAILPIT_DATA_DIR:-./data/mailpit}:/data"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8025/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.15.0}
     restart: unless-stopped

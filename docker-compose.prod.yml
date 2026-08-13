@@ -1,0 +1,127 @@
+services:
+  caddy:
+    build:
+      context: ./deploy
+      dockerfile: Caddy.Dockerfile
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - public
+      - backend
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${PLM_IQ_IMAGE:-plm-iq:prod}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BASE_DOMAIN: ${BASE_DOMAIN}
+      TENANT_REQUIRE_SUBDOMAIN: ${TENANT_REQUIRE_SUBDOMAIN:-true}
+    expose:
+      - "8000"
+    volumes:
+      - plm_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      gitea:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.15.0}
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      ELASTIC_PASSWORD: ${ES_PASSWORD}
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:$${ELASTIC_PASSWORD} http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  gitea:
+    image: gitea/gitea:${GITEA_VERSION:-1.22}
+    restart: unless-stopped
+    environment:
+      USER_UID: "${GITEA_UID:-1000}"
+      USER_GID: "${GITEA_GID:-1000}"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__ROOT_URL: ${GITEA_BASE_URL}/
+      GITEA__server__SSH_PORT: "${GITEA_SSH_PORT:-2222}"
+    expose:
+      - "3000"
+    volumes:
+      - gitea_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+networks:
+  public:
+  backend:
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  elasticsearch_data:
+  gitea_data:
+  plm_data:

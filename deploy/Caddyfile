@@ -1,0 +1,34 @@
+{
+    email {$ACME_EMAIL}
+}
+
+# Apex application.
+plm-iq.com {
+    encode gzip zstd
+    reverse_proxy api:8000
+}
+
+# API hostname.
+api.plm-iq.com {
+    encode gzip zstd
+    reverse_proxy api:8000
+}
+
+# Tenant hostnames.
+# Requires DNS-01 support because this is a wildcard certificate.
+*.discreet.plm-iq.com {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    encode gzip zstd
+    reverse_proxy api:8000
+}
+
+# Optional future service hostnames:
+# mcp.plm-iq.com {
+#     reverse_proxy mcp:8000
+# }
+#
+# git.plm-iq.com {
+#     reverse_proxy gitea:3000
+# }
