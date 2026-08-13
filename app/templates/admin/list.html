@@ -13,12 +13,22 @@
         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newUserModal" onclick="setNewUserTenant(0)">
             <i class="bi bi-person-add"></i> New User
         </button>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inviteUserModal">
+            <i class="bi bi-envelope-plus"></i> Invite User
+        </button>
     </div>
 </div>
 
 {% if error %}
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
     {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+{% if info %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    {{ info }}
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 {% endif %}
@@ -378,6 +388,40 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-success">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── Invite User Modal ──────────────────────────────── -->
+<div class="modal fade" id="inviteUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/admin/invite">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-envelope-plus"></i> Invite User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">
+                        The invited user will receive a link to verify their email and set a password.
+                        Email is their login id.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" placeholder="user@company.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <select name="role" class="form-select">
+                            {% for r in user_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-send"></i> Send Invite</button>
                 </div>
             </form>
         </div>

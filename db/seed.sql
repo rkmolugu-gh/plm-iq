@@ -351,10 +351,20 @@ INSERT OR IGNORE INTO roles (name, description, created_at, is_global) VALUES ('
 -- Master Admin Seed Data
 -- ============================================================
 INSERT OR IGNORE INTO users (username, full_name, email, password_hash, tenant_id, tenant_key, is_active, created_date, role)
-SELECT 'masteradmin', 'Master Admin', NULL,
+SELECT 'masteradmin', 'Master Admin', 'masteradmin@localhost',
 '$2b$12$/lprcRhuQOtubH2mNs/RTeEY8KHvNZozMOVDE1E77EPNPjbSs2lZy',
 6, 'tk_plm_iq_superadmin', TRUE, date('now'), 'superadmin'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='masteradmin');
+
+UPDATE users SET email = CASE
+    WHEN email IS NULL OR trim(email) = '' THEN username || '@localhost'
+    ELSE email
+END
+WHERE email IS NULL OR trim(email) = '';
+
+-- Seed users have passwords already, so they are email-verified by default.
+-- (New self-service registrations and invitations start unverified.)
+UPDATE users SET email_verified = TRUE WHERE password_hash IS NOT NULL AND password_hash <> '';
 
 -- saved_queries (3 rows)
 INSERT OR IGNORE INTO saved_queries (id, name, description, mode, definition, created_by, created_at, is_public, tenant_id, tenant_key) VALUES

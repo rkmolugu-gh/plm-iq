@@ -64,11 +64,11 @@
                 <form method="post" action="/login">
                     <input type="hidden" name="next" value="{{ next or '/' }}">
                     <div class="mb-3">
-                        <label for="username" class="form-label small">Username</label>
+                        <label for="username" class="form-label small">Email or Username</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-person"></i></span>
-                            <input type="text" class="form-control" id="username" name="username"
-                                   placeholder="e.g. megan, jane, nik" required autofocus>
+                            <input type="text" class="form-control" id="username" name="email"
+                                   placeholder="you@company.com" required autofocus>
                         </div>
                     </div>
                     <div class="mb-4">
@@ -87,6 +87,13 @@
                         <i class="bi bi-box-arrow-in-right"></i> Sign In
                     </button>
                 </form>
+                <div class="text-center mt-3 small">
+                    <a href="/forgot">Forgot password?</a>
+                </div>
+                <hr class="my-3">
+                <div class="text-center small text-muted">
+                    New here? <a href="/register"><strong>Register a tenant</strong></a>
+                </div>
             </div>
         </div>
 

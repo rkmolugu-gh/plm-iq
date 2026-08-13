@@ -34,9 +34,10 @@ class User(Base):
     __tablename__ = "users"
 
     user_id = Column("user_id", Integer, primary_key=True, autoincrement=True)
-    username = Column("username", String, unique=True, nullable=False)
+    username = Column("username", String, unique=True, nullable=True)
     full_name = Column("full_name", String, nullable=False)
-    email = Column("email", String)
+    email = Column("email", String, unique=True, nullable=False)
+    email_verified = Column("email_verified", Boolean, nullable=False, default=False)
     password_hash = Column("password_hash", String, nullable=False, default="")
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False, default=1)
     tenant_key = Column("tenant_key", String, nullable=False)

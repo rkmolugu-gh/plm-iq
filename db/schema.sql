@@ -31,9 +31,10 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 CREATE TABLE IF NOT EXISTS users (
     user_id     INTEGER PRIMARY KEY,
-    username    TEXT    NOT NULL UNIQUE,
+    username    TEXT    UNIQUE,
     full_name   TEXT    NOT NULL,
-    email       TEXT,
+    email       TEXT    NOT NULL UNIQUE,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     password_hash TEXT NOT NULL DEFAULT '',
     tenant_id   INTEGER NOT NULL DEFAULT 1,
     tenant_key  TEXT    NOT NULL,

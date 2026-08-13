@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Set Password - PLM-IQ{% endblock %}
+
+{% block nav_right %}{% endblock %}
+{% block sidebar %}{% endblock %}
+{% block body_class %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card border-secondary shadow">
+            <div class="card-body p-4">
+                {% if invalid %}
+                    <div class="text-center mb-3">
+                        <i class="bi bi-x-circle text-danger" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="text-center mb-3">Link Invalid or Expired</h4>
+                    <p class="text-muted small">{{ error }}</p>
+                    <div class="d-grid gap-2">
+                        <a href="/forgot" class="btn btn-outline-secondary">Request a new link</a>
+                        <a href="/login" class="btn btn-primary">Go to Login</a>
+                    </div>
+                {% else %}
+                    <div class="text-center mb-3">
+                        <i class="bi bi-shield-lock" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <h4 class="text-center mb-1">Set Your Password</h4>
+                    <p class="text-center text-muted small mb-3">{{ email }}</p>
+
+                    {% if error %}
+                    <div class="alert alert-danger py-2 small">{{ error }}</div>
+                    {% endif %}
+
+                    <form method="post" action="/verify/{{ token }}">
+                        <div class="mb-3">
+                            <label for="password" class="form-label small">New Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                <input type="password" class="form-control" id="password" name="password"
+                                       placeholder="At least 6 characters" minlength="6" required autofocus>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check2-circle"></i> Set Password
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

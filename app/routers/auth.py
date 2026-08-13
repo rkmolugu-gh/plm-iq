@@ -8,9 +8,15 @@ from fastapi import APIRouter, Depends, Form, Request, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import SMTP_ENABLED
 from app.database import get_db, TenantScopedSession
 from app.models import User, Tenant
 from app.template_utils import render
+
+
+def _today() -> str:
+    import datetime
+    return datetime.date.today().isoformat()
 
 logger = logging.getLogger(__name__)
 
@@ -265,38 +271,49 @@ def login_form(request: Request, error: str = "", db: TenantScopedSession = Depe
 @router.post("/login", response_class=HTMLResponse, include_in_schema=False)
 def login_submit(
     request: Request,
-    username: str = Form(...),
     password: str = Form(...),
     next: str = Form("/"),
+    email: str = Form(""),
+    username: str = Form(""),
     db: TenantScopedSession = Depends(get_tenant_db),
 ):
-    """Authenticate user and create session."""
-    # Look up user by username
-    user = db.query(User).filter(User.username == username).first()
+    """Authenticate user and create session.
+
+    The login identifier is the user's EMAIL (the logical user id). For
+    backwards compatibility with the seed quick-login (which submits
+    usernames), a username is also accepted as a fallback.
+    """
+    identifier = (email or username or "").strip()
+    user = db.query(User).filter(
+        (User.email == identifier) | (User.username == identifier)
+    ).first()
 
     if not user or not user.is_active:
-        all_users = db.query(User).filter(User.is_active.is_(True)).order_by(User.username).all()
-        return HTMLResponse(content=render(
-            "login.html",
-            request=request,
-            error="Invalid username or password.",
-            all_users=all_users,
-        ))
+        return _login_error(request, db, "Invalid email or password.")
+
+    if not user.email_verified:
+        return _login_error(request, db,
+                            "Your email is not verified yet. Please check your inbox "
+                            "for the verification link.")
 
     if not _check_password(password, user.password_hash or ""):
-        all_users = db.query(User).filter(User.is_active.is_(True)).order_by(User.username).all()
-        return HTMLResponse(content=render(
-            "login.html",
-            request=request,
-            error="Invalid username or password.",
-            all_users=all_users,
-        ))
+        return _login_error(request, db, "Invalid email or password.")
 
     # Set session
     request.session["user_id"] = user.user_id
     logger.info(f"User '{user.username}' (id={user.user_id}) logged in")
 
     return RedirectResponse(url=next, status_code=303)
+
+
+def _login_error(request: Request, db, message: str) -> HTMLResponse:
+    all_users = db.query(User).filter(User.is_active.is_(True)).order_by(User.username).all()
+    return HTMLResponse(content=render(
+        "login.html",
+        request=request,
+        error=message,
+        all_users=all_users,
+    ))
 
 
 @router.post("/logout", response_class=HTMLResponse, include_in_schema=False)
@@ -321,3 +338,175 @@ def switch_user(
     logger.info("User '%s' switched session to user '%s'", current_user.username, target.username)
     back = request.headers.get("Referer", "/")
     return RedirectResponse(url=back, status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Self-service registration + email verification + password reset
+# ---------------------------------------------------------------------------
+
+def _make_tenant_key(name: str) -> str:
+    """Propose a unique-ish tenant_key from the tenant name."""
+    import re as _re
+    base = _re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+    return f"tk_{base or 'tenant'}"
+
+
+def _email_in_use(db, email: str) -> bool:
+    return db.query(User).filter(User.email == email).first() is not None
+
+
+@router.get("/register", response_class=HTMLResponse, include_in_schema=False)
+def register_form(request: Request, error: str = ""):
+    """Render the new-tenant registration form."""
+    return HTMLResponse(content=render(
+        "auth/register.html",
+        request=request,
+        error=error,
+    ))
+
+
+@router.post("/register", response_class=HTMLResponse, include_in_schema=False)
+def register_submit(
+    request: Request,
+    tenant_name: str = Form(...),
+    admin_name: str = Form(...),
+    admin_email: str = Form(...),
+    db: TenantScopedSession = Depends(get_tenant_db),
+):
+    """Create a new tenant + unverified tenant-admin, then email a verify link."""
+    tenant_name = (tenant_name or "").strip()
+    admin_name = (admin_name or "").strip()
+    admin_email = (admin_email or "").strip().lower()
+
+    if not tenant_name or not admin_name or not admin_email:
+        return _render_register(request, error="All fields are required.")
+    if db.query(Tenant).filter(Tenant.tenant_name == tenant_name).first():
+        return _render_register(request, error=f"Tenant '{tenant_name}' already exists.")
+    if _email_in_use(db, admin_email):
+        return _render_register(request, error="An account with that email already exists.")
+
+    # Tenant
+    tenant_key = _make_tenant_key(tenant_name)
+    from app.routers.admin import _provision_tenant_git
+    tenant = Tenant(
+        tenant_name=tenant_name,
+        tenant_key=tenant_key,
+        tenant_secret="",
+        role="reader",
+        is_active=True,
+        created_date=_today(),
+    )
+    db.add(tenant)
+    db.flush()
+
+    # Tenant-admin (email is the login id), unverified, no password yet.
+    user = User(
+        username=admin_email.split("@")[0],
+        full_name=admin_name,
+        email=admin_email,
+        email_verified=False,
+        password_hash="",
+        tenant_id=tenant.tenant_id,
+        tenant_key=tenant_key,
+        role="tenantadmin",
+        is_active=True,
+        created_date=_today(),
+    )
+    db.add(user)
+    db.commit()
+    try:
+        _provision_tenant_git(tenant)
+    except Exception:  # noqa: BLE001 - best-effort; lazy retry later
+        pass
+
+    from app.email_verify import send_verification_email
+    link = send_verification_email(request, user, "register")
+
+    return HTMLResponse(content=render(
+        "auth/confirm_register.html",
+        request=request,
+        email=admin_email,
+        dev_link=link,
+        smtp_enabled=SMTP_ENABLED,
+    ))
+
+
+def _render_register(request: Request, error: str) -> HTMLResponse:
+    return HTMLResponse(content=render(
+        "auth/register.html", request=request, error=error,
+    ))
+
+
+@router.get("/verify/{token}", response_class=HTMLResponse, include_in_schema=False)
+def verify_form(request: Request, token: str, error: str = ""):
+    """Render the set-password form for a valid token."""
+    from app.email_verify import read_token
+    data = read_token(token)
+    if data is None:
+        return HTMLResponse(content=render(
+            "auth/verify.html", request=request,
+            invalid=True, error="This link is invalid or has expired (valid 1 hour).",
+        ))
+    uid, email = data
+    return HTMLResponse(content=render(
+        "auth/verify.html", request=request,
+        token=token, uid=uid, email=email, invalid=False, error=error,
+    ))
+
+
+@router.post("/verify/{token}", response_class=HTMLResponse, include_in_schema=False)
+def verify_submit(
+    request: Request,
+    token: str,
+    password: str = Form(...),
+    db: TenantScopedSession = Depends(get_tenant_db),
+):
+    """Set the user's password, mark email verified, and log them in."""
+    from app.email_verify import read_token
+    data = read_token(token)
+    if data is None:
+        return HTMLResponse(content=render(
+            "auth/verify.html", request=request,
+            invalid=True, error="This link is invalid or has expired (valid 1 hour).",
+        ))
+    uid, email = data
+    if not password or len(password) < 6:
+        return verify_form(request, token, error="Password must be at least 6 characters.")
+
+    user = db.query(User).filter(User.user_id == uid, User.email == email).first()
+    if not user:
+        return HTMLResponse(content=render(
+            "auth/verify.html", request=request,
+            invalid=True, error="Account not found.",
+        ))
+    user.password_hash = _hash_password(password)
+    user.email_verified = True
+    db.commit()
+
+    request.session["user_id"] = user.user_id
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.get("/forgot", response_class=HTMLResponse, include_in_schema=False)
+def forgot_form(request: Request, error: str = "", sent: bool = False):
+    """Render the forgot-password form."""
+    return HTMLResponse(content=render(
+        "auth/forgot.html", request=request, error=error, sent=sent,
+    ))
+
+
+@router.post("/forgot", response_class=HTMLResponse, include_in_schema=False)
+def forgot_submit(
+    request: Request,
+    email: str = Form(...),
+    db: TenantScopedSession = Depends(get_tenant_db),
+):
+    """Send a reset link for an existing email (no user enumeration)."""
+    email = (email or "").strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        from app.email_verify import send_verification_email
+        send_verification_email(request, user, "reset")
+        logger.info("Password reset link sent to %s", email)
+    # Always render the same confirmation regardless of whether the email exists.
+    return forgot_form(request, sent=True)

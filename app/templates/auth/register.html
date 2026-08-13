@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Register - PLM-IQ{% endblock %}
+
+{% block nav_right %}{% endblock %}
+{% block sidebar %}{% endblock %}
+{% block body_class %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="card border-secondary shadow">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <i class="bi bi-building-add" style="font-size: 2.5rem;"></i>
+                    <h4 class="mt-2">Create a Tenant</h4>
+                    <small class="text-muted">Register your tenant and become its administrator</small>
+                </div>
+
+                {% if error %}
+                <div class="alert alert-danger py-2 small">{{ error }}</div>
+                {% endif %}
+
+                <form method="post" action="/register">
+                    <div class="mb-3">
+                        <label for="tenant_name" class="form-label small">Tenant Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-building"></i></span>
+                            <input type="text" class="form-control" id="tenant_name" name="tenant_name"
+                                   placeholder="e.g. Acme Bicycles" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="admin_name" class="form-label small">Your Full Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                            <input type="text" class="form-control" id="admin_name" name="admin_name"
+                                   placeholder="e.g. Alex Rivera" required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="admin_email" class="form-label small">Your Email</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                            <input type="email" class="form-control" id="admin_email" name="admin_email"
+                                   placeholder="you@company.com" required>
+                        </div>
+                        <div class="form-text">This will be your login id. A verification link is sent here.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check2-circle"></i> Register Tenant
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="text-center mt-3 small text-muted">
+            Already have an account? <a href="/login">Sign in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

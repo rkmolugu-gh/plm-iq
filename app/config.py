@@ -23,6 +23,9 @@ APP_DESCRIPTION = os.environ["APP_DESCRIPTION"]
 APP_VERSION = os.environ["APP_VERSION"]
 SECRET_KEY = os.environ["SECRET_KEY"]
 
+# Email verification / password-reset link validity (minutes).
+VERIFY_TOKEN_MAX_AGE_MINUTES = int(os.environ.get("VERIFY_TOKEN_MAX_AGE_MINUTES", "60"))
+
 # File storage
 VOLUME_DIR = os.environ["VOLUME_DIR"]
 

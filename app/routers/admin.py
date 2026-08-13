@@ -587,6 +587,66 @@ def admin_user_create(
     return RedirectResponse(url=f"/admin/user/{user.user_id}", status_code=303)
 
 
+@router.post("/invite", response_class=HTMLResponse)
+def admin_user_invite(
+    request: Request,
+    email: str = Form(...),
+    role: str = Form("reader"),
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_role(["tenantadmin"])),
+):
+    """Invite a user by email + proposed role; they verify email + set password.
+
+    Email is the login id. The invited user is created in a pending state
+    (email_verified=0, no password) under the inviter's tenant and sent a
+    verification link (shown in dev when SMTP is disabled).
+    """
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        return _render_tree(request, db, error="A valid email is required.")
+    if db.query(User).filter(User.email == email).first():
+        return _render_tree(request, db, error=f"A user with email '{email}' already exists.")
+    new_role = _valid_role(db, role)
+    err = _enforce_one_admin_per_tenant(db, _role.tenant_id, new_role=new_role)
+    if err:
+        return _render_tree(request, db, error=err)
+
+    full_name = email.split("@")[0]
+    user = User(
+        username=full_name,
+        full_name=full_name,
+        email=email,
+        email_verified=False,
+        password_hash="",
+        tenant_id=_role.tenant_id,
+        tenant_key=_role.tenant_key,
+        role=new_role,
+        is_active=True,
+        created_date=_today(),
+    )
+    db.add(user)
+    db.commit()
+
+    from app.email_verify import send_verification_email
+    from app.config import SMTP_ENABLED as _smtp_on
+    link = send_verification_email(request, user, "invite")
+
+    ctx = auth_context(request, db)
+    ctx.update(error=None, info=(
+        f"Invitation sent to {email}."
+        + (f" (dev link: {link})" if not _smtp_on else " They should check their inbox.")
+    ))
+    return HTMLResponse(content=render("admin/list.html", **ctx,
+                                       tenants=[t for t in db.query(Tenant).order_by(Tenant.tenant_name).all()],
+                                       selected_tenant=None, selected_user=None,
+                                       selected_tenant_id=None, selected_user_id=None,
+                                       user_roles=role_names(db), tenant_roles=role_names(db),
+                                       roles=role_rows(db), base_domain=BASE_DOMAIN,
+                                       can_manage_tenants=is_superuser(_role),
+                                       can_manage_roles=is_superuser(_role),
+                                       user_tenant_locked=not is_superuser(_role)))
+
+
 @router.post("/user/{uid}/edit", response_class=HTMLResponse)
 def admin_user_edit(
     request: Request,
@@ -669,23 +729,51 @@ def admin_user_delete(
 # the global defaults; every other tenant's rows override them.
 
 
+def _platform_tenant_key(db) -> Optional[str]:
+    """The tenant_key of the platform/global tenant (hosts the masteradmin).
+
+    The global settings are stored under the GLOBAL_TENANT_KEY bucket regardless
+    of the platform tenant's actual key, so we only need this to identify *who*
+    is the global editor (and thus edits the global bucket).
+    """
+    m = db.query(User).filter(
+        (User.role.is_(None)) | (User.role == "superadmin"), User.tenant_id.isnot(None)
+    ).first()
+    if m:
+        return m.tenant_key
+    return None
+
+
 def _current_tenant_key(request: Request, db) -> Optional[str]:
-    """Resolve the tenant_key of the user editing settings."""
+    """Resolve the settings bucket the current user edits.
+
+    A platform (plm-iq) tenant admin edits the global defaults (GLOBAL_TENANT_KEY
+    bucket); every other tenant admin edits their own tenant's override bucket.
+    """
     tkey = getattr(request.state, "tenant_key", None)
-    if tkey:
-        return tkey
-    user_id = request.session.get("user_id")
-    if user_id is not None:
-        user = db.query(User).filter(User.user_id == user_id).first()
-        if user:
-            return user.tenant_key
-    return GLOBAL_TENANT_KEY
+    if not tkey:
+        user_id = request.session.get("user_id")
+        if user_id is not None:
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if user:
+                tkey = user.tenant_key
+    if not tkey:
+        return GLOBAL_TENANT_KEY
+
+    # Platform tenant admins edit the global bucket, not a per-tenant override.
+    if tkey == _platform_tenant_key(db):
+        return GLOBAL_TENANT_KEY
+    return tkey
 
 
 def _all_settings(db: Session, tenant_key: str):
     """Return the merged settings for a tenant as a list of row dicts.
 
-    Each row is {'key', 'value', 'source'} where source is one of:
+    Each row is {'key', 'value', 'global_value', 'source'}:
+      'value'        - effective value for this tenant
+      'global_value' - the underlying 'plm-iq' global default (so a tenant can
+                       copy it), or None when the tenant IS the global editor
+      'source' is one of:
       'tenant'  - overridden locally by this tenant
       'global'  - inherited from the 'plm-iq' global defaults
       'default' - from the in-code DEFAULT_SETTINGS fallback
@@ -694,31 +782,41 @@ def _all_settings(db: Session, tenant_key: str):
     from app.settings import (
         DEFAULT_SETTINGS, GLOBAL_TENANT_KEY as _GTK, _encode,
     )
-    from app.settings import load_tenant_settings
 
     raw = db._db if isinstance(db, TenantScopedSession) else db
 
     global_rows = {r.key: r for r in raw.query(AppSetting).filter(AppSetting.tenant_key == _GTK).all()}
     tenant_rows = {r.key: r for r in raw.query(AppSetting).filter(AppSetting.tenant_key == tenant_key).all()} if tenant_key != _GTK else {}
 
+    def _global_value(key: str) -> str:
+        """The raw global value for a key (DB or in-code default)."""
+        if key in global_rows:
+            return global_rows[key].value
+        if key in DEFAULT_SETTINGS:
+            return _encode(DEFAULT_SETTINGS[key])
+        return ""
+
     # Start from DEFAULT_SETTINGS so every constant is shown even if unseeded.
     out = []
     for key in DEFAULT_SETTINGS:
         if key in tenant_rows:
-            out.append({"key": key, "value": tenant_rows[key].value, "source": "tenant"})
+            row = {"key": key, "value": tenant_rows[key].value, "source": "tenant"}
         elif key in global_rows:
-            out.append({"key": key, "value": global_rows[key].value, "source": "global"})
+            row = {"key": key, "value": global_rows[key].value, "source": "global"}
         else:
-            out.append({"key": key, "value": _encode(DEFAULT_SETTINGS[key]), "source": "default"})
+            row = {"key": key, "value": _encode(DEFAULT_SETTINGS[key]), "source": "default"}
+        # Show the global default next to the value so tenants can copy it.
+        row["global_value"] = None if tenant_key == _GTK else _global_value(key)
+        out.append(row)
 
     # Add any DB-only keys not in DEFAULT_SETTINGS (e.g. legacy scalar settings).
     known = set(DEFAULT_SETTINGS)
     for key, row in global_rows.items():
         if key not in known:
-            out.append({"key": key, "value": row.value, "source": "global"})
+            out.append({"key": key, "value": row.value, "global_value": None, "source": "global"})
     for key, row in tenant_rows.items():
         if key not in known:
-            out.append({"key": key, "value": row.value, "source": "tenant"})
+            out.append({"key": key, "value": row.value, "global_value": _global_value(key), "source": "tenant"})
 
     out.sort(key=lambda r: r["key"])
     return out

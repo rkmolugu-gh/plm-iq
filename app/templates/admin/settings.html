@@ -43,9 +43,12 @@
                 <table class="table table-sm">
                     <thead>
                         <tr>
-                            <th style="width: 250px;">Setting</th>
+                            <th style="width: 230px;">Setting</th>
                             <th>Value</th>
-                            <th style="width: 130px;">Source</th>
+                            <th style="width: 160px;">Source</th>
+                            {% if not is_global_editor %}
+                            <th style="width: 220px;">Global default (copy)</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -59,7 +62,7 @@
                                     <option value="false" {% if s.value == "false" %}selected{% endif %}>False (hide inactive users)</option>
                                 </select>
                                 {% else %}
-                                <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm">
+                                <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target">
                                 {% endif %}
                             </td>
                             <td>
@@ -71,10 +74,18 @@
                                 <span class="badge bg-light text-muted">default</span>
                                 {% endif %}
                             </td>
+                            {% if not is_global_editor %}
+                            <td>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm" value="{{ s.global_value }}" readonly>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyGlobalToValue(this)"><i class="bi bi-clipboard"></i></button>
+                                </div>
+                            </td>
+                            {% endif %}
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="3" class="text-center text-muted py-3">
+                            <td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="text-center text-muted py-3">
                                 No settings yet. Add one below.
                             </td>
                         </tr>
@@ -112,5 +123,21 @@
         </p>
     </div>
 </div>
+
+<script>
+// Copy the read-only global default into the editable value input for the
+// same row, so a tenant admin can adopt the global value then tweak it.
+function copyGlobalToValue(btn) {
+    var group = btn.closest('.input-group');
+    if (!group) return;
+    var globalInput = group.querySelector('input');
+    if (!globalInput) return;
+    var row = btn.closest('tr');
+    if (!row) return;
+    var target = row.querySelector('.form-control-copy-target');
+    if (!target) return;
+    target.value = globalInput.value;
+}
+</script>
 
 {% endblock %}
