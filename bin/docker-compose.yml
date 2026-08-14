@@ -1,3 +1,6 @@
+# PLM-IQ infrastructure services (no app). Run via: bin/buildrun.bat
+# All relative paths resolve against PLMIQ_ROOT (the project root), which
+# buildrun.bat sets automatically and .env records.
 services:
   gitea:
     image: gitea/gitea:${GITEA_VERSION:-1.22}
@@ -12,30 +15,13 @@ services:
       - "${GITEA_HTTP_PORT:-3000}:3000"
       - "${GITEA_SSH_PORT:-2222}:22"
     volumes:
-      - "${GITEA_DATA_DIR:-./data/gitea}:/data"
+      - "${GITEA_DATA_DIR:-${PLMIQ_ROOT}/data/gitea}:/data"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/healthz >/dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 20
       start_period: 20s
-
-  postgres:
-    image: postgres:${POSTGRES_VERSION:-16}
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: "${POSTGRES_USER:-plmiq}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-plmiq}"
-      POSTGRES_DB: "${POSTGRES_DB:-plmiq}"
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - "${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
   smtp:
     image: axllent/mailpit:${MAILPIT_VERSION:-latest}
@@ -47,7 +33,7 @@ services:
       - "${SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
     volumes:
-      - "${MAILPIT_DATA_DIR:-./data/mailpit}:/data"
+      - "${MAILPIT_DATA_DIR:-${PLMIQ_ROOT}/data/mailpit}:/data"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8025/ >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -66,7 +52,7 @@ services:
     ports:
       - "${ELASTICSEARCH_HTTP_PORT:-9200}:9200"
     volumes:
-      - "${ELASTICSEARCH_DATA_DIR:-./data/elasticsearch}:/usr/share/elasticsearch/data"
+      - "${ELASTICSEARCH_DATA_DIR:-${PLMIQ_ROOT}/data/elasticsearch}:/usr/share/elasticsearch/data"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -u elastic:$${ELASTIC_PASSWORD} http://127.0.0.1:9200/_cluster/health >/dev/null || exit 1"]
       interval: 10s

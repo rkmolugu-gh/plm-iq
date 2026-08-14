@@ -1,8 +1,11 @@
+# PLM-IQ production stack (Caddy TLS + api + infra). SQLite (no Postgres).
+# Run via: bin/buildrun.bat prod build / prod run
+# Requires operationally: ACME_EMAIL and CLOUDFLARE_API_TOKEN in .env.
 services:
   caddy:
     build:
-      context: ./deploy
-      dockerfile: Caddy.Dockerfile
+      context: ${PLMIQ_ROOT}
+      dockerfile: bin/Caddy.Dockerfile
     restart: unless-stopped
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
@@ -11,9 +14,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      - ${PLMIQ_ROOT}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       api:
         condition: service_healthy
@@ -23,13 +26,12 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ${PLMIQ_ROOT}
+      dockerfile: bin/Dockerfile
     image: ${PLM_IQ_IMAGE:-plm-iq:prod}
     restart: unless-stopped
     init: true
-    env_file:
-      - .env.prod
+    env_file: ${PLMIQ_ROOT}/.env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       BASE_DOMAIN: ${BASE_DOMAIN}
@@ -37,10 +39,9 @@ services:
     expose:
       - "8000"
     volumes:
+      - ${PLMIQ_ROOT}/db:/app/db
       - plm_data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
       elasticsearch:
         condition: service_healthy
       gitea:
@@ -54,23 +55,6 @@ services:
       retries: 5
       start_period: 30s
 
-  postgres:
-    image: postgres:${POSTGRES_VERSION:-16}
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.15.0}
     restart: unless-stopped
@@ -81,7 +65,7 @@ services:
       ELASTIC_PASSWORD: ${ES_PASSWORD}
       ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      - "${ELASTICSEARCH_DATA_DIR:-${PLMIQ_ROOT}/data/elasticsearch}:/usr/share/elasticsearch/data"
     networks:
       - backend
     healthcheck:
@@ -103,7 +87,7 @@ services:
     expose:
       - "3000"
     volumes:
-      - gitea_data:/data
+      - "${GITEA_DATA_DIR:-${PLMIQ_ROOT}/data/gitea}:/data"
     networks:
       - backend
     healthcheck:
@@ -121,7 +105,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
-  postgres_data:
-  elasticsearch_data:
-  gitea_data:
   plm_data:
