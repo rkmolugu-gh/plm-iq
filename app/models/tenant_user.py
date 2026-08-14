@@ -24,6 +24,9 @@ class Tenant(Base):
     git_cad_repo = Column("git_cad_repo", String, nullable=True)          # tenant's private CAD repo
     git_docs_repo = Column("git_docs_repo", String, nullable=True)        # tenant's private docs repo
     git_provisioned = Column("git_provisioned", Boolean, default=False)   # idempotent provisioning flag
+    node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
+
+    node = relationship("GraphNode")
 
     users = relationship("User", back_populates="tenant")
     parts = relationship("Part", back_populates="tenant")
@@ -44,6 +47,9 @@ class User(Base):
     is_active = Column("is_active", Boolean, default=True)
     created_date = Column("created_date", String)
     role = Column("role", String, nullable=False, default="reader")
+    node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
+
+    node = relationship("GraphNode")
 
     tenant = relationship("Tenant", back_populates="users")
     favorites = relationship("Favorite", back_populates="user")

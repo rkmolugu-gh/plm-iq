@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS tenants (
     git_secret_enc TEXT,
     git_cad_repo   TEXT,
     git_docs_repo  TEXT,
-    git_provisioned BOOLEAN NOT NULL DEFAULT FALSE
+    git_provisioned BOOLEAN NOT NULL DEFAULT FALSE,
+    node_id     INTEGER UNIQUE,
+    FOREIGN KEY (node_id) REFERENCES plmiq_node(node_id)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -41,7 +43,9 @@ CREATE TABLE IF NOT EXISTS users (
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     created_date DATE,
     role        TEXT NOT NULL DEFAULT 'reader',
-    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+    node_id     INTEGER UNIQUE,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id) REFERENCES plmiq_node(node_id)
 );
 
 -- ----------------------------------------------------------------------------
@@ -79,12 +83,15 @@ CREATE TABLE IF NOT EXISTS parts (
     created_by      INTEGER,
     tenant_id       INTEGER NOT NULL DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
+    node_id         INTEGER UNIQUE,
     FOREIGN KEY (modified_owner)  REFERENCES users(user_id),
     FOREIGN KEY (created_by)      REFERENCES users(user_id),
-    FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id)         REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_parts_status      ON parts(status);
+CREATE INDEX idx_parts_node        ON parts(node_id);
 CREATE INDEX idx_parts_tenant      ON parts(tenant_id);
 CREATE INDEX idx_parts_tenant_key  ON parts(tenant_key);
 CREATE INDEX idx_parts_owner       ON parts(modified_owner);
@@ -147,12 +154,15 @@ CREATE TABLE IF NOT EXISTS costing_bom (
     modified_date   DATE,
     tenant_id       INTEGER,
     tenant_key      TEXT    NOT NULL,
+    node_id         INTEGER UNIQUE,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
-    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_cost_bom_part_number ON costing_bom(part_number);
 CREATE INDEX idx_cost_bom_type        ON costing_bom(cost_type);
+CREATE INDEX idx_cost_bom_node        ON costing_bom(node_id);
 CREATE INDEX idx_cost_bom_tenant      ON costing_bom(tenant_id);
 CREATE INDEX idx_cost_bom_tenant_key ON costing_bom(tenant_key);
 
@@ -186,15 +196,18 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     modified_date   DATE,
     tenant_id       INTEGER NOT NULL DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
+    node_id         INTEGER UNIQUE,
     FOREIGN KEY (part_number)     REFERENCES parts(part_number),
     FOREIGN KEY (change_drafter)  REFERENCES users(user_id),
     FOREIGN KEY (change_approver) REFERENCES users(user_id),
     FOREIGN KEY (created_by)      REFERENCES users(user_id),
     FOREIGN KEY (modified_by)     REFERENCES users(user_id),
-    FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id)         REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_eco_status       ON engineering_change_orders(eco_status);
+CREATE INDEX idx_eco_node         ON engineering_change_orders(node_id);
 CREATE INDEX idx_eco_part_number  ON engineering_change_orders(part_number);
 CREATE INDEX idx_eco_drafter      ON engineering_change_orders(change_drafter);
 CREATE INDEX idx_eco_tenant       ON engineering_change_orders(tenant_id);
@@ -229,13 +242,16 @@ CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     modified_date           DATE,
     tenant_id               INTEGER NOT NULL DEFAULT 1,
     tenant_key              TEXT    NOT NULL,
+    node_id                 INTEGER UNIQUE,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
     FOREIGN KEY (created_by)  REFERENCES users(user_id),
-    FOREIGN KEY (modified_by) REFERENCES users(user_id)
+    FOREIGN KEY (modified_by) REFERENCES users(user_id),
+    FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_aml_part_number      ON approved_manufacturer_list(part_number);
+CREATE INDEX idx_aml_node            ON approved_manufacturer_list(node_id);
 CREATE INDEX idx_aml_preferred        ON approved_manufacturer_list(preferred_flag);
 CREATE INDEX idx_aml_manufacturer     ON approved_manufacturer_list(manufacturer_name);
 CREATE INDEX idx_aml_tenant           ON approved_manufacturer_list(tenant_id);
@@ -276,13 +292,16 @@ CREATE TABLE IF NOT EXISTS approved_vendor_list (
     modified_date       DATE,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
+    node_id             INTEGER UNIQUE,
     FOREIGN KEY (part_number) REFERENCES parts(part_number),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
     FOREIGN KEY (created_by)  REFERENCES users(user_id),
-    FOREIGN KEY (modified_by) REFERENCES users(user_id)
+    FOREIGN KEY (modified_by) REFERENCES users(user_id),
+    FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_avl_part_number   ON approved_vendor_list(part_number);
+CREATE INDEX idx_avl_node         ON approved_vendor_list(node_id);
 CREATE INDEX idx_avl_preferred     ON approved_vendor_list(preferred_flag);
 CREATE INDEX idx_avl_vendor        ON approved_vendor_list(vendor_name);
 CREATE INDEX idx_avl_tenant        ON approved_vendor_list(tenant_id);
@@ -323,14 +342,17 @@ CREATE TABLE IF NOT EXISTS cad_metadata (
     modified_date       DATE,
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
+    node_id             INTEGER UNIQUE,
     FOREIGN KEY (part_number)   REFERENCES parts(part_number),
     FOREIGN KEY (modeling_author) REFERENCES users(user_id),
     FOREIGN KEY (created_by)    REFERENCES users(user_id),
     FOREIGN KEY (modified_by)   REFERENCES users(user_id),
-    FOREIGN KEY (tenant_id)     REFERENCES tenants(tenant_id)
+    FOREIGN KEY (tenant_id)     REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id)       REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_cad_part_number ON cad_metadata(part_number);
+CREATE INDEX idx_cad_node        ON cad_metadata(node_id);
 CREATE INDEX idx_cad_format      ON cad_metadata(cad_file_format);
 CREATE INDEX idx_cad_ref_type    ON cad_metadata(file_reference_type);
 CREATE INDEX idx_cad_author      ON cad_metadata(modeling_author);
@@ -362,11 +384,14 @@ CREATE TABLE IF NOT EXISTS documents (
     modified_date   TEXT,
     tenant_id       INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
+    node_id         INTEGER UNIQUE,
     FOREIGN KEY (created_by)  REFERENCES users(user_id),
-    FOREIGN KEY (modified_by) REFERENCES users(user_id)
+    FOREIGN KEY (modified_by) REFERENCES users(user_id),
+    FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
 CREATE INDEX idx_doc_parent   ON documents(parent_id);
+CREATE INDEX idx_doc_node     ON documents(node_id);
 CREATE INDEX idx_doc_tenant   ON documents(tenant_id);
 CREATE INDEX idx_doc_tenant_key ON documents(tenant_key);
 CREATE INDEX idx_doc_kind     ON documents(kind);
@@ -389,10 +414,13 @@ CREATE TABLE IF NOT EXISTS workflow_definitions (
     created_by  INTEGER REFERENCES users(user_id),
     tenant_id   INTEGER REFERENCES tenants(tenant_id),  -- NULL for global definitions
     tenant_key  TEXT    NOT NULL,
-    created_at  DATE
+    created_at  DATE,
+    node_id     INTEGER UNIQUE,
+    FOREIGN KEY (node_id) REFERENCES plmiq_node(node_id)
 );
 CREATE INDEX idx_wf_def_tenant ON workflow_definitions(tenant_id);
 CREATE INDEX idx_wf_def_tenant_key ON workflow_definitions(tenant_key);
+CREATE INDEX idx_wf_def_node ON workflow_definitions(node_id);
 
 CREATE TABLE IF NOT EXISTS workflow_instances (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -407,11 +435,14 @@ CREATE TABLE IF NOT EXISTS workflow_instances (
     result_status TEXT,
     due_date      DATE,
     tenant_id     INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
-    tenant_key    TEXT    NOT NULL
+    tenant_key    TEXT    NOT NULL,
+    node_id       INTEGER UNIQUE,
+    FOREIGN KEY (node_id) REFERENCES plmiq_node(node_id)
 );
 CREATE INDEX idx_wf_inst_obj     ON workflow_instances(object_type, object_id);
 CREATE INDEX idx_wf_inst_tenant  ON workflow_instances(tenant_id);
 CREATE INDEX idx_wf_inst_tenant_key ON workflow_instances(tenant_key);
+CREATE INDEX idx_wf_inst_node    ON workflow_instances(node_id);
 -- At most one ACTIVE workflow per object (ignored where the engine enforces it too).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_wf_inst_unique_active
     ON workflow_instances(object_type, object_id)
@@ -430,11 +461,14 @@ CREATE TABLE IF NOT EXISTS workflow_tasks (
     due_date     DATE,
     completed_at DATE,
     tenant_id    INTEGER NOT NULL REFERENCES tenants(tenant_id) DEFAULT 1,
-    tenant_key   TEXT    NOT NULL
+    tenant_key   TEXT    NOT NULL,
+    node_id      INTEGER UNIQUE,
+    FOREIGN KEY (node_id) REFERENCES plmiq_node(node_id)
 );
 CREATE INDEX idx_wf_task_assignee_status ON workflow_tasks(assigned_to, status);
 CREATE INDEX idx_wf_task_instance        ON workflow_tasks(instance_id);
 CREATE INDEX idx_wf_task_tenant_key      ON workflow_tasks(tenant_key);
+CREATE INDEX idx_wf_task_node            ON workflow_tasks(node_id);
 
 CREATE TABLE IF NOT EXISTS notifications (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -502,3 +536,120 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value      TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_key, key)
 );
+
+-- ----------------------------------------------------------------------------
+-- 12. GRAPH LAYER (plmiq prefix)
+-- Relationship / traceability layer over the authoritative domain tables above.
+-- plmiq_node is a NODE IDENTITY registry only (no type is stored on the node).
+-- The type of a node is derived from the business object that owns it: every
+-- node-capable domain table carries a UNIQUE nullable node_id FK to
+-- plmiq_node (parts, costing_bom, engineering_change_orders, AML, AVL,
+-- cad_metadata, documents, workflow_definitions/instances/tasks, users,
+-- tenants). This avoids duplicating object type on the node. Edges relate
+-- nodes; annotations, evidence and impact are supplementary layers on edges.
+-- See docs/plm-iq-graph-concepts.txt.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS plmiq_node (
+    node_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_label   TEXT,
+    attributes   TEXT,                         -- JSON
+    created_by   INTEGER REFERENCES users(user_id),
+    created_date TEXT,
+    tenant_id    INTEGER NOT NULL DEFAULT 1,
+    tenant_key   TEXT    NOT NULL
+);
+CREATE INDEX idx_plmiq_node_tenant    ON plmiq_node(tenant_id);
+CREATE INDEX idx_plmiq_node_tenant_key ON plmiq_node(tenant_key);
+
+-- Governed catalog of semantic edge types (canonical direction + inverse type).
+CREATE TABLE IF NOT EXISTS plmiq_edge_type (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                TEXT    NOT NULL UNIQUE,   -- e.g. HAS_COMPONENT
+    description         TEXT,
+    canonical_direction TEXT,                      -- e.g. ASSEMBLY -> PART
+    inverse_type        TEXT,                      -- e.g. USED_IN
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_date        TEXT,
+    tenant_key          TEXT    NOT NULL DEFAULT 'plm-iq'
+);
+CREATE INDEX idx_plmiq_edgetype_name ON plmiq_edge_type(name);
+
+-- Directed edge between two nodes, typed for its semantic meaning.
+CREATE TABLE IF NOT EXISTS plmiq_edge (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_node_id INTEGER NOT NULL,
+    target_node_id INTEGER NOT NULL,
+    edge_type_id   INTEGER NOT NULL,
+    state          TEXT,
+    quantity       NUMERIC(12,4),
+    unit           TEXT,
+    sequence       INTEGER,
+    attributes     TEXT,                          -- JSON (edge properties extension)
+    created_by     INTEGER REFERENCES users(user_id),
+    updated_by     INTEGER REFERENCES users(user_id),
+    created_date   TEXT,
+    updated_date   TEXT,
+    tenant_id      INTEGER NOT NULL DEFAULT 1,
+    tenant_key     TEXT    NOT NULL,
+    FOREIGN KEY (source_node_id) REFERENCES plmiq_node(node_id),
+    FOREIGN KEY (target_node_id) REFERENCES plmiq_node(node_id),
+    FOREIGN KEY (edge_type_id)   REFERENCES plmiq_edge_type(id)
+);
+CREATE INDEX idx_plmiq_edge_source    ON plmiq_edge(source_node_id);
+CREATE INDEX idx_plmiq_edge_target    ON plmiq_edge(target_node_id);
+CREATE INDEX idx_plmiq_edge_type      ON plmiq_edge(edge_type_id);
+CREATE INDEX idx_plmiq_edge_tenant_key ON plmiq_edge(tenant_key);
+
+-- Commentary attached to an edge.
+CREATE TABLE IF NOT EXISTS plmiq_edge_annotation (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    edge_id         INTEGER NOT NULL,
+    annotation_type TEXT    NOT NULL DEFAULT 'GENERAL',
+    text            TEXT    NOT NULL,
+    author_type     TEXT    NOT NULL DEFAULT 'human',  -- human | ai
+    created_by      INTEGER REFERENCES users(user_id),
+    created_date    TEXT,
+    tenant_id       INTEGER NOT NULL DEFAULT 1,
+    tenant_key      TEXT    NOT NULL,
+    FOREIGN KEY (edge_id) REFERENCES plmiq_edge(id)
+);
+CREATE INDEX idx_plmiq_annot_edge       ON plmiq_edge_annotation(edge_id);
+CREATE INDEX idx_plmiq_annot_tenant_key ON plmiq_edge_annotation(tenant_key);
+
+-- Source supporting an edge or AI conclusion (why we believe it).
+CREATE TABLE IF NOT EXISTS plmiq_edge_evidence (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    edge_id        INTEGER NOT NULL,
+    evidence_type  TEXT    NOT NULL,               -- BOM_RECORD | SOURCE_OBJECT | WORKFLOW_RECORD | AI_INFERENCE | ...
+    reference      TEXT,
+    confidence     NUMERIC(6,4),
+    created_by     INTEGER REFERENCES users(user_id),
+    created_date   TEXT,
+    tenant_id      INTEGER NOT NULL DEFAULT 1,
+    tenant_key     TEXT    NOT NULL,
+    FOREIGN KEY (edge_id) REFERENCES plmiq_edge(id)
+);
+CREATE INDEX idx_plmiq_evid_edge       ON plmiq_edge_evidence(edge_id);
+CREATE INDEX idx_plmiq_evid_type       ON plmiq_edge_evidence(evidence_type);
+CREATE INDEX idx_plmiq_evid_tenant_key ON plmiq_edge_evidence(tenant_key);
+
+-- Assessed effect of a change, expressed on an edge.
+CREATE TABLE IF NOT EXISTS plmiq_edge_impact (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    edge_id         INTEGER NOT NULL,
+    impact_type     TEXT    NOT NULL,              -- DIRECT | DOWNSTREAM | UPSTREAM | POTENTIAL | NO_IMPACT | UNKNOWN
+    impact_level    TEXT,
+    confidence      NUMERIC(6,4),
+    reason          TEXT,
+    analysis_method TEXT,
+    evidence_count  INTEGER DEFAULT 0,
+    reviewed        BOOLEAN NOT NULL DEFAULT FALSE,
+    review_decision TEXT,
+    analysis_run_id TEXT,
+    tenant_id       INTEGER NOT NULL DEFAULT 1,
+    tenant_key      TEXT    NOT NULL,
+    FOREIGN KEY (edge_id) REFERENCES plmiq_edge(id)
+);
+CREATE INDEX idx_plmiq_impact_edge       ON plmiq_edge_impact(edge_id);
+CREATE INDEX idx_plmiq_impact_type       ON plmiq_edge_impact(impact_type);
+CREATE INDEX idx_plmiq_impact_tenant_key ON plmiq_edge_impact(tenant_key);

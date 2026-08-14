@@ -493,4 +493,48 @@ UPDATE favorites SET tenant_key = (SELECT tenant_key FROM tenants WHERE tenants.
 UPDATE saved_queries SET tenant_key = (SELECT tenant_key FROM tenants WHERE tenants.tenant_id = saved_queries.tenant_id) WHERE tenant_key = '' OR tenant_key IS NULL;
 UPDATE users SET tenant_key = (SELECT tenant_key FROM tenants WHERE tenants.tenant_id = users.tenant_id) WHERE tenant_key = '' OR tenant_key IS NULL;
 
+-- ----------------------------------------------------------------------------
+-- GRAPH LAYER SEED — plmiq_edge_type (governed edge catalog)
+-- Edge types applicable to EXISTING business objects only (Phase 1).
+-- Each edge is stored once in its canonical direction; inverse_type names the
+-- reverse traversal. See docs/plm-iq-graph-concepts.txt.
+-- ----------------------------------------------------------------------------
+PRAGMA foreign_keys = OFF;
+
+INSERT OR IGNORE INTO plmiq_edge_type (name, description, canonical_direction, inverse_type, is_active, created_date, tenant_key) VALUES
+    -- Structure / BOM
+    ('HAS_COMPONENT', 'Assembly contains component part', 'ASSEMBLY -> PART', 'USED_IN', TRUE, '2026-08-14', 'plm-iq'),
+    ('USED_IN', 'Part is used in an assembly', 'PART -> ASSEMBLY', 'HAS_COMPONENT', TRUE, '2026-08-14', 'plm-iq'),
+    -- Cost
+    ('HAS_COST', 'Part has cost rows', 'PART -> COST', 'COST_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('COST_OF', 'Cost rows belong to a part', 'COST -> PART', 'HAS_COST', TRUE, '2026-08-14', 'plm-iq'),
+    -- Supply chain
+    ('HAS_SUPPLIER', 'Product has approved manufacturer', 'PRODUCT -> SUPPLIER', 'SUPPLIED_BY', TRUE, '2026-08-14', 'plm-iq'),
+    ('SUPPLIED_BY', 'Product is supplied by manufacturer', 'SUPPLIER -> PRODUCT', 'HAS_SUPPLIER', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_VENDOR', 'Product has approved vendor', 'PRODUCT -> SUPPLIER', 'VENDOR_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('VENDOR_OF', 'Vendor supplies the product', 'SUPPLIER -> PRODUCT', 'HAS_VENDOR', TRUE, '2026-08-14', 'plm-iq'),
+    -- CAD / Documents
+    ('HAS_CAD', 'Product has CAD model', 'PRODUCT -> CAD_MODEL', 'CAD_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('CAD_OF', 'CAD model belongs to product', 'CAD_MODEL -> PRODUCT', 'HAS_CAD', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_DOCUMENT', 'Product has document', 'PRODUCT -> DOCUMENT', 'DOCUMENT_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('DOCUMENT_OF', 'Document belongs to product', 'DOCUMENT -> PRODUCT', 'HAS_DOCUMENT', TRUE, '2026-08-14', 'plm-iq'),
+    -- Change
+    ('AFFECTS', 'Engineering change affects an object', 'ENGINEERING_CHANGE -> NODE', 'AFFECTED_BY', TRUE, '2026-08-14', 'plm-iq'),
+    ('AFFECTED_BY', 'Object is affected by an engineering change', 'NODE -> ENGINEERING_CHANGE', 'AFFECTS', TRUE, '2026-08-14', 'plm-iq'),
+    ('CHANGES', 'Engineering change changes an object', 'ENGINEERING_CHANGE -> NODE', 'CHANGED_BY', TRUE, '2026-08-14', 'plm-iq'),
+    ('CHANGED_BY', 'Object is changed by an engineering change', 'NODE -> ENGINEERING_CHANGE', 'CHANGES', TRUE, '2026-08-14', 'plm-iq'),
+    -- Workflow
+    ('OPERATES_ON', 'Workflow instance operates on an object', 'WORKFLOW_INSTANCE -> NODE', 'OPERATED_BY', TRUE, '2026-08-14', 'plm-iq'),
+    ('OPERATED_BY', 'Object is operated on by a workflow instance', 'NODE -> WORKFLOW_INSTANCE', 'OPERATES_ON', TRUE, '2026-08-14', 'plm-iq'),
+    ('ASSIGNED_TO', 'Workflow task is assigned to a user', 'WORKFLOW_TASK -> USER', 'ASSIGNED_TASK', TRUE, '2026-08-14', 'plm-iq'),
+    ('ASSIGNED_TASK', 'User has an assigned workflow task', 'USER -> WORKFLOW_TASK', 'ASSIGNED_TO', TRUE, '2026-08-14', 'plm-iq'),
+    -- Ownership / responsibility
+    ('OWNS', 'User owns an object', 'USER -> NODE', 'OWNED_BY', TRUE, '2026-08-14', 'plm-iq'),
+    ('OWNED_BY', 'Object is owned by a user or organization', 'NODE -> USER', 'OWNS', TRUE, '2026-08-14', 'plm-iq'),
+    ('RESPONSIBLE_FOR', 'User or team is responsible for an object', 'USER -> NODE', 'RESPONSIBILITY_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('RESPONSIBILITY_OF', 'Object responsibility belongs to a user/team', 'NODE -> USER', 'RESPONSIBLE_FOR', TRUE, '2026-08-14', 'plm-iq'),
+    -- Org structure
+    ('HAS_SITE', 'Organization has a site', 'ORGANIZATION -> NODE', 'SITE_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('SITE_OF', 'Site belongs to an organization', 'NODE -> ORGANIZATION', 'HAS_SITE', TRUE, '2026-08-14', 'plm-iq');
+
 PRAGMA foreign_keys = ON;

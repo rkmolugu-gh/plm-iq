@@ -14,6 +14,14 @@ from app.models.workflow import WorkflowDefinition, WorkflowInstance, WorkflowTa
 from app.models.role import Role, role_names
 from app.models.favorite import Favorite
 from app.models.setting import AppSetting
+from app.models.graph import (
+    GraphNode,
+    GraphEdgeType,
+    GraphEdge,
+    GraphEdgeAnnotation,
+    GraphEdgeEvidence,
+    GraphEdgeImpact,
+)
 
 __all__ = [
     "Tenant",
@@ -35,4 +43,10 @@ __all__ = [
     "role_names",
     "Favorite",
     "AppSetting",
+    "GraphNode",
+    "GraphEdgeType",
+    "GraphEdge",
+    "GraphEdgeAnnotation",
+    "GraphEdgeEvidence",
+    "GraphEdgeImpact",
 ]

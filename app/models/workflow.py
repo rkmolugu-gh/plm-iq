@@ -30,6 +30,9 @@ class WorkflowDefinition(Base):
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"))  # NULL for global
     tenant_key = Column("tenant_key", String, nullable=False)
     created_at = Column("created_at", String)
+    node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
+
+    node = relationship("GraphNode")
 
     instances = relationship("WorkflowInstance", back_populates="definition")
 
@@ -51,6 +54,9 @@ class WorkflowInstance(Base):
     due_date = Column("due_date", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
     tenant_key = Column("tenant_key", String, nullable=False)
+    node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
+
+    node = relationship("GraphNode")
 
     definition = relationship("WorkflowDefinition", back_populates="instances")
     tasks = relationship(
@@ -84,6 +90,9 @@ class WorkflowTask(Base):
     completed_at = Column("completed_at", String)
     tenant_id = Column("tenant_id", Integer, ForeignKey("tenants.tenant_id"), nullable=False)
     tenant_key = Column("tenant_key", String, nullable=False)
+    node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
+
+    node = relationship("GraphNode")
 
     instance = relationship("WorkflowInstance", back_populates="tasks")
     assignee = relationship("User")

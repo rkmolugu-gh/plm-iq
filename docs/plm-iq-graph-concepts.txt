@@ -523,10 +523,15 @@ Implemented incrementally, one phase per effort. Phase 1 is the schema; later
 phases layer population, traversal, the agent, and hardening on top.
 
 SCHEMA DECISION (applies to all phases)
-- Generic POLYMORPHIC NODE REGISTRY: plmiq_node holds one row per existing domain
-  object via (object_type, object_id); no FK to domain tables because object
-  primary keys differ in type. The graph is a relationship/traceability layer over
-  authoritative domain tables (GRAPH GOVERNANCE items 3 and 4).
+- NORMALIZED INVERSE-FK NODE REGISTRY: plmiq_node is an IDENTITY-ONLY registry
+  (node_id, label, attributes, audit, tenant) — NO type is stored on the node.
+  The type of a node is derived from the business object that owns it: every
+  node-capable domain table carries a UNIQUE nullable node_id FK to plmiq_node
+  (parts, costing_bom, engineering_change_orders, AML, AVL, cad_metadata,
+  documents, workflow_definitions/instances/tasks, users, tenants). This keeps
+  object type on the business object and avoids duplicating it on the node. The
+  graph is a relationship/traceability layer over authoritative domain tables
+  (GRAPH GOVERNANCE items 3 and 4).
 - All six core tables shipped in Phase 1, prefixed plmiq: plmiq_node,
   plmiq_edge_type, plmiq_edge, plmiq_edge_annotation, plmiq_edge_evidence,
   plmiq_edge_impact.
@@ -543,8 +548,13 @@ Create the schema for existing business objects only.
   (object_type, object_id), (source_node_id), (target_node_id), tenant columns.
 - app/models/graph.py (+ register in app/models/__init__.py): SQLAlchemy models
   following existing conventions (Base from app/database.py).
-  - plmiq_node: node_id PK, object_type, object_id, node_label, node_type,
-    attributes (JSON), created_by/at, tenant_id, tenant_key.
+  - plmiq_node: node_id PK, node_label, attributes (JSON), created_by/at,
+    tenant_id, tenant_key. Identity-only: the owning domain row (each carries a
+    UNIQUE node_id FK) supplies the object type.
+  - Add node_id (Integer, UNIQUE, FK -> plmiq_node.node_id) to each node-capable
+    domain table (parts, costing_bom, engineering_change_orders, AML, AVL,
+    cad_metadata, documents, workflow_definitions/instances/tasks, users,
+    tenants) so a node's type is derived from its business object.
   - plmiq_edge_type: id, name (unique), description, canonical_direction,
     inverse_type, is_active, tenant_key.
   - plmiq_edge: id PK, source_node_id, target_node_id (FK -> plmiq_node.node_id),
