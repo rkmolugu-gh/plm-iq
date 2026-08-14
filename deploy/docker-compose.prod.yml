@@ -6,6 +6,11 @@
 #
 #   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d
 #
+# Run from the repository root. docker compose resolves every relative path
+# below against the project directory (repo root) -- NOT against this file's
+# deploy/ location -- so repo files are referenced from the root, and the
+# deploy/ artifacts (Caddyfile, Caddy.Dockerfile) are prefixed with deploy/.
+#
 # Required environment (secrets, provisioned in the prod environment, NOT in
 # the committed .env):
 #   ACME_EMAIL           - Let's Encrypt contact
@@ -19,10 +24,10 @@
 services:
   api:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: ../.env
+    env_file: .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,15 +44,15 @@ services:
       # (Postgres is provisioned for a future DB migration; the app still
       # runs on SQLite until a driver is added to pyproject.toml and
       # DATABASE_URL is switched to postgres.)
-      - ../db:/app/db
-      - ../data:/app/data
+      - ./db:/app/db
+      - ./data:/app/data
     networks:
       - default
 
   caddy:
     build:
       context: .
-      dockerfile: Caddy.Dockerfile
+      dockerfile: deploy/Caddy.Dockerfile
     restart: unless-stopped
     ports:
       - "80:80"
@@ -57,7 +62,7 @@ services:
       ACME_EMAIL: "${ACME_EMAIL:?ACME_EMAIL is required (Let's Encrypt contact)}"
       CLOUDFLARE_API_TOKEN: "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN required (Cloudflare Zone DNS Edit)}"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data # certs, storage, access logs
       - caddy_config:/config
     depends_on:

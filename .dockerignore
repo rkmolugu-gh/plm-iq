@@ -2,6 +2,7 @@
 .github
 .gitignore
 .venv
+node_modules
 __pycache__
 *.py[cod]
 .pytest_cache
