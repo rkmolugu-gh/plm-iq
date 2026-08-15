@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import APP_TITLE, APP_DESCRIPTION, APP_VERSION, SECRET_KEY
-from app.routers import dashboard, parts, bom, costing, eco, aml, avl, cad, documents, admin, auth, import_router, queries, workflow, roles, favorites, status
+from app.routers import dashboard, parts, bom, costing, eco, aml, avl, cad, documents, admin, auth, import_router, queries, workflow, roles, favorites, status, graph
 from app.routers.auth import _RedirectToLogin
 from app.aisearch import router as search_router
 from app.plmassistant.assistant_router import router as assistant_router
@@ -158,6 +158,7 @@ app.include_router(queries.router)
 app.include_router(workflow.router)
 app.include_router(favorites.router)
 app.include_router(status.router)
+app.include_router(graph.router)
 
 
 @app.get("/health")

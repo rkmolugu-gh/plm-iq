@@ -41,6 +41,7 @@
                 <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
             </form>
             {% endif %}
+            <a href="/graph/{{ part.part_number|urlencode }}" class="btn btn-sm btn-outline-info" title="View connectivity graph"><i class="bi bi-diagram-3"></i> Graph</a>
             <span class="badge bg-{% if part.status == 'RELEASED' %}success{% elif part.status == 'OBSOLETED' %}danger{% else %}secondary{% endif %} fs-6">
                 {{ part.status }}
             </span>

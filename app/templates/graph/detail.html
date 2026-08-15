@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Graph — {{ object_id }} — PLM-IQ{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        {% if back_url %}<li class="breadcrumb-item"><a href="{{ back_url }}">{{ object_id }}</a></li>
+        {% else %}<li class="breadcrumb-item">{{ object_id }}</li>{% endif %}
+        <li class="breadcrumb-item active">Graph</li>
+    </ol>
+</nav>
+
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Connectivity Graph — {{ object_id }}
+            <span class="badge bg-secondary badge-status ms-2" id="node-count"></span>
+        </h5>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-light" id="expand-all">
+                <i class="bi bi-arrows-expand"></i> Expand All
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-light" id="collapse-all">
+                <i class="bi bi-arrows-collapse"></i> Collapse All
+            </button>
+            <a class="btn btn-sm btn-primary" id="export-btn" href="/graph/{{ object_id }}/export">
+                <i class="bi bi-download"></i> Export (.txt)
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="mb-2 small text-muted">Double-click a node to expand / collapse its subtree. Line direction:
+            <code>out</code> = downstream, <code>in</code> = upstream.</div>
+        <div id="graph-tree" class="plm-tree"></div>
+
+        <div class="mt-3 small text-muted" id="graph-legend"></div>
+    </div>
+</div>
+
+<script type="application/json" id="graph-data">{{ tree_json | safe }}</script>
+<style>
+    .plm-tree ul { list-style: none; padding-left: 18px; margin: 0; border-left: 1px solid #444; }
+    .plm-tree li { white-space: nowrap; }
+    .plm-tree .node-row { cursor: default; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .plm-tree .node-row:hover { background: rgba(255,255,255,0.05); }
+    .plm-tree .twisty { display: inline-block; width: 16px; color: #aaa; font-size: 0.8rem; }
+    .plm-tree .node-child { margin-top: 2px; }
+    .plm-tree .collapsed > .node-child { display: none; }
+    .plm-badge { font-size: 0.72rem; padding: 1px 6px; border-radius: 8px; margin-right: 6px; font-weight: 600; }
+    .plm-edge { color: #8ab4f8; font-size: 0.72rem; margin-left: 6px; }
+    .plm-label { color: #d6d6d6; }
+</style>
+<script>
+(function () {
+    const TYPE_COLORS = {
+        'PART': '#166534', 'ECO': '#7f1d1d', 'SUPPLIER': '#78350f',
+        'CAD_MODEL': '#0e5a6d', 'DOCUMENT': '#3730a3', 'default': '#3f3f46'
+    };
+    const TYPE_LABELS = {
+        'PART': 'PART', 'ECO': 'ECO', 'SUPPLIER': 'SUPPLIER',
+        'CAD_MODEL': 'CAD', 'DOCUMENT': 'DOCUMENT', 'default': 'NODE'
+    };
+
+    let treeData = null;
+    let rootEl, expandAllBtn, collapseAllBtn, countEl, legendEl;
+
+    function badge(nodeType) {
+        const color = TYPE_COLORS[nodeType] || TYPE_COLORS['default'];
+        const label = TYPE_LABELS[nodeType] || nodeType;
+        return `<span class="plm-badge" style="background:${color};color:#fff">${label}</span>`;
+    }
+
+    function edgeHtml(edgeType, direction) {
+        if (!edgeType) return '';
+        const d = direction === 'out' ? '→' : '←';
+        return `<span class="plm-edge">${d} ${edgeType} (${direction})</span>`;
+    }
+
+    function renderNode(node) {
+        const hasKids = node.children && node.children.length > 0;
+        const twisty = hasKids
+            ? '<span class="twisty" data-twisty>▾</span>'
+            : '<span class="twisty"></span>';
+        const row = document.createElement('li');
+        row.dataset.full = '1';
+        if (hasKids) {
+            row.classList.add('node-row', 'js-node');
+            row.addEventListener('dblclick', (ev) => {
+                ev.preventDefault();
+                toggle(row);
+            });
+        }
+        row.innerHTML = twisty + badge(node.node_type)
+            + `<span class="plm-label">${node.label}</span>`
+            + edgeHtml(node.edge_type, node.direction);
+
+        if (hasKids) {
+            const childWrap = document.createElement('div');
+            childWrap.className = 'node-child';
+            const ul = document.createElement('ul');
+            node.children.forEach(c => {
+                const li = renderNode(c);
+                if (li) ul.appendChild(li);
+            });
+            if (node.children.length === 0 && !node.expanded) { /* keep node themselves */ }
+            childWrap.appendChild(ul);
+            row.appendChild(childWrap);
+        }
+        return row;
+    }
+
+    function toggle(row) {
+        row.classList.toggle('collapsed');
+        const t = row.querySelector('[data-twisty]');
+        if (t) t.textContent = row.classList.contains('collapsed') ? '▸' : '▾';
+    }
+
+    function collapseAll() {
+        document.querySelectorAll('#graph-tree .js-node').forEach(r => {
+            if (!r.classList.contains('collapsed')) { r.classList.add('collapsed'); }
+            const t = r.querySelector('[data-twisty]');
+            if (t) t.textContent = '▸';
+        });
+        updateCount();
+    }
+
+    function expandAll() {
+        document.querySelectorAll('#graph-tree .js-node').forEach(r => {
+            r.classList.remove('collapsed');
+            const t = r.querySelector('[data-twisty]');
+            if (t) t.textContent = '▾';
+        });
+        updateCount();
+    }
+
+    function updateCount() {
+        if (!countEl) return;
+        const total = document.querySelectorAll('#graph-tree li').length;
+        const visible = total; // count all nodes in tree
+        countEl.textContent = visible + ' node' + (visible === 1 ? '' : 's');
+    }
+
+    function render(tree) {
+        rootEl.innerHTML = '';
+        if (!tree) { rootEl.innerHTML = '<div class="text-muted">No connections.</div>'; return; }
+        const ul = document.createElement('ul');
+        const li = renderNode(tree);
+        if (li) ul.appendChild(li);
+        rootEl.appendChild(ul);
+        // Collapse children of the root by default for a compact initial view? Keep expanded.
+        updateCount();
+    }
+
+    function buildLegend() {
+        if (!legendEl) return;
+        let html = '<strong>Legend:</strong> ';
+        Object.keys(TYPE_COLORS).forEach(t => {
+            if (t === 'default') return;
+            html += badge(t) + ' ';
+        });
+        legendEl.innerHTML = html;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const dataEl = document.getElementById('graph-data');
+        rootEl = document.getElementById('graph-tree');
+        expandAllBtn = document.getElementById('expand-all');
+        collapseAllBtn = document.getElementById('collapse-all');
+        countEl = document.getElementById('node-count');
+        legendEl = document.getElementById('graph-legend');
+        exportBtn = document.getElementById('export-btn');
+        try {
+            treeData = JSON.parse(dataEl.textContent);
+        } catch (e) { treeData = null; }
+        buildLegend();
+        render(treeData);
+        expandAllBtn && expandAllBtn.addEventListener('click', expandAll);
+        collapseAllBtn && collapseAllBtn.addEventListener('click', collapseAll);
+    });
+})();
+</script>
+
+{% endblock %}

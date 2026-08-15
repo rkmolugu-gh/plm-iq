@@ -58,14 +58,19 @@ INSERT OR IGNORE INTO users (user_id, username, full_name, email, password_hash,
     (29, 'plmiq_quality', 'Vince Quality', 'vince.quality@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'quality'),
     (30, 'plmiq_mfg', 'Wendy Manufacturing', 'wendy.mfg@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'manufacturing');
 
--- parts (30 rows: 5 parts per tenant)
+-- parts (34 rows: 5 parts per tenant, except tenant 1 which has 9)
 INSERT INTO parts (part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES
-    -- Tenant 1: BicycleCo (5 parts)
+    -- Tenant 1: BicycleCo (9 parts)
     ('BIKE-001', 'H', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4'),
     ('FRM-001', 'J', 'Frame Assembly', 'volume\Frame Assembly', 'TIG-welded aluminum 6061', 'EA', 1, 'DRAFT', '03-01-2014', '18-08-2024', 2, 1, 'tk_bicycleco_a1b2c3d4'),
     ('FRM-002', 'A', 'Frame - Main Triangle', 'volume\Frame - Main Triangle', 'Double-butted aluminum', 'EA', 1, 'DRAFT', '03-02-2014', '26-11-2016', 3, 1, 'tk_bicycleco_a1b2c3d4'),
     ('FRM-003', 'F', 'Top Tube', 'volume\Top Tube', 'Aluminum 6061-T6 - 560mm', 'EA', 1, 'RELEASED', '31-05-2021', '24-12-2022', 3, 1, 'tk_bicycleco_a1b2c3d4'),
     ('FRM-004', 'O', 'Down Tube', 'volume\Down Tube', 'Aluminum 6061-T6 - tapered', 'EA', 1, 'RELEASED', '21-10-2010', '19-01-2021', 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    -- Added to resolve FK violation: ECO-0002..0005 reference these parts (endorsed by user)
+    ('FRM-010', 'N', 'Rear Dropouts', 'volume\Rear Dropouts', 'CNC 7075 aluminum', 'SET', 2, 'RELEASED', '2025-11-20', '2026-01-08', 2, 1, 'tk_bicycleco_a1b2c3d4'),
+    ('DRV-009', 'I', 'Chain 11-Speed', 'volume\Chain 11-Speed', 'Nickel-plated steel', 'EA', 1, 'RELEASED', '2026-02-10', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    ('WHL-007', 'M', 'Front Inner Tube', 'volume\Front Inner Tube', 'Butyl rubber', 'EA', 1, 'RELEASED', '2026-03-22', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    ('BRK-004', 'C', 'Front Brake Pad', 'volume\Front Brake Pad', 'Brake pad compound', 'SET', 2, 'RELEASED', '2025-10-05', '2025-11-15', 4, 1, 'tk_bicycleco_a1b2c3d4'),
     -- Tenant 2: CycleWorks (5 parts)
     ('CYC-001', 'A', 'Carbon Fiber Wheel Set', 'volume\Carbon Fiber Wheel Set', 'Carbon fiber composite', 'SET', 1, 'RELEASED', '2020-08-01', '2021-03-15', 11, 2, 'tk_cycleworks_e5f6g7h8'),
     ('CYC-002', 'B', 'Disc Brake Caliper', 'volume\Disc Brake Caliper', 'CNC aluminum 7075', 'EA', 2, 'RELEASED', '2020-09-01', '2021-06-20', 11, 2, 'tk_cycleworks_e5f6g7h8'),

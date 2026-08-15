@@ -26,7 +26,7 @@ class Tenant(Base):
     git_provisioned = Column("git_provisioned", Boolean, default=False)   # idempotent provisioning flag
     node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
 
-    node = relationship("GraphNode")
+    node = relationship("GraphNode", foreign_keys=[node_id])
 
     users = relationship("User", back_populates="tenant")
     parts = relationship("Part", back_populates="tenant")
@@ -49,7 +49,7 @@ class User(Base):
     role = Column("role", String, nullable=False, default="reader")
     node_id = Column("node_id", Integer, ForeignKey("plmiq_node.node_id"))
 
-    node = relationship("GraphNode")
+    node = relationship("GraphNode", foreign_keys=[node_id])
 
     tenant = relationship("Tenant", back_populates="users")
     favorites = relationship("Favorite", back_populates="user")
