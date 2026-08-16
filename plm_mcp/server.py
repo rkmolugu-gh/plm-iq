@@ -225,6 +225,86 @@ PLM_TOOLS = [
             "required": ["part_number"],
         },
     ),
+    # ── Read-only graph traversal tools (Phase 3) ────────────────────────
+    # Each routes through execute_tool, which enforces deny-by-default tenant
+    # isolation — a missing tenant key yields an access-denied, never a leak.
+    types.Tool(
+        name="get_neighborhood",
+        description="Get the direct neighbors (one edge away) of a business object in the relationship graph.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id (part number, ECO number, document name, or CAD file name)"},
+                "limit": {"type": "integer", "description": "Max neighbors to return (default 50, max 500)"},
+            },
+            "required": ["object_id"],
+        },
+    ),
+    types.Tool(
+        name="walk_upstream",
+        description="Traverse the graph upstream from an object — the nodes that contribute to / source it (suppliers, BOM parents).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+        },
+    ),
+    types.Tool(
+        name="walk_downstream",
+        description="Traverse the graph downstream from an object — the nodes that depend on / are affected by it (components, ECOs, CAD, docs).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+        },
+    ),
+    types.Tool(
+        name="traverse_graph",
+        description="Traverse the graph in both directions from an object and return all reachable nodes within depth.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+        },
+    ),
+    types.Tool(
+        name="find_path",
+        description="Find a path (sequence of edges) connecting two business objects in the graph, if one exists.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Starting business object id"},
+                "target": {"type": "string", "description": "Ending business object id"},
+                "max_depth": {"type": "integer", "description": "Max path length (default 8)"},
+            },
+            "required": ["source", "target"],
+        },
+    ),
+    types.Tool(
+        name="get_impact_set",
+        description="Get candidate impacted nodes for a change (ECO -> part -> structure -> CAD/document propagation).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "ECO number or part number to start propagation from"},
+                "max_depth": {"type": "integer", "description": "How deep to propagate (default 8)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+        },
+    ),
 ]
 
 

@@ -23,6 +23,7 @@ from app.models.avl import ApprovedVendor
 from app.models.cad import CadMetadata
 from app.models.tenant_user import User, Tenant
 from app.settings import DEFAULT_SETTINGS
+from app.graph import service as graph_service
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +314,126 @@ GET_CAD_TOOL = {
     },
 }
 
+# ── Graph tools (read-only relationship traversal) ─────────────
+# Wrapper around app.graph.service; used by the assistant and MCP. These
+# tools only READ the plmiq layer — they never mutate authoritative data.
+
+GET_NEIGHBORHOOD_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_neighborhood",
+        "description": "Get the direct neighbors (one edge away) of a business object in the relationship graph. Pass a part number, ECO number, document name, or CAD file name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id: part number (e.g. FRM-003), ECO number, document name, or CAD file name"},
+                "limit": {"type": "integer", "description": "Max neighbors to return (default 50, max 500)"},
+            },
+            "required": ["object_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+WALK_UPSTREAM_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "walk_upstream",
+        "description": "Traverse the graph upstream from an object — the nodes that contribute to / source the object (e.g. its suppliers, parents in BOM).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+WALK_DOWNSTREAM_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "walk_downstream",
+        "description": "Traverse the graph downstream from an object — the nodes that depend on / are affected by it (e.g. its components, ECOs, CAD, docs).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+TRAVERSE_GRAPH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "traverse_graph",
+        "description": "Traverse the graph in both directions from an object and return all reachable nodes within depth. Use for a broad survey of an object's connectivity.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "Business object id to start from"},
+                "max_depth": {"type": "integer", "description": "How deep to traverse (default 5)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+FIND_PATH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "find_path",
+        "description": "Find a path (sequence of edges) connecting two business objects in the graph, if one exists.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Starting business object id"},
+                "target": {"type": "string", "description": "Ending business object id"},
+                "max_depth": {"type": "integer", "description": "Max path length (default 8)"},
+            },
+            "required": ["source", "target"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+GET_IMPACT_SET_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_impact_set",
+        "description": "Get the candidate impacted nodes for a change — traverse an ECO's change through affected parts, BOM structure, CAD, and documents (change propagation).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "object_id": {"type": "string", "description": "ECO number or part number to start propagation from"},
+                "max_depth": {"type": "integer", "description": "How deep to propagate (default 8)"},
+                "max_nodes": {"type": "integer", "description": "Node budget (default 400)"},
+            },
+            "required": ["object_id"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+GRAPH_TOOLS = [
+    GET_NEIGHBORHOOD_TOOL,
+    WALK_UPSTREAM_TOOL,
+    WALK_DOWNSTREAM_TOOL,
+    TRAVERSE_GRAPH_TOOL,
+    FIND_PATH_TOOL,
+    GET_IMPACT_SET_TOOL,
+]
+
 # ── All tools the agent can use ───────────────────────────────────
 ALL_TOOLS = [
     LIST_PARTS_TOOL,
@@ -327,7 +448,7 @@ ALL_TOOLS = [
     GET_AML_TOOL,
     GET_AVL_TOOL,
     GET_CAD_TOOL,
-]
+] + GRAPH_TOOLS
 
 
 def _fmt_size(size: int) -> str:
@@ -860,6 +981,132 @@ def _execute_get_cad(part_number: str, tenant_key: str | None = None) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Graph tools (read-only traversal — Phase 3)
+# ═══════════════════════════════════════════════════════════════════
+
+def _graph_lines(title: str, note: str, results: list) -> list[str]:
+    lines = [title]
+    if note:
+        lines.append(note)
+    for r in results:
+        label = r.get("label") or r.get("object_key") or r.get("node_id")
+        etype = r.get("edge_type") or ""
+        lines.append(f"  - [{r.get('object_type')}] {label}{'  via ' + etype if etype else ''}")
+    return lines
+
+
+def _execute_get_neighborhood(object_id: str, limit: int = 50, tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        resolved = graph_service.resolve_node(db, object_id)
+        if not resolved:
+            return f"Error: '{object_id}' not found in the graph."
+        nb = graph_service.neighborhood(db, resolved["node_id"], limit=min(limit, 500))
+        lines = [f"Neighborhood of {resolved['object_type']} '{object_id}' ({nb['edge_count']} edges):"]
+        for e in nb["edges"]:
+            direction = "upstream" if e["direction"] == "in" else "downstream"
+            lines.append(f"  - {direction} {e['edge_type']} -> [{e['label'] or e['node_id']}]")
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def _execute_walk_upstream(object_id: str, max_depth: int = 5, max_nodes: int = 400,
+                        tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        resolved = graph_service.resolve_node(db, object_id)
+        if not resolved:
+            return f"Error: '{object_id}' not found in the graph."
+        results = graph_service.upstream(db, resolved["node_id"],
+                                     max(max_depth, 1), max(max_nodes, 1))
+        lines = _graph_lines(f"Upstream traversal from '{object_id}' "
+                            f"({len(results)} nodes):", "", results)
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def _execute_walk_downstream(object_id: str, max_depth: int = 5, max_nodes: int = 400,
+                         tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        resolved = graph_service.resolve_node(db, object_id)
+        if not resolved:
+            return f"Error: '{object_id}' not found in the graph."
+        results = graph_service.downstream(db, resolved["node_id"],
+                                       max(max_depth, 1), max(max_nodes, 1))
+        lines = _graph_lines(f"Downstream traversal from '{object_id}' "
+                           f"({len(results)} nodes):", "", results)
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def _execute_traverse_graph(object_id: str, max_depth: int = 5, max_nodes: int = 400,
+                         tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        resolved = graph_service.resolve_node(db, object_id)
+        if not resolved:
+            return f"Error: '{object_id}' not found in the graph."
+        nid = resolved["node_id"]
+        up = graph_service.upstream(db, nid, max(max_depth, 1), max(max_nodes, 1))
+        down = graph_service.downstream(db, nid, max(max_depth, 1), max(max_nodes, 1))
+        total = up + down
+        seen = set()
+        deduped = []
+        for n in total:
+            if n["node_id"] in seen:
+                continue
+            seen.add(n["node_id"])
+            deduped.append(n)
+        lines = _graph_lines(f"Graph traversal from '{object_id}' ({len(deduped)} nodes):",
+                            f"  upstream: {len(up)} | downstream: {len(down)}", deduped)
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def _execute_find_path(source: str, target: str, max_depth: int = 8,
+                    tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        src = graph_service.resolve_node(db, source)
+        dst = graph_service.resolve_node(db, target)
+        if not src:
+            return f"Error: '{source}' not found in the graph."
+        if not dst:
+            return f"Error: '{target}' not found in the graph."
+        path = graph_service.find_path(db, src["node_id"], dst["node_id"],
+                                   max(max_depth, 1))
+        if path is None:
+            return f"No path found from '{source}' to '{target}'."
+        lines = [f"Path from '{source}' to '{target}' ({len(path)} edges):"]
+        for idx, e in enumerate(path, 1):
+            lines.append(f"  {idx}. [{e['from']}] --{e['edge_type']}--> [{e['to']}]")
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+def _execute_get_impact_set(object_id: str, max_depth: int = 8, max_nodes: int = 400,
+                         tenant_key: str | None = None) -> str:
+    db = TenantScopedSession(SessionLocal(), tenant_key)
+    try:
+        resolved = graph_service.resolve_node(db, object_id)
+        if not resolved:
+            return f"Error: '{object_id}' not found in the graph."
+        results = graph_service.change_propagation(db, resolved["node_id"],
+                                              max(max_depth, 1), max(max_nodes, 1))
+        lines = _graph_lines(f"Impact set for change '{object_id}' ({len(results)} nodes):",
+                           "  propagation: ECO -> part -> structure -> CAD/document", results)
+        return "\n".join(lines)
+    finally:
+        db.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Tool Execution — registry of all available tools
 # ═══════════════════════════════════════════════════════════════════
 
@@ -876,4 +1123,10 @@ TOOL_REGISTRY = {
     "get_aml": _execute_get_aml,
     "get_avl": _execute_get_avl,
     "get_cad": _execute_get_cad,
+    "get_neighborhood": _execute_get_neighborhood,
+    "walk_upstream": _execute_walk_upstream,
+    "walk_downstream": _execute_walk_downstream,
+    "traverse_graph": _execute_traverse_graph,
+    "find_path": _execute_find_path,
+    "get_impact_set": _execute_get_impact_set,
 }
