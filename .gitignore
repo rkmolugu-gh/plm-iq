@@ -58,7 +58,8 @@ logs/
 *.backup
 
 .env
-
+.env.prod.example
+.env.dev.example
 
 
 # SQLite temporary files
