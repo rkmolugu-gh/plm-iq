@@ -106,7 +106,17 @@ NODE_SOURCES = [
 
 
 def _clear_graph(db: Session) -> None:
-    """Remove all graph-layer rows (FK order matters)."""
+    """Remove all graph-layer rows (FK order matters).
+
+    The identity registry (plmiq_node) is referenced by the UNIQUE node_id FK
+    carried on every node-capable domain table. Before deleting nodes we must
+    release those FKs (set them to NULL on the domain rows); otherwise SQLite's
+    foreign-key enforcement blocks the DELETE. The domain rows are re-registered
+    and re-linked during _build_nodes.
+    """
+    for model, _otype, _kf, _lf, _cf in NODE_SOURCES:
+        db.query(model).update({model.node_id: None})
+    db.flush()
     db.query(GraphEdgeEvidence).delete()
     db.query(GraphEdge).delete()
     db.query(GraphNode).delete()
@@ -162,6 +172,13 @@ def _add_edge(
     attrs=None,
 ) -> None:
     """Insert one canonical-direction edge plus its structural evidence row."""
+    # Normalize tenant from the source node so the edge is tenanted. This MUST be
+    # resolved before the edge is flushed: both tenant_id and tenant_key are
+    # NOT NULL on plmiq_edge, so a deferred (None) flush would violate the
+    # constraint.
+    src = db.get(GraphNode, source)
+    src_tenant_id = src.tenant_id if src is not None else 1
+    src_tenant_key = src.tenant_key if src is not None else "plm-iq"
     edge = GraphEdge(
         source_node_id=source,
         target_node_id=target,
@@ -172,25 +189,20 @@ def _add_edge(
         attributes=attrs,
         created_date=_now(),
         updated_date=_now(),
-        tenant_id=None,
-        tenant_key=None,  # normalized below from an endpoint node
+        tenant_id=src_tenant_id,
+        tenant_key=src_tenant_key,
     )
     db.add(edge)
-    db.flush()
-    # Normalize tenant from the source node so the edge is tenanted.
-    src = db.get(GraphNode, source)
-    edge.tenant_id = src.tenant_id
-    edge.tenant_key = src.tenant_key
+    db.flush()  # assign edge.id
     db.add(GraphEdgeEvidence(
         edge_id=edge.id,
         evidence_type=evidence_type,
         reference=evidence_ref,
         confidence=1.0,  # structural / human-source, not AI inference
         created_date=_now(),
-        tenant_id=src.tenant_id,
-        tenant_key=src.tenant_key,
+        tenant_id=src_tenant_id,
+        tenant_key=src_tenant_key,
     ))
-    db.add(edge)
     db.commit()
 
 

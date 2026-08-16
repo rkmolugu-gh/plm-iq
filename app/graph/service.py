@@ -76,6 +76,8 @@ def node_info(db: Session, node_id: int) -> Optional[dict]:
                 "node_label": label,
             }
     fallback = db.query(GraphNode).filter(GraphNode.node_id == node_id).first()
+    if fallback is None:
+        return None
     return {
         "node_id": node_id,
         "object_type": "NODE",
@@ -133,6 +135,14 @@ def _reverse_type(edge) -> str:
 def _node_label(edge, use_source: bool) -> str:
     node = edge.source_node if use_source else edge.target_node
     return node.node_label if node and node.node_label else ""
+
+
+def _outgoing(db: Session, node_id: int):
+    return db.query(GraphEdge).filter(GraphEdge.source_node_id == node_id).all()
+
+
+def _incoming(db: Session, node_id: int):
+    return db.query(GraphEdge).filter(GraphEdge.target_node_id == node_id).all()
 
 
 def neighborhood(db: Session, node_id: int, limit: int = 100) -> dict:

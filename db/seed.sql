@@ -543,3 +543,154 @@ INSERT OR IGNORE INTO plmiq_edge_type (name, description, canonical_direction, i
     ('SITE_OF', 'Site belongs to an organization', 'NODE -> ORGANIZATION', 'HAS_SITE', TRUE, '2026-08-14', 'plm-iq');
 
 PRAGMA foreign_keys = ON;
+
+-- ----------------------------------------------------------------------------
+-- BicycleCo graph layer seed (Phase 5)
+-- plmiq_node identities, canonical edges, and structural evidence for the
+-- BicycleCo tenant. Derived by build_graph from the existing domain rows above.
+-- These explicit node_ids are wired back to the domain tables below.
+-- ----------------------------------------------------------------------------
+PRAGMA foreign_keys = OFF;
+
+INSERT INTO plmiq_node (node_id, node_label, attributes, created_by, created_date, tenant_id, tenant_key) VALUES
+(225, 'BicycleCo', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(231, 'megan', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(236, 'bicycle_reader', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(237, 'bicycle_admin', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(238, 'bicycle_quality', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(239, 'bicycle_mfg', NULL, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(262, 'Complete Bicycle - 21-Speed Hybrid', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(263, 'Frame Assembly', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(264, 'Frame - Main Triangle', NULL, 3, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(265, 'Top Tube', NULL, 3, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(266, 'Down Tube', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(267, 'Rear Dropouts', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(268, 'Chain 11-Speed', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(269, 'Front Inner Tube', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(270, 'Front Brake Pad', NULL, 4, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(296, 'Cost BIKE-001 L0', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(297, 'Cost FRM-001 L1', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(298, 'Cost FRM-002 L2', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(299, 'Cost FRM-003 L3', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(300, 'Cost FRM-004 L3', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(326, 'Top Tube Material Upgrade for Weight Reduction', NULL, 3, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(327, 'Rear Dropouts Forged-to-CNC Conversion', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(328, 'Chain Upgrade to Corrosion-Resistant Variant', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(329, 'Add Puncture Protection to Front Inner Tube', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(330, 'Front Brake Pad Compound Upgrade to Ceramic', NULL, 4, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(356, 'MFR:BicycleCo Manufacturing', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(357, 'MFR:BicycleCo Manufacturing', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(358, 'MFR:Alcoa Aluminum', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(359, 'MFR:Kaiser Aluminum', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(360, 'MFR:Shimano Components', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(386, 'VND:BicycleCo Supply Chain', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(387, 'VND:BicycleCo Supply Chain', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(388, 'VND:Alcoa Distribution', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(389, 'VND:Kaiser Aluminum', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(390, 'VND:Shimano Distribution', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(416, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(417, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(418, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(419, 'BIKE-001_RH.stp', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(420, 'FRM-001_J.sldasm', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+
+INSERT INTO plmiq_edge (id, source_node_id, target_node_id, edge_type_id, state, quantity, unit, sequence, attributes, created_by, updated_by, created_date, updated_date, tenant_id, tenant_key) VALUES
+(1, 262, 263, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 2}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(2, 263, 264, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 3}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(3, 264, 265, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 4}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(4, 264, 266, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 5}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(25, 262, 296, 3, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(26, 263, 297, 3, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(27, 264, 298, 3, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(28, 265, 299, 3, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(29, 266, 300, 3, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(55, 326, 265, 13, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(56, 327, 267, 13, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(57, 328, 268, 13, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(58, 329, 269, 13, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(59, 330, 270, 13, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(85, 262, 356, 5, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(86, 263, 357, 5, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(87, 264, 358, 5, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(88, 265, 359, 5, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(89, 266, 360, 5, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(115, 262, 386, 7, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(116, 263, 387, 7, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(117, 264, 388, 7, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(118, 265, 389, 7, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(119, 266, 390, 7, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(145, 262, 416, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(146, 263, 417, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(147, 264, 418, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(148, 265, 419, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(149, 266, 420, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(175, 231, 262, 21, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+
+INSERT INTO plmiq_edge_evidence (id, edge_id, evidence_type, reference, confidence, created_by, created_date, tenant_id, tenant_key) VALUES
+(1, 1, 'BOM_RECORD', 'bom:2', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(2, 2, 'BOM_RECORD', 'bom:3', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(3, 3, 'BOM_RECORD', 'bom:4', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(4, 4, 'BOM_RECORD', 'bom:5', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(25, 25, 'SOURCE_OBJECT', 'costing:1', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(26, 26, 'SOURCE_OBJECT', 'costing:2', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(27, 27, 'SOURCE_OBJECT', 'costing:3', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(28, 28, 'SOURCE_OBJECT', 'costing:4', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(29, 29, 'SOURCE_OBJECT', 'costing:5', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(55, 55, 'WORKFLOW_RECORD', 'ECO-0001', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(56, 56, 'WORKFLOW_RECORD', 'ECO-0002', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(57, 57, 'WORKFLOW_RECORD', 'ECO-0003', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(58, 58, 'WORKFLOW_RECORD', 'ECO-0004', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(59, 59, 'WORKFLOW_RECORD', 'ECO-0005', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(85, 85, 'SUPPLIER_RECORD', 'BicycleCo Manufacturing', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(86, 86, 'SUPPLIER_RECORD', 'BicycleCo Manufacturing', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(87, 87, 'SUPPLIER_RECORD', 'Alcoa Aluminum', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(88, 88, 'SUPPLIER_RECORD', 'Kaiser Aluminum', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(89, 89, 'SUPPLIER_RECORD', 'Shimano Components', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(115, 115, 'SUPPLIER_RECORD', 'BicycleCo Supply Chain', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(116, 116, 'SUPPLIER_RECORD', 'BicycleCo Supply Chain', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(117, 117, 'SUPPLIER_RECORD', 'Alcoa Distribution', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(118, 118, 'SUPPLIER_RECORD', 'Kaiser Aluminum', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(119, 119, 'SUPPLIER_RECORD', 'Shimano Distribution', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(145, 145, 'SOURCE_OBJECT', 'cad:1', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(146, 146, 'SOURCE_OBJECT', 'cad:2', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(147, 147, 'SOURCE_OBJECT', 'cad:3', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(148, 148, 'SOURCE_OBJECT', 'cad:4', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(149, 149, 'SOURCE_OBJECT', 'cad:5', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(175, 175, 'SOURCE_OBJECT', 'megan', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+
+UPDATE parts SET node_id = 262 WHERE part_number = 'BIKE-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 263 WHERE part_number = 'FRM-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 264 WHERE part_number = 'FRM-002' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 265 WHERE part_number = 'FRM-003' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 266 WHERE part_number = 'FRM-004' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 267 WHERE part_number = 'FRM-010' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 268 WHERE part_number = 'DRV-009' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 269 WHERE part_number = 'WHL-007' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 270 WHERE part_number = 'BRK-004' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE costing_bom SET node_id = 296 WHERE id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE costing_bom SET node_id = 297 WHERE id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE costing_bom SET node_id = 298 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE costing_bom SET node_id = 299 WHERE id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE costing_bom SET node_id = 300 WHERE id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE engineering_change_orders SET node_id = 326 WHERE eco_number = 'ECO-0001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE engineering_change_orders SET node_id = 327 WHERE eco_number = 'ECO-0002' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE engineering_change_orders SET node_id = 328 WHERE eco_number = 'ECO-0003' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE engineering_change_orders SET node_id = 329 WHERE eco_number = 'ECO-0004' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE engineering_change_orders SET node_id = 330 WHERE eco_number = 'ECO-0005' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_manufacturer_list SET node_id = 356 WHERE id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_manufacturer_list SET node_id = 357 WHERE id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_manufacturer_list SET node_id = 358 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_manufacturer_list SET node_id = 359 WHERE id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_manufacturer_list SET node_id = 360 WHERE id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_vendor_list SET node_id = 386 WHERE id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_vendor_list SET node_id = 387 WHERE id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_vendor_list SET node_id = 388 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_vendor_list SET node_id = 389 WHERE id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE approved_vendor_list SET node_id = 390 WHERE id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE cad_metadata SET node_id = 416 WHERE id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE cad_metadata SET node_id = 417 WHERE id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE cad_metadata SET node_id = 418 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE cad_metadata SET node_id = 419 WHERE id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE cad_metadata SET node_id = 420 WHERE id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+
+PRAGMA foreign_keys = ON;

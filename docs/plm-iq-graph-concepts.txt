@@ -540,7 +540,7 @@ SCHEMA DECISION (applies to all phases)
   tenant isolation is enforced centrally.
 
 --------------------------------------------------------------------------------
-PHASE 1 — GRAPH SCHEMA (terminology + six core plmiq tables)
+PHASE 1 — GRAPH SCHEMA DONE
 --------------------------------------------------------------------------------
 Create the schema for existing business objects only.
 - db/schema.sql: add plmiq_node, plmiq_edge_type, plmiq_edge, plmiq_edge_annotation,
@@ -577,7 +577,7 @@ Create the schema for existing business objects only.
 - Verify: rebuild DB via db/_build_db.py; confirm all six tables + seed edge types.
 
 --------------------------------------------------------------------------------
-PHASE 2 — POPULATE NODES & EDGES FOR EXISTING DATA (backfill/seeding)
+PHASE 2 — POPULATE NODES & EDGES FOR EXISTING DATA DONE
 --------------------------------------------------------------------------------
 Register existing domain rows as nodes and derive edges from existing relational
 links; do not invent new relationships.
@@ -595,7 +595,7 @@ links; do not invent new relationships.
 - Verify: node/edge counts match domain counts; FK/tenant checks clean.
 
 --------------------------------------------------------------------------------
-PHASE 3 — GRAPH SERVICE & QUERY LAYER
+PHASE 3 — GRAPH SERVICE & QUERY LAYER DONE
 --------------------------------------------------------------------------------
 Expose read-only traversal over the graph, tenant-scoped via TenantScopedSession.
 - New package app/graph/ with query/service functions:
@@ -609,7 +609,7 @@ Expose read-only traversal over the graph, tenant-scoped via TenantScopedSession
 - Add unit tests for traversal directions and tenant scoping.
 
 --------------------------------------------------------------------------------
-PHASE 4 — IMPACT ANALYSIS AGENT
+PHASE 4 — IMPACT ANALYSIS AGENT DONE
 --------------------------------------------------------------------------------
 An agent that understands the graph concepts (nodes, edge types, upstream/
 downstream, lineage, traceability) and answers questions about relationships and
@@ -631,8 +631,8 @@ change impact.
   cross-tenant questions are denied.
 
 --------------------------------------------------------------------------------
-PHASE 5 — VERIFICATION, TESTS & DOC FINALIZATION
---------------------------------------------------------------------------------
+PHASE 5 — VERIFICATION, TESTS & DOC FINALIZATION DONE
+-------------------------------------------------------------------------------
 - Full test pass: schema (Phase 1), population integrity (Phase 2), traversal +
   tenant isolation (Phase 3), agent integration (Phase 4). Rebuild DB and reseed.
 - Security review: confirm every graph code path is tenanted (deny-by-default),
@@ -640,6 +640,9 @@ PHASE 5 — VERIFICATION, TESTS & DOC FINALIZATION
 - Performance review: indexes on the new tables; bound traversal depth/width.
 - Fold the completed phases back into this doc as the live implementation roadmap
   (mark each phase DONE / IN PROGRESS / PENDING).
+- BicycleCo graph seed data captured from a populated DB and committed to
+  db/seed.sql so the graph is self-contained for the demo tenant after a fresh
+  rebuild via db/_build_db.py.
 
 --------------------------------------------------------------------------------
 PHASE 4 — DONE · IMPACT ANALYSIS AGENT (implementation record)
@@ -702,6 +705,66 @@ IMPLEMENTED DELIVERABLES
    - an impact prompt does NOT trigger a mutating tool (guarded NOW structurally
      by READ_ONLY_TOOLS — the regression test locks that in);
    - cross-tenant impact questions are denied.
+
+
+================================================================================
+PHASE 5 — DONE · VERIFICATION, TESTS & DOC FINALIZATION (implementation record)
+================================================================================
+Approved 2026-08-16. Phase 5 is the full verification pass: schema, population
+integrity, traversal, tenant isolation, agent integration, security, performance,
+and seed data for the demo tenant.
+
+FIXES FOUND DURING PHASE 5
+1. db/indexing/build_graph.py — _add_edge flushed plmiq_edge with tenant_key=None,
+   violating the NOT NULL constraint. Fixed by resolving the source node's tenant
+   BEFORE flushing the edge.
+2. db/indexing/build_graph.py — _clear_graph deleted plmiq_node while domain rows
+   still held node_id FKs, causing FK violations on --force. Fixed by nulling
+   domain node_id columns before deleting graph rows.
+3. app/graph/service.py — neighborhood/_walk referenced undefined _outgoing and
+   _incoming helpers. Added them.
+4. app/graph/service.py — node_info always returned a fallback dict even when the
+   node was absent from the current tenant, breaking tenant isolation. Fixed to
+   return None when no domain row or graph node is visible.
+
+IMPLEMENTED DELIVERABLES
+1. tests/test_graph_phases.py
+   - Phase 1 (schema): 9 tests verifying all six plmiq tables, columns, indexes,
+     and that every node-capable domain table carries a node_id FK.
+   - Phase 2 (population): 4 tests verifying BicycleCo graph counts, domain-row
+     back-references, edge tenancy, and evidence linkage.
+   - Phase 3 (traversal + tenant isolation): 9 tests covering resolve_node,
+     neighborhood, structure_traversal, find_path, downstream, change_propagation,
+     and cross-tenant isolation (resolve, neighborhood, tool-layer denial).
+   - Phase 4 (agent integration): 3 tests verifying READ_ONLY_TOOLS excludes
+     mutating tools, impact_chat delegates to assistant_chat with tools=READ_ONLY_TOOLS,
+     and the structural read-only guard holds.
+   - Security: 3 tests verifying every graph tool denies without tenant_key,
+     cross-tenant lookups return "not found" (no data leak), and tenant-scoped
+     queries never return another tenant's data.
+   - Performance: 3 tests verifying bounded traversal defaults and that tenant-key
+     indexes exist on all plmiq tables.
+   Total: 31 tests, all green against a freshly rebuilt DB.
+
+2. db/seed.sql — BicycleCo graph seed data
+   - Captured from a populated DB (build_graph --force) and appended after the
+     edge-type seed.
+   - Contains INSERTs for plmiq_node (40 rows), plmiq_edge (30 rows),
+     plmiq_edge_evidence (30 rows), and UPDATEs wiring domain rows (parts,
+     costing_bom, engineering_change_orders, AML, AVL, cad_metadata) back to
+     their plmiq_node identities.
+   - Wrapped in PRAGMA foreign_keys OFF/ON to avoid ordering issues.
+
+3. db/_build_db.py — verification updated to include all six plmiq tables so
+   rebuilds confirm the graph layer is present.
+
+VERIFICATION
+- Full test pass: 49 passed (31 new graph tests + 18 existing).
+- Rebuild DB via python -m db._build_db: clean, no FK violations, plmiq_node 40,
+  plmiq_edge 30, plmiq_edge_evidence 30.
+- Tenant isolation confirmed: CycleWorks key cannot resolve or traverse BicycleCo
+  nodes; execute_tool denies without tenant_key.
+
 
 ================================================================================
 USING THE IMPACT ANALYSIS MODE (user guide)

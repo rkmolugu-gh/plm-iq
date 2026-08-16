@@ -30,6 +30,12 @@ TABLES = [
     "workflow_tasks",
     "notifications",
     "favorites",
+    "plmiq_node",
+    "plmiq_edge_type",
+    "plmiq_edge",
+    "plmiq_edge_annotation",
+    "plmiq_edge_evidence",
+    "plmiq_edge_impact",
 ]
 
 
