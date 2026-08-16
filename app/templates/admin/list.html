@@ -343,21 +343,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Subdomain</label>
-                        <input type="text" name="subdomain" class="form-control" placeholder="e.g. tenant1 (→ tenant1.{{ base_domain }})">
-                        <div class="form-text text-secondary">Letters, numbers, dashes.</div>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Role</label>
-                            <select name="role" class="form-select">
-                                {% for r in tenant_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
-                            </select>
+                        <div class="input-group">
+                            <input type="text" name="subdomain" id="newTenantSubdomain" class="form-control" required pattern="[a-z0-9-]+"
+                                   placeholder="auto-filled from tenant name">
+                            <span class="input-group-text">.{{ base_domain }}</span>
                         </div>
-                        <div class="col-md-6 mb-3 d-flex align-items-end">
-                            <div class="form-check">
-                                <input type="checkbox" name="is_active" value="on" class="form-check-input" id="ntActive" checked>
-                                <label class="form-check-label" for="ntActive">Active</label>
-                            </div>
+                        <div class="form-text text-secondary">Auto-generated from the tenant name. Lowercase letters, numbers, dashes only.</div>
+                    </div>
+                    <div class="mb-3 d-flex align-items-center">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_active" value="on" class="form-check-input" id="ntActive" checked>
+                            <label class="form-check-label" for="ntActive">Active</label>
                         </div>
                     </div>
                 </div>
@@ -515,6 +511,45 @@ function generateEditTenantSecret() {
     const rand = Math.random().toString(16).substring(2, 10);
     secretInput.value = 'ts_' + (name || 'tenant') + '_' + rand;
 }
+function genSubdomain() {
+    const name = (document.querySelector('#newTenantModal input[name="tenant_name"]').value || '').trim().toLowerCase();
+    document.getElementById('newTenantSubdomain').value = name.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+function validateNewTenant() {
+    const sd = document.getElementById('newTenantSubdomain').value.trim();
+    if (!sd) {
+        alert('Subdomain is auto-generated from the tenant name and must be filled in.');
+        document.getElementById('newTenantSubdomain').focus();
+        return false;
+    }
+    if (!/^[a-z0-9-]+$/.test(sd)) {
+        alert('Subdomain must be lowercase letters, numbers, dashes only.');
+        document.getElementById('newTenantSubdomain').focus();
+        return false;
+    }
+    return true;
+}
+document.addEventListener('DOMContentLoaded', function() {
+    const ntModal = document.getElementById('newTenantModal');
+    if (ntModal) {
+        ntModal.addEventListener('shown.bs.modal', function() {
+            const nameInput = ntModal.querySelector('input[name="tenant_name"]');
+            if (nameInput) {
+                nameInput.addEventListener('input', genSubdomain);
+                genSubdomain();
+            }
+        });
+        const form = ntModal.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!validateNewTenant()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        }
+    }
+});
 </script>
 
 {% endblock %}
