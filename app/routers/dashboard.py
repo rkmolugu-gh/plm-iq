@@ -130,3 +130,14 @@ def dashboard(request: Request, db: TenantScopedSession = Depends(get_tenant_db)
         eco_statuses=get_settings(request).ECO_STATUSES,
         favorites=enriched_favorites,
     ))
+
+
+@router.get("/help", response_class=HTMLResponse, include_in_schema=False)
+def help_page(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
+    """Render the help page with status legend."""
+    user = require_user(request, db)
+    ctx = auth_context(request, db)
+    return HTMLResponse(content=render(
+        "help.html",
+        **ctx,
+    ))

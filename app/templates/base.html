@@ -118,6 +118,19 @@
                                 </a>
                             </li>
                             <li><hr class="dropdown-divider"></li>
+                            {% if current_user and (current_user.role == 'tenantadmin' or current_user.role is none or current_user.role == 'superadmin') %}
+                            <li>
+                                <a class="dropdown-item d-flex justify-content-between align-items-center" href="/admin/settings">
+                                    <span><i class="bi bi-gear"></i> Settings</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            <li>
+                                <a class="dropdown-item d-flex justify-content-between align-items-center" href="/help">
+                                    <span><i class="bi bi-question-circle"></i> Help</span>
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="post" action="/logout">
                                     <button type="submit" class="dropdown-item">
@@ -152,6 +165,40 @@
             <li class="nav-item">
                 <a class="nav-link" href="/queries"><i class="bi bi-sliders"></i> Queries</a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#domainSubmenu" role="button" aria-expanded="false">
+                    <span><i class="bi bi-diagram-3"></i> Domain</span>
+                    <i class="bi bi-chevron-down small"></i>
+                </a>
+                <div class="collapse" id="domainSubmenu">
+                    <ul class="nav nav-pills flex-column ms-3 border-start border-secondary ps-2">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/parts"><i class="bi bi-box-seam"></i> Parts</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/bom"><i class="bi bi-diagram-3"></i> BOM</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/costing"><i class="bi bi-currency-dollar"></i> Costing</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/eco"><i class="bi bi-arrow-left-right"></i> ECO</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/aml"><i class="bi bi-buildings"></i> AML</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/avl"><i class="bi bi-truck"></i> AVL</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/cad"><i class="bi bi-file-earmark-code"></i> CAD</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/documents"><i class="bi bi-folder2-open"></i> Documents</a>
+                        </li>
+                    </ul>
+                </div>
+            </li>
             {% if current_user and (current_user.role == 'tenantadmin' or current_user.role is none or current_user.role == 'superadmin') %}
             <li class="nav-item">
                 <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#adminSubmenu" role="button" aria-expanded="false">
@@ -167,13 +214,7 @@
                             <a class="nav-link" href="/admin"><i class="bi bi-people"></i> Users &amp; Tenants</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/tenant"><i class="bi bi-building"></i> My Tenant</a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link" href="/import"><i class="bi bi-upload"></i> Import CSV</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/settings"><i class="bi bi-gear"></i> Settings</a>
                         </li>
                     </ul>
                 </div>

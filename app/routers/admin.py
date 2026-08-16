@@ -297,37 +297,53 @@ def admin_tenant_edit(
     role: str = Form("reader"),
     is_active: str = Form("off"),
     db: TenantScopedSession = Depends(get_tenant_db),
-    _role: User = Depends(require_superuser),
+    _role: User = Depends(require_role(["tenantadmin", "superadmin"])),
 ):
     tenant = _load_tenant(db, tid)
     if not tenant:
         return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
-    name = (tenant_name or "").strip()
-    if not name:
-        return _render_tree(request, db, selected_tenant=tenant, error="Tenant name is required.")
-    if db.query(Tenant).filter(Tenant.tenant_name == name, Tenant.tenant_id != tid).first():
-        return _render_tree(request, db, selected_tenant=tenant, error="That tenant name is already in use.")
-    key = (tenant_key or "").strip()
-    if not key:
-        return _render_tree(request, db, selected_tenant=tenant, error="Tenant key is required.")
-    if db.query(Tenant).filter(Tenant.tenant_key == key, Tenant.tenant_id != tid).first():
-        return _render_tree(request, db, selected_tenant=tenant, error="That tenant key is already in use.")
-    secret = (tenant_secret or "").strip()
-    if not secret:
-        return _render_tree(request, db, selected_tenant=tenant, error="Tenant secret is required.")
-    sub = (subdomain or "").strip().lower() or None
-    if sub:
-        if not re.fullmatch(r"[a-z0-9-]+", sub):
-            return _render_tree(request, db, selected_tenant=tenant, error="Subdomain must be lowercase letters, numbers or dashes.")
-        if db.query(Tenant).filter(Tenant.subdomain == sub, Tenant.tenant_id != tid).first():
-            return _render_tree(request, db, selected_tenant=tenant, error="That subdomain is already in use.")
-    tenant.tenant_name = name
-    tenant.tenant_key = key
-    tenant.tenant_secret = secret
-    tenant.subdomain = sub
-    tenant.description = description or None
-    tenant.role = _valid_role(db, role)
-    tenant.is_active = (is_active == "on")
+
+    superuser = is_superuser(_role)
+    can_edit_self = not superuser and tenant.tenant_id == _role.tenant_id
+
+    if can_edit_self:
+        sub = (subdomain or "").strip().lower() or None
+        if sub:
+            if not re.fullmatch(r"[a-z0-9-]+", sub):
+                return _render_tree(request, db, selected_tenant=tenant, error="Subdomain must be lowercase letters, numbers or dashes.")
+            clash = db.query(Tenant).filter(Tenant.subdomain == sub, Tenant.tenant_id != tenant.tenant_id).first()
+            if clash:
+                return _render_tree(request, db, selected_tenant=tenant, error="That subdomain is already taken.")
+        tenant.subdomain = sub
+        tenant.description = description or None
+        tenant.is_active = (is_active == "on")
+    else:
+        name = (tenant_name or "").strip()
+        if not name:
+            return _render_tree(request, db, selected_tenant=tenant, error="Tenant name is required.")
+        if db.query(Tenant).filter(Tenant.tenant_name == name, Tenant.tenant_id != tid).first():
+            return _render_tree(request, db, selected_tenant=tenant, error="That tenant name is already in use.")
+        key = (tenant_key or "").strip()
+        if not key:
+            return _render_tree(request, db, selected_tenant=tenant, error="Tenant key is required.")
+        if db.query(Tenant).filter(Tenant.tenant_key == key, Tenant.tenant_id != tid).first():
+            return _render_tree(request, db, selected_tenant=tenant, error="That tenant key is already in use.")
+        secret = (tenant_secret or "").strip()
+        if not secret:
+            return _render_tree(request, db, selected_tenant=tenant, error="Tenant secret is required.")
+        sub = (subdomain or "").strip().lower() or None
+        if sub:
+            if not re.fullmatch(r"[a-z0-9-]+", sub):
+                return _render_tree(request, db, selected_tenant=tenant, error="Subdomain must be lowercase letters, numbers or dashes.")
+            if db.query(Tenant).filter(Tenant.subdomain == sub, Tenant.tenant_id != tid).first():
+                return _render_tree(request, db, selected_tenant=tenant, error="That subdomain is already in use.")
+        tenant.tenant_name = name
+        tenant.tenant_key = key
+        tenant.tenant_secret = secret
+        tenant.subdomain = sub
+        tenant.description = description or None
+        tenant.role = _valid_role(db, role)
+        tenant.is_active = (is_active == "on")
     db.commit()
     return RedirectResponse(url=f"/admin/tenant/{tid}", status_code=303)
 
@@ -360,29 +376,9 @@ def admin_tenant_delete(
 # ── Current-tenant management (tenant admin, not global super-admin) ──────
 
 @router.get("/tenant", response_class=HTMLResponse)
-def tenant_self(
-    request: Request,
-    db: TenantScopedSession = Depends(get_tenant_db),
-    _u: User = Depends(require_role(["tenantadmin"])),
-):
-    """Manage the current tenant and its users.
-
-    Available to any logged-in user of the tenant; the tenant is taken from
-    the authenticated user (which the subdomain middleware has already
-    scoped). Shows the tenant's details + a user list with inline CRUD.
-    """
-    tenant = db.query(Tenant).filter(Tenant.tenant_id == _u.tenant_id).first()
-    if not tenant:
-        return HTMLResponse(content=render("404.html", **auth_context(request, db)), status_code=404)
-    users = db.query(User).filter(User.tenant_id == tenant.tenant_id).order_by(User.username).all()
-    return HTMLResponse(content=render(
-        "admin/tenant_self.html",
-        **auth_context(request, db),
-        tenant=tenant,
-        users=users,
-        user_roles=role_names(db),
-        base_domain=BASE_DOMAIN,
-    ))
+def tenant_self_redirect():
+    """Redirect /admin/tenant to /admin (Users & Tenants page)."""
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @router.post("/tenant", response_class=HTMLResponse)
