@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}PLM Assistant - PLM-IQ{% endblock %}
+{% block title %}{{ 'Impact Analysis' if is_impact else 'PLM Assistant' }} - PLM-IQ{% endblock %}
 {% block content %}
 <style>
     .chat-container {
@@ -109,12 +109,22 @@
 <div class="d-flex justify-content-between align-items-center mb-2">
     <div>
         <h4 class="mb-0">
-            <i class="bi bi-robot"></i> PLM Assistant
-            <span class="badge bg-info assistant-badge ms-1">Agent</span>
+            <i class="bi {{ 'bi-diagram-3' if is_impact else 'bi-robot' }}"></i>
+            {{ 'PLM Impact Analysis' if is_impact else 'PLM Assistant' }}
+            <span class="badge assistant-badge ms-1 {{ 'bg-warning text-dark' if is_impact else 'bg-info' }}">
+                {{ 'Impact (read-only)' if is_impact else 'Agent' }}
+            </span>
         </h4>
-        <small class="text-muted">Goal-driven engineering assistant with tool calling</small>
+        <small class="text-muted">{{ 'Relationship & change-impact analysis over the PLM graph - read-only tools only' if is_impact
+            else 'Goal-driven engineering assistant with tool calling' }}</small>
     </div>
     <div class="d-flex gap-2 align-items-center">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Agent mode">
+            <a class="btn {{ 'btn-info' if not is_impact else 'btn-outline-secondary' }}"
+               href="/assistant?mode=assistant">Assistant</a>
+            <a class="btn {{ 'btn-warning' if is_impact else 'btn-outline-secondary' }}"
+               href="/assistant?mode=impact">Impact</a>
+        </div>
         <details class="small" style="cursor:pointer">
             <summary class="text-muted" style="font-size:0.7rem;">
                 <i class="bi bi-cpu"></i> Model
@@ -122,9 +132,13 @@
             <div class="bg-dark border rounded p-2 mt-1" style="position:absolute;z-index:100;min-width:260px;right:0;">
                 <div class="small"><strong>Assistant Model:</strong> <code>{{ assistant_model or 'not set' }}</code></div>
                 <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> Set <code>ASSISTANT_MODEL</code> in <code>plm-iq/.env</code></div>
+                {% if is_impact %}
+                <div class="small text-warning mt-1"><i class="bi bi-shield-lock"></i> Impact mode has no write tools.</div>
+                {% endif %}
             </div>
         </details>
         <form method="POST" action="/assistant/new" style="display:inline">
+            <input type="hidden" name="mode" value="{{ mode }}">
             <button type="submit" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-plus-circle"></i> New Conversation
             </button>
@@ -168,7 +182,16 @@
 </div>
 {% else %}
 <div class="empty-chat">
-    <i class="bi bi-robot"></i>
+    <i class="bi {{ 'bi-diagram-3' if is_impact else 'bi-robot' }}"></i>
+    {% if is_impact %}
+    <h5 class="text-muted">Analyze change impact across the PLM graph.</h5>
+    <p class="text-muted small">Ask what a change would affect. This mode is read-only.</p>
+    <div class="d-flex gap-2 mt-2">
+        <span class="badge bg-secondary">"What is the impact of changing FRM-003?"</span>
+        <span class="badge bg-secondary">"What depends on BIKE-001?"</span>
+        <span class="badge bg-secondary">"Traverse ECO-001 downstream"</span>
+    </div>
+    {% else %}
     <h5 class="text-muted">How can I help you with PLM?</h5>
     <p class="text-muted small">Ask about parts, create new parts, or upload images for analysis.</p>
     <div class="d-flex gap-2 mt-2">
@@ -176,10 +199,12 @@
         <span class="badge bg-secondary">"Create a part similar to FRM-003"</span>
         <span class="badge bg-secondary">"What parts are in the BOM?"</span>
     </div>
+    {% endif %}
 </div>
 {% endif %}
 
 <form method="POST" action="/assistant" class="chat-input-form" enctype="multipart/form-data" id="assistantForm">
+    <input type="hidden" name="mode" value="{{ mode }}">
     <div class="d-flex gap-2 mb-2">
         <label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
             <i class="bi bi-paperclip"></i> Attach files

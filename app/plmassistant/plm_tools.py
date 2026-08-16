@@ -450,6 +450,15 @@ ALL_TOOLS = [
     GET_CAD_TOOL,
 ] + GRAPH_TOOLS
 
+# Mutating tools are excluded from the read-only set used by the impact
+# analysis mode. READ_ONLY_TOOLS is derived so any future tool added to
+# ALL_TOOLS is read-only by default unless explicitly named as mutating.
+MUTATING_TOOL_NAMES = {"create_part", "update_part_status"}
+READ_ONLY_TOOLS = [
+    t for t in ALL_TOOLS
+    if t["function"]["name"] not in MUTATING_TOOL_NAMES
+]
+
 
 def _fmt_size(size: int) -> str:
     if size < 1024:

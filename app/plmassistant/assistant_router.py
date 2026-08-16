@@ -30,6 +30,7 @@ from app.template_utils import render
 
 from .config import ASSISTANT_MODEL, MAX_UPLOAD_SIZE, MAX_HISTORY_TURNS, MAX_SESSIONS
 from .assistant_agent import assistant_chat, prepare_assistant_messages
+from .impact_agent import impact_chat
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,22 @@ sessions: dict[str, dict] = {}
 # ── Upload config ────────────────────────────────────────────────
 _UPLOAD_DIR = Path(__file__).resolve().parent.parent / "data" / "uploads"
 _ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
+_MODE_COOKIE = "ai_mode"
+_SESSION_COOKIES = {"assistant": "assistant_session", "impact": "impact_session"}
+_MODES = ("assistant", "impact")
+
+
+def _session_key(mode: str, session_id: str) -> str:
+    return f"{mode}:{session_id}"
+
+
+def _resolve_mode(request: Request) -> str:
+    """Mode from query first, then the persisted ai_mode cookie, else default."""
+    q = request.query_params.get("mode")
+    if q and q in _MODES:
+        return q
+    return request.cookies.get(_MODE_COOKIE) or "assistant"
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -140,12 +157,16 @@ def _process_uploaded_file(file: UploadFile, session_id: str) -> dict:
     return metadata
 
 
-def _get_or_create_session(session_id: Optional[str]) -> tuple[str, dict]:
-    """Return (session_id, session_data) — creates a new session if needed."""
-    if not session_id or session_id not in sessions:
+def _get_or_create_session(session_id: Optional[str], mode: str = "assistant") -> tuple[str, dict]:
+    """Return (session_id, session_data) — creates a new session if needed.
+
+    Sessions are namespaced by mode so the general assistant and the impact
+    analysis agent keep separate conversations.
+    """
+    if not session_id or _session_key(mode, session_id) not in sessions:
         session_id = str(uuid.uuid4())
-        sessions[session_id] = {"messages": [], "flags": {}}
-    return session_id, sessions[session_id]
+        sessions[_session_key(mode, session_id)] = {"messages": [], "flags": {}}
+    return session_id, sessions[_session_key(mode, session_id)]
 
 
 def _trim_history(session_data: dict) -> None:
@@ -167,19 +188,31 @@ def _evict_if_needed() -> None:
 
 @router.get("", response_class=HTMLResponse)
 def assistant_page(request: Request, db: Session = Depends(get_db)):
-    """Render the assistant chat page with session history."""
+    """Render the assistant chat page with session history.
+
+    Supports an optional ?mode=impact query that switches the page (and its
+    session) to the impact analysis agent. The mode is persisted in a cookie and
+    carried by the forms as a hidden field so POST keeps the same mode.
+    """
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    session_id, session_data = _get_or_create_session(request.cookies.get("assistant_session"))
+    mode = _resolve_mode(request)
+    cookie_name = _SESSION_COOKIES[mode]
+    session_id, session_data = _get_or_create_session(
+        request.cookies.get(cookie_name), mode=mode)
     messages = session_data["messages"]
+    is_impact = mode == "impact"
 
     response = HTMLResponse(content=render(
         "assistant.html",
         messages=messages,
         **ctx,
         assistant_model=ASSISTANT_MODEL,
+        mode=mode,
+        is_impact=is_impact,
     ))
-    response.set_cookie(key="assistant_session", value=session_id, max_age=3600, httponly=True)
+    response.set_cookie(key=cookie_name, value=session_id, max_age=3600, httponly=True)
+    response.set_cookie(key=_MODE_COOKIE, value=mode, max_age=3600, httponly=True)
     return response
 
 
@@ -188,16 +221,23 @@ async def assistant_send(
     request: Request,
     message: str = Form("", description="User's message"),
     files: list[UploadFile] = File(default=[], description="Optional file attachments"),
+    mode: str = Form("assistant", description="Agent mode: 'assistant' or 'impact'"),
     db: Session = Depends(get_db),
 ):
-    """Process a user message through the PLM Assistant agent.
+    """Process a user message through the assistant or impact agent.
 
-    Supports file attachments (images, PDFs, text). Images trigger the
-    vision-aware LLM path; text-only queries use the tool-calling ReAct loop.
+    The hidden 'mode' form field selects the agent: 'impact' runs the
+    read-only impact analysis agent (no mutating tools), anything else runs the
+    general assistant. Images trigger the vision path on the general assistant only;
+    impact mode is text-only.
     """
     user = require_user(request, db)
     tenant_key = get_tenant_key(request, db)
-    session_id, session_data = _get_or_create_session(request.cookies.get("assistant_session"))
+    if mode not in _MODES:
+        mode = _MODES[0]
+    cookie_name = _SESSION_COOKIES[mode]
+    session_id, session_data = _get_or_create_session(
+        request.cookies.get(cookie_name), mode=mode)
     msgs = session_data["messages"]
 
     # 1. Process uploaded files
@@ -207,7 +247,7 @@ async def assistant_send(
             meta = _process_uploaded_file(f, session_id)
             uploaded_file_metas.append(meta)
 
-    # 2. Build user message content (multimodal if images present)
+    # 2. Build user message content (multimodal where supported)
     user_content = prepare_assistant_messages(message, uploaded_file_metas)
     user_msg: dict = {"role": "user", "content": user_content}
     if uploaded_file_metas:
@@ -217,45 +257,49 @@ async def assistant_send(
         user_msg["display_text"] = display_text
     msgs.append(user_msg)
 
-    # 3. Build message list for the agent
+    # 3. Call the agent for the active mode
     agent_messages = list(msgs)
-
-    # 4. Call the agent
-    logger.info(f"[assistant] Processing: session={session_id[:8]} msg='{message[:80]}' files={len(uploaded_file_metas)}")
+    logger.info(f"[assistant] mode={mode} session={session_id[:8]} msg='{message[:80]}' files={len(uploaded_file_metas)}")
     try:
-        reply = assistant_chat(messages=agent_messages, tenant_key=tenant_key)
+        if mode == "impact":
+            reply = impact_chat(messages=agent_messages, tenant_key=tenant_key)
+        else:
+            reply = assistant_chat(messages=agent_messages, tenant_key=tenant_key)
     except Exception as e:
         logger.exception(f"[assistant] Agent call failed: {e}")
-        # Extract a user-friendly error message
         error_msg = str(e)
-        # Remove any "RuntimeError: " prefix for cleaner display
         if error_msg.startswith("RuntimeError: "):
             error_msg = error_msg[len("RuntimeError: "):]
         reply = f"I'm sorry, I couldn't process that request. Error: {error_msg}"
 
-    # 5. Store assistant reply
+    # 4. Store assistant reply
     assistant_msg: dict = {"role": "assistant", "content": reply}
     msgs.append(assistant_msg)
 
-    # 6. Trim and evict
+    # 5. Trim and evict
     _trim_history(session_data)
     _evict_if_needed()
 
-    # 7. Redirect to GET (POST-Redirect-GET pattern)
-    response = RedirectResponse(url="/assistant", status_code=303)
-    response.set_cookie(key="assistant_session", value=session_id, max_age=3600, httponly=True)
+    # 6. Redirect to GET (POST-Redirect-GET pattern), keeping the mode + session
+    response = RedirectResponse(url=f"/assistant?mode={mode}", status_code=303)
+    response.set_cookie(key=cookie_name, value=session_id, max_age=3600, httponly=True)
+    response.set_cookie(key=_MODE_COOKIE, value=mode, max_age=3600, httponly=True)
     return response
 
 
 @router.post("/new")
-def assistant_new(request: Request, db: Session = Depends(get_db)):
+def assistant_new(request: Request, mode: str = Form("assistant"), db: Session = Depends(get_db)):
     """Clear the current session's chat history and remove uploaded files."""
     user = require_user(request, db)
-    session_id = request.cookies.get("assistant_session")
-    if session_id and session_id in sessions:
-        sessions[session_id] = {"messages": [], "flags": {}}
+    if mode not in _MODES:
+        mode = (_resolve_mode(request) if mode not in _MODES else mode)
+    cookie_name = _SESSION_COOKIES[mode]
+    session_id = request.cookies.get(cookie_name)
+    if session_id and _session_key(mode, session_id) in sessions:
+        sessions[_session_key(mode, session_id)] = {"messages": [], "flags": {}}
         _cleanup_uploads(session_id)
 
-    response = RedirectResponse(url="/assistant", status_code=303)
-    response.set_cookie(key="assistant_session", value=session_id or str(uuid.uuid4()), max_age=3600, httponly=True)
+    response = RedirectResponse(url=f"/assistant?mode={mode}", status_code=303)
+    response.set_cookie(key=cookie_name, value=session_id or str(uuid.uuid4()), max_age=3600, httponly=True)
+    response.set_cookie(key=_MODE_COOKIE, value=mode, max_age=3600, httponly=True)
     return response

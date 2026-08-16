@@ -640,3 +640,118 @@ PHASE 5 — VERIFICATION, TESTS & DOC FINALIZATION
 - Performance review: indexes on the new tables; bound traversal depth/width.
 - Fold the completed phases back into this doc as the live implementation roadmap
   (mark each phase DONE / IN PROGRESS / PENDING).
+
+--------------------------------------------------------------------------------
+PHASE 4 — DONE · IMPACT ANALYSIS AGENT (implementation record)
+--------------------------------------------------------------------------------
+Approved 2026-08-15 with one change: the impact agent is READ-ONLY both by
+prompt AND structurally, via a restricted tool set (READ_ONLY_TOOLS), not the
+broad ALL_TOOLS option.
+
+FINAL DESIGN
+  Impact agent = system-prompt + tool-set specialization of the shared ReAct loop
+  in assistant_agent.py. No second engine, no new tool loop:
+    impact_chat(messages, tenant_key=None)
+      -> assistant_chat(messages, system_prompt=_IMPACT_SYSTEM_PROMPT,
+                       tools=READ_ONLY_TOOLS, tenant_key=tenant_key)
+
+STRUCTURAL READ-ONLY GUARANTEE (stronger than prompt-level)
+  plm_tools.py defines READ_ONLY_TOOLS = ALL_TOOLS minus the mutating tools
+  (MUTATING_TOOL_NAMES = {"create_part", "update_part_status"}). The impact agent
+  is exposed only to READ_ONLY_TOOLS, so it structurally cannot call a write tool;
+  the prompt-level read-only instruction is a second layer, not the only one.
+
+IMPLEMENTED DELIVERABLES
+1. app/plmassistant/impact_agent.py
+   - _IMPACT_SYSTEM_PROMPT: graph vocabulary (node, edge, edge type,
+     upstream/downstream, lineage, traceability, impact set) + evidence-backed
+     answering rules (answer from tool data only; distinguish structural edges from
+     AI inference; require evidence before asserting an impact classification
+     DIRECT/DOWNSTREAM/UPSTREAM/POTENTIAL/NO_IMPACT/UNKNOWN; NEVER claim to
+     modify data — GRAPH GOVERNANCE items 6-8).
+   - Leads the agent with the Phase 3 graph tools: get_neighborhood,
+     walk_upstream, walk_downstream, traverse_graph, find_path, get_impact_set,
+     plus the READ-ONLY PLM tools (get_part, get_bom, get_costing, get_eco,
+     search_ecos, get_aml, get_avl, get_cad, list_parts, search_parts) for
+     context. All deny-by-default on missing tenant_key via execute_tool.
+   - impact_chat() delegates to assistant_chat() with tools=READ_ONLY_TOOLS.
+
+2. app/plmassistant/assistant_agent.py — generic tool threading
+   - _run_tool_loop and assistant_chat now accept a tools parameter (default
+     ALL_TOOLS), so a mode can run the shared loop against a restricted set.
+     Existing assistant behaviour is unchanged.
+
+3. app/plmassistant/assistant_router.py — mode toggle
+   - GET /assistant?mode=impact | ?mode=assistant renders the same chat page in
+     the chosen mode; mode persists in an ai_mode cookie.
+   - Sessions namespaced by mode (assistant_session vs impact_session cookies;
+     'mode:' prefix in the session store) so the two conversations stay separate.
+   - POST /assistant reads field mode ('assistant' | 'impact'); impact -> impact_chat.
+   - POST /assistant/new clears only the active mode's session.
+
+4. app/plmassistant/templates/assistant.html
+   - Assistant <-> Impact switcher in the page header; impact title/badge
+     ("Impact (read-only)"), subtitle, empty-state prompts, and a "no write
+     tools" note; hidden mode inputs on the message and New-Conversation forms.
+
+5. No router persistence of impact assessments (read-only) — plmiq_edge_impact
+   rows are still deferred to a future phase.
+
+6. Tests (deferred to end-of-phases verification):
+   - impact questions resolve to correct edges/rows;
+   - an impact prompt does NOT trigger a mutating tool (guarded NOW structurally
+     by READ_ONLY_TOOLS — the regression test locks that in);
+   - cross-tenant impact questions are denied.
+
+================================================================================
+USING THE IMPACT ANALYSIS MODE (user guide)
+================================================================================
+The Impact Analysis mode is part of the same Assistant page. It answers
+questions about relationships and change impact by reasoning over the PLM-IQ graph,
+and is READ-ONLY (no data can be created or changed from this mode).
+
+WHERE IT LIVES
+  URL:       /assistant?mode=impact   (or click the "Impact" button on the
+             Assistant page header — the Assistant/Impact switcher)
+  Model:     same ASSISTANT_MODEL as the assistant.
+  Sessions:  Impact keeps its own conversation history, separate from the Assistant's.
+
+WHAT IT CAN DO (example prompts)
+  - Change impact:           "What is the impact of changing FRM-003?"
+  - Downstream / dependents:"What depends on BIKE-001?"
+  - Upstream / contributors:"What feeds into FRM-003?"
+  - BOM structure:          "Show the structure under FRM-001"
+  - Change propagation:    "Traverse ECO-001 downstream" / "Impact set for ECO-001"
+  - Connectivity / paths:  "Is there a path between FRM-003 and WHL-007?"
+
+HOW IT ANSWERS
+  - It leads with the graph tools (get_impact_set, walk_upstream/walk_downstream,
+    traverse_graph, get_neighborhood, find_path) and may read part/BOM/cost/ECO/
+    supplier/CAD context to explain WHY a node is affected.
+  - Answers classify impact as DIRECT, DOWNSTREAM, UPSTREAM, POTENTIAL,
+    NO_IMPACT, or UNKNOWN, and cite the edge path as evidence (e.g.
+    "ECO-001 --AFFECTS--> FRM-003 --HAS_COMPONENT--> ...").
+  - It does NOT invent relationships: it reports structural links as fact and is
+    explicit when evidence is incomplete.
+
+WHAT IT CANNOT DO
+  - No create / update / status changes (no write tools in this mode).
+  - Multimedia uploads are not used in impact mode (text questions only).
+
+REQUIRED PIPELINE BEFORE USE
+  The impact agent reads the graph layer, which must be populated first (Phase 2):
+    python -m db.indexing.build_graph --force
+  Without a populated graph, the mode still opens but traversal tools find no
+  nodes ("not found in the graph"). Re-run the backfill after data changes to keep
+  the graph current (it is incremental unless --force is passed).
+
+TENANT ISOLATION
+  Impact questions are answered with the same tenant key as the logged-in user, and
+  every tool denies by default without a tenant key (never queries unscoped). See
+  GRAPH GOVERNANCE item 10 and docs/multitenant-considerations.md.
+
+EXAMPLE
+  User:        "What is the impact of changing FRM-003?"
+  Agent tools: get_impact_set("FRM-003"), walk_downstream(...), get_eco(...)
+  Answer:      Affected objects with the edge path + impact classification for each,
+              or an explicit "UNKNOWN / insufficient evidence" when appropriate.

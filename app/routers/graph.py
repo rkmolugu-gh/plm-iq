@@ -1,7 +1,5 @@
 """Graph traversal router — render connectivity view for a business object."""
 
-import json
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
@@ -15,16 +13,22 @@ router = APIRouter(prefix="/graph")
 
 @router.get("/{object_id}", response_class=HTMLResponse)
 def graph_detail(object_id: str, request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
-    """Show a collapsible hierarchical traversal rooted at the business object."""
+    """Show the connectivity graph for a business object.
+
+    The page shell is lightweight: existence and the breadcrumb back-link are
+    derived from the domain object (resolve_root). All traversal data is fetched
+    client-side from the /graph-api endpoints (app.routers.graph_api), so the
+    page exercises neighborhood, upstream, downstream, structure, propagation,
+    path and subgraph through the new plmiq layer.
+    """
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    root = build_tree(db, object_id)
-    if root is None:
-        return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
     # Find the object's canonical page for the breadcrumb back-link.
     info = resolve_root(db, object_id)
-    object_type = info[0] if info else "PART"
+    if info is None:
+        return HTMLResponse(content=render("404.html", **ctx), status_code=404)
+    object_type = info[0]
     back_url = {
         "PART": f"/parts/{object_id}",
         "ECO": f"/eco/{object_id}",
@@ -36,10 +40,8 @@ def graph_detail(object_id: str, request: Request, db: TenantScopedSession = Dep
     return HTMLResponse(content=render(
         "graph/detail.html",
         **ctx,
-        root=root,
         object_id=object_id,
         object_type=object_type,
-        tree_json=json.dumps(root),
         back_url=back_url,
     ))
 

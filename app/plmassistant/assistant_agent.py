@@ -82,7 +82,8 @@ User: "list the latest 3 parts"
 → Answer (too many calls!)"""
 
 
-def _run_tool_loop(messages: list[dict], tenant_key: str | None = None) -> str:
+def _run_tool_loop(messages: list[dict], tenant_key: str | None = None,
+                   tools: list | None = None) -> str:
     """Run the ReAct tool-calling loop.
 
     Sends messages to the LLM, executes any tool calls, feeds results back,
@@ -91,15 +92,17 @@ def _run_tool_loop(messages: list[dict], tenant_key: str | None = None) -> str:
     Args:
         messages: The conversation messages to process.
         tenant_key: Optional tenant key for multi-tenant data isolation.
+        tools: The tool set exposed to the LLM (defaults to ALL_TOOLS).
 
     Returns:
         The final assistant reply text.
     """
+    tools = tools or ALL_TOOLS
     tool_messages = list(messages)
     llm_response_text = ""
 
     for _round in range(MAX_TOOL_ROUNDS):
-        response = chat_with_tools(tool_messages, tools=ALL_TOOLS, model=ASSISTANT_MODEL)
+        response = chat_with_tools(tool_messages, tools=tools, model=ASSISTANT_MODEL)
         llm_response_text = response.get("content") or ""
         tool_calls = response.get("tool_calls")
 
@@ -136,6 +139,7 @@ def assistant_chat(
     system_prompt: str | None = None,
     model: str | None = None,
     tenant_key: str | None = None,
+    tools: list | None = None,
 ) -> str:
     """Process a conversation through the PLM Assistant agent.
 
@@ -148,11 +152,13 @@ def assistant_chat(
         system_prompt: Optional system prompt override (defaults to the PLM assistant prompt).
         model: Optional model override (defaults to ASSISTANT_MODEL).
         tenant_key: Optional tenant key for multi-tenant data isolation.
+        tools: The tool set exposed to the LLM (defaults to ALL_TOOLS).
 
     Returns:
         The assistant's text response.
     """
     model = model or ASSISTANT_MODEL
+    tools = tools or ALL_TOOLS
     vision_model = VISION_MODEL or model
     system = system_prompt or _SYSTEM_PROMPT
 
@@ -239,7 +245,7 @@ def assistant_chat(
             c = " ".join(texts)
         llm_messages.append({"role": "user", "content": c})
 
-    return _run_tool_loop(llm_messages, tenant_key=tenant_key)
+    return _run_tool_loop(llm_messages, tenant_key=tenant_key, tools=tools)
 
 
 def prepare_assistant_messages(
