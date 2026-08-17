@@ -909,3 +909,29 @@ async def admin_settings_save(
     # Invalidate any cached settings for this tenant so the next request re-reads.
     invalidate_tenant_settings(tkey)
     return RedirectResponse(url="/admin/settings", status_code=303)
+
+
+@router.post("/settings/delete/{key}", response_class=HTMLResponse)
+def admin_settings_delete(
+    request: Request,
+    key: str,
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_role(["tenantadmin"])),
+):
+    """Delete a tenant override for a single setting, reverting to global."""
+    from app.settings import GLOBAL_TENANT_KEY as _GTK
+
+    tkey = _current_tenant_key(request, db)
+    if tkey == _GTK:
+        return RedirectResponse(url="/admin/settings?error=Globals+cannot+be+deleted+here", status_code=303)
+
+    raw = db._db if isinstance(db, TenantScopedSession) else db
+    row = raw.query(AppSetting).filter(
+        AppSetting.tenant_key == tkey,
+        AppSetting.key == key,
+    ).first()
+    if row:
+        raw.delete(row)
+        db.commit()
+        invalidate_tenant_settings(tkey)
+    return RedirectResponse(url="/admin/settings", status_code=303)

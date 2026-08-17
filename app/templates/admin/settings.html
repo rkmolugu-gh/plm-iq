@@ -51,6 +51,7 @@
                             {% else %}
                             <th>Global value</th>
                             <th>Tenant</th>
+                            <th style="width: 80px;">Delete</th>
                             {% endif %}
                             <th style="width: 120px;">Source</th>
                         </tr>
@@ -91,6 +92,17 @@
                                 {% endif %}
                             </td>
                             {% endif %}
+                            {% if not is_global_editor %}
+                            <td>
+                                <form method="POST" action="/admin/settings/delete/{{ s.key }}" class="d-inline"
+                                      onsubmit="return confirm('Delete override for {{ s.key }}? This reverts to the global default.');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            title="Delete override" aria-label="Delete override">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            {% endif %}
                             <td>
                                 {% if s.source == "tenant" %}
                                 <span class="badge bg-success">Tenant</span>
@@ -101,7 +113,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="text-center text-muted py-3">
+                            <td colspan="{% if is_global_editor %}3{% else %}5{% endif %}" class="text-center text-muted py-3">
                                 No settings yet. Add one below.
                             </td>
                         </tr>
