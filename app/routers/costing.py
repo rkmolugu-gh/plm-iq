@@ -11,6 +11,7 @@ from app.database import TenantScopedSession
 from app.models import CostingBomItem, User
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/costing")
@@ -143,6 +144,7 @@ def costing_new_submit(
     user = require_user(request, db)
     item = CostingBomItem(
         part_number=part_number,
+        number=next_object_id(db, "costing", user.tenant_key if user else None),
         part_name=part_name or None,
         level=level,
         qty=qty,

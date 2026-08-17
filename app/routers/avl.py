@@ -10,6 +10,7 @@ from app.database import TenantScopedSession
 from app.models import ApprovedVendor, User
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/avl")
@@ -138,6 +139,7 @@ def avl_new_submit(
     user = require_user(request, db)
     item = ApprovedVendor(
         part_number=part_number,
+        number=next_object_id(db, "avl", user.tenant_key if user else None),
         vendor_name=vendor_name,
         vendor_part_number=vendor_part_number or None,
         preferred_flag=preferred_flag or "No",

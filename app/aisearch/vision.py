@@ -212,6 +212,7 @@ def vision_chat(
     max_tokens: int = VISION_MAX_TOKENS,
     timeout: float = VISION_TIMEOUT_SECONDS,
     temperature: float = 0.7,
+    tenant_key: Optional[str] = None,
 ) -> str:
     """Send a text + optional images to a vision-capable LLM.
 
@@ -236,11 +237,13 @@ def vision_chat(
     Raises:
         VisionAPIError if all retries are exhausted or the API rejects the request.
     """
-    model = model or VISION_MODEL or CHAT_MODEL
+    from .llm_client import _resolve as _resolve_cfg
+    cfg = _resolve_cfg(tenant_key)
+    model = model or cfg["vision_model"] or cfg["chat_model"] or (VISION_MODEL or CHAT_MODEL)
     if not model:
-        raise VisionAPIError("CHAT_MODEL is not configured. Set it in plm-iq/.env.")
+        raise VisionAPIError("CHAT_MODEL is not configured. Set it in the global settings (.env fallback).")
 
-    client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY, timeout=timeout, max_retries=0)
+    client = OpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"], timeout=timeout, max_retries=0)
 
     # Build content array
     content: list[dict] = []

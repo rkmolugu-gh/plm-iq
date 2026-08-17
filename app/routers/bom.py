@@ -10,6 +10,7 @@ from app.database import TenantScopedSession
 from app.models import BomItem, User, Part
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/bom")
@@ -232,8 +233,10 @@ def bom_hierarchy_submit(
 
     # Single transaction: assembly root + components
     root = nodes[0]
+    tkey = getattr(db, "tenant_key", None) or (_role and getattr(_role, "tenant_key", None))
     items = [BomItem(
         part_number=root["part_number"],
+        number=next_object_id(db, "bom", tkey),
         level=0,
         parent_assembly=None,
         qty=1,
@@ -244,6 +247,7 @@ def bom_hierarchy_submit(
     for n in nodes[1:]:
         items.append(BomItem(
             part_number=n["part_number"],
+            number=next_object_id(db, "bom", tkey),
             level=n["level"],
             parent_assembly=n["parent"],
             qty=n["qty"],

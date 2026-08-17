@@ -67,7 +67,7 @@ def rag_answer(query: str, entity_type: Optional[str] = None, tenant_key: Option
     context_text = "\n".join(context_parts)
 
     # Step 3: Build messages and call LLM
-    answer, t_llm_elapsed = _call_llm(context_text, query, t_start)
+    answer, t_llm_elapsed = _call_llm(context_text, query, t_start, tenant_key=tenant_key)
 
     t_elapsed = time.time() - t_start
     return {
@@ -153,6 +153,7 @@ def rag_answer_multimodal(
             images=images,
             model=vision_model,
             max_tokens=4096,
+            tenant_key=tenant_key,
         )
     except Exception as e:
         logger.error(f"RAG multimodal LLM call failed: {e}")
@@ -261,7 +262,8 @@ def _check_early_return(search_result: dict, t_start: float) -> dict | None:
     return None
 
 
-def _call_llm(context_text: str, query: str, t_start: float) -> tuple[str, float]:
+def _call_llm(context_text: str, query: str, t_start: float,
+              tenant_key: Optional[str] = None) -> tuple[str, float]:
     """Build messages and call text LLM. Returns (answer_text, llm_elapsed)."""
     t_llm_start = time.time()
     messages = [
@@ -271,7 +273,7 @@ def _call_llm(context_text: str, query: str, t_start: float) -> tuple[str, float
 
     logger.debug(f"RAG LLM prompt: {len(context_text)} chars context, {len(query)} chars query")
     try:
-        answer = chat(messages, model=CHAT_MODEL)
+        answer = chat(messages, model=CHAT_MODEL, tenant_key=tenant_key)
     except Exception as e:
         logger.error(f"RAG LLM call failed: {e}")
         answer = f"Error generating answer: {e}"

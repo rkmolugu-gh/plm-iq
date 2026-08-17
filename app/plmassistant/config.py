@@ -10,12 +10,14 @@ if _DOTENV_PATH.exists():
     load_dotenv(_DOTENV_PATH)
 
 # ── LLM API ──────────────────────────────────────────────────────
-LLM_API_KEY = os.environ["LLM_API_KEY"]
-LLM_BASE_URL = os.environ["LLM_BASE_URL"]
-ASSISTANT_MODEL = os.environ["ASSISTANT_MODEL"]
+# Prefer per-tenant DB settings at call time; these env constants are a bootstrap
+# fallback (see app.aisearch.llm_client._resolve).
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")
+ASSISTANT_MODEL = os.environ.get("ASSISTANT_MODEL", "deepseek-v4-flash")
 
 # ── Vision Model Config ──────────────────────────────────────────
-VISION_MODEL = os.environ["VISION_MODEL"]
+VISION_MODEL = os.environ.get("VISION_MODEL", "")
 VISION_MAX_IMAGE_DIMENSION = int(os.environ["VISION_MAX_IMAGE_DIMENSION"])
 VISION_MAX_TOKENS = int(os.environ["VISION_MAX_TOKENS"])
 VISION_TIMEOUT_SECONDS = int(os.environ["VISION_TIMEOUT_SECONDS"])

@@ -173,7 +173,7 @@ def hybrid_search(
     query_vector = None
     t_embed_start = time.time()
     try:
-        query_vector = _embed_query(query)
+        query_vector = _embed_query(query, tenant_key=tenant_key)
     except Exception as e:
         t_embed_elapsed = time.time() - t_embed_start
         logger.warning(f"Query embedding failed: {e}")
@@ -308,11 +308,11 @@ def _resolve_indices(entity_type: Optional[str]) -> list[str]:
     return ALL_INDICES
 
 
-def _embed_query(query: str) -> list[float]:
+def _embed_query(query: str, tenant_key: Optional[str] = None) -> list[float]:
     """Generate query embedding using Python (llm_client).
 
     Calls the LLM API directly via llm_client.embed() instead of using
     an ES inference pipeline (which requires a Platinum ES license).
     """
     from .llm_client import embed as api_embed
-    return api_embed(query)
+    return api_embed(query, tenant_key=tenant_key)

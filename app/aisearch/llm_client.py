@@ -20,20 +20,53 @@ import time
 import requests
 from typing import Optional
 
-from .config import LLM_BASE_URL, LLM_API_KEY, EMBEDDING_MODEL, CHAT_MODEL
+from . import config as _cfg
 
 logger = logging.getLogger(__name__)
 
 
-def _headers() -> dict:
+def _resolve(tenant_key: Optional[str] = None) -> dict:
+    """Return effective LLM config dict, resolving tenant settings when present.
+
+    Loads the tenant's resolved settings (global defaults, per-tenant overrides)
+    from the DB and, for each field, uses the DB value if non-empty, otherwise
+    falls back to the legacy env constants for that field. This lets tenants
+    override any LLM parameter while keeping an env bootstrap fallback.
+    """
+    s = None
+    try:
+        from app.settings import load_tenant_settings
+        from app.database import SessionLocal
+        with SessionLocal() as db:
+            s = load_tenant_settings(db, tenant_key)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("LLM settings resolution failed (%s); using env", e)
+
+    def _pick(db_val: str, env_val: str) -> str:
+        return db_val if db_val else env_val
+
+    return {
+        "api_key": _pick(s.LLM_API_KEY if s else "", _cfg.LLM_API_KEY),
+        "base_url": _pick(s.LLM_BASE_URL if s else "", _cfg.LLM_BASE_URL),
+        "embedding_model": _pick(s.EMBEDDING_MODEL if s else "", _cfg.EMBEDDING_MODEL),
+        "chat_model": _pick(s.CHAT_MODEL if s else "", _cfg.CHAT_MODEL),
+        "reranker_model": _pick(s.RERANKER_MODEL if s else "", _cfg.RERANKER_MODEL),
+        "embedding_dimensions": _pick(str(s.EMBEDDING_DIMENSIONS if s else ""), str(_cfg.EMBEDDING_DIMENSIONS)),
+        "vision_model": _pick(s.VISION_MODEL if s else "", _cfg.VISION_MODEL),
+        "assistant_model": _pick(s.ASSISTANT_MODEL if s else "", ""),
+    }
+
+
+def _headers(api_key: str) -> dict:
     """Build standard headers with API key."""
     return {
-        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
 
-def embed(text: str, model: Optional[str] = None, max_retries: int = 5) -> list[float]:
+def embed(text: str, model: Optional[str] = None, max_retries: int = 5,
+          tenant_key: Optional[str] = None) -> list[float]:
     """Generate embedding vector for the given text.
 
     Retries with exponential backoff on 429 (rate limit) errors.
@@ -42,6 +75,7 @@ def embed(text: str, model: Optional[str] = None, max_retries: int = 5) -> list[
         text: Input text to embed.
         model: Model name (defaults to bge-m3).
         max_retries: Max retries on 429 rate limit errors (default 5).
+        tenant_key: Optional tenant key for per-tenant LLM settings.
 
     Returns:
         List of floats representing the embedding vector (1024-dim).
@@ -50,13 +84,15 @@ def embed(text: str, model: Optional[str] = None, max_retries: int = 5) -> list[
         RuntimeError: If the API call fails after all retries.
     """
     t0 = time.time()
-    model = model or EMBEDDING_MODEL
-    url = f"{LLM_BASE_URL}/embeddings"
+    cfg = _resolve(tenant_key)
+    model = model or cfg["embedding_model"]
+    url = f"{cfg['base_url']}/embeddings"
     payload = {"input": text, "model": model}
+    headers = _headers(cfg["api_key"])
 
     for attempt in range(1, max_retries + 1):
         logger.debug(f"Embedding {len(text)} chars with {model} (attempt {attempt})")
-        resp = requests.post(url, headers=_headers(), json=payload, timeout=30)
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
 
         if resp.status_code == 200:
             data = resp.json()
@@ -112,7 +148,8 @@ def _parse_error_message(resp: requests.Response) -> str:
     return resp.text[:200]
 
 
-def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5) -> str:
+def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5,
+         tenant_key: Optional[str] = None) -> str:
     """Send a chat completion request and return the assistant's reply.
 
     Retries with exponential backoff on 429 (rate limit) errors and on 502/503
@@ -122,6 +159,7 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
         messages: List of dicts with 'role' and 'content' keys.
         model: Model name
         max_retries: Max retries on 429 rate limit errors (default 5).
+        tenant_key: Optional tenant key for per-tenant LLM settings.
 
     Returns:
         The assistant's text response.
@@ -131,9 +169,11 @@ def chat(messages: list[dict], model: Optional[str] = None, max_retries: int = 5
             The error message will contain a user-friendly description.
     """
     t0 = time.time()
-    model = model or CHAT_MODEL
-    url = f"{LLM_BASE_URL}/chat/completions"
+    cfg = _resolve(tenant_key)
+    model = model or cfg["chat_model"]
+    url = f"{cfg['base_url']}/chat/completions"
     payload = {"model": model, "messages": messages}
+    headers = _headers(cfg["api_key"])
 
     for attempt in range(1, max_retries + 1):
         logger.debug(f"Chat: {len(messages)} messages with {model} (attempt {attempt})")
@@ -191,6 +231,7 @@ def chat_with_tools(
     tools: list[dict],
     model: Optional[str] = None,
     max_retries: int = 5,
+    tenant_key: Optional[str] = None,
 ) -> dict:
     """Send a chat completion with tool definitions and return the full response.
 
@@ -206,6 +247,7 @@ def chat_with_tools(
         tools: List of tool definition dicts (OpenAI function-calling format).
         model: Model name.
         max_retries: Max retries on 429 rate limit errors (default 5).
+        tenant_key: Optional tenant key for per-tenant LLM settings.
 
     Returns:
         The full response dict from the API, containing either 'content' or 'tool_calls'.
@@ -215,9 +257,11 @@ def chat_with_tools(
             The error message will contain a user-friendly description.
     """
     t0 = time.time()
-    model = model or CHAT_MODEL
-    url = f"{LLM_BASE_URL}/chat/completions"
+    cfg = _resolve(tenant_key)
+    model = model or cfg["chat_model"]
+    url = f"{cfg['base_url']}/chat/completions"
     payload = {"model": model, "messages": messages, "tools": tools}
+    headers = _headers(cfg["api_key"])
 
     for attempt in range(1, max_retries + 1):
         logger.debug(f"Chat with tools: {len(messages)} messages, {len(tools)} tools (attempt {attempt})")

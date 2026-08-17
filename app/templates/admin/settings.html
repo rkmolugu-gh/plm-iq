@@ -53,6 +53,8 @@
                     </thead>
                     <tbody>
                         {% for s in setting_rows %}
+                        {% if s.key == "LLM_API_KEY" %}<tr><td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="bg-light"><strong><i class="bi bi-cpu"></i> LLM Parameters</strong><br><span class="text-muted small">Configured globally, overridable per tenant. Applied at call time.</span></td></tr>{% endif %}
+                        {% if s.key == "PART_PREFIX" %}<tr><td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="bg-light"><strong><i class="bi bi-hash"></i> Object ID Numbering</strong><br><span class="text-muted small">Prefix + counter start. Auto-generated ids look like <code>PART-1000</code>.</span></td></tr>{% endif %}
                         <tr>
                             <td><code>{{ s.key }}</code></td>
                             <td>
@@ -61,6 +63,10 @@
                                     <option value="true" {% if s.value == "true" %}selected{% endif %}>True (show inactive users)</option>
                                     <option value="false" {% if s.value == "false" %}selected{% endif %}>False (hide inactive users)</option>
                                 </select>
+                                {% elif s.key == "LLM_API_KEY" %}
+                                <input type="password" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target" autocomplete="off">
+                                {% elif "COUNTER_START" in s.key %}
+                                <input type="number" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target" style="width: 140px;">
                                 {% else %}
                                 <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target">
                                 {% endif %}

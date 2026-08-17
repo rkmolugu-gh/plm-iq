@@ -102,7 +102,7 @@ def _run_tool_loop(messages: list[dict], tenant_key: str | None = None,
     llm_response_text = ""
 
     for _round in range(MAX_TOOL_ROUNDS):
-        response = chat_with_tools(tool_messages, tools=tools, model=ASSISTANT_MODEL)
+        response = chat_with_tools(tool_messages, tools=tools, model=ASSISTANT_MODEL, tenant_key=tenant_key)
         llm_response_text = response.get("content") or ""
         tool_calls = response.get("tool_calls")
 
@@ -219,6 +219,7 @@ def assistant_chat(
             images=images,
             model=vision_model,
             max_tokens=4096,
+            tenant_key=tenant_key,
         )
         return reply
 

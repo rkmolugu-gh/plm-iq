@@ -21,6 +21,8 @@ global ``plm-iq`` values via ``WORKFLOW_STATUSES``.
 
 import json
 import logging
+import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from app.database import TenantScopedSession
@@ -28,6 +30,31 @@ from app.database import TenantScopedSession
 logger = logging.getLogger(__name__)
 
 GLOBAL_TENANT_KEY = "plm-iq"
+
+# Load the project-root .env so these in-code defaults can seed the global rows
+# (the LLM params moved here from .env). Mirror of app.config's loader.
+_SETTINGS_DOTENV = Path(__file__).resolve().parent.parent / ".env"
+if _SETTINGS_DOTENV.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_SETTINGS_DOTENV)
+
+# Keys whose values are stored as plain strings (not JSON), even though they
+# appear in DEFAULT_SETTINGS. These are the LLM params and the object prefix /
+# counter-start settings, which the UI edits as plain text. Everything NOT in this
+# set and present in DEFAULT_SETTINGS is a JSON-encoded option list (arrays).
+SCALAR_SETTINGS = frozenset({
+    "LLM_API_KEY", "LLM_BASE_URL", "CHAT_MODEL", "EMBEDDING_MODEL",
+    "EMBEDDING_DIMENSIONS", "RERANKER_MODEL", "VISION_MODEL",
+    "ASSISTANT_MODEL",
+    "PART_PREFIX", "PART_COUNTER_START",
+    "BOM_PREFIX", "BOM_COUNTER_START",
+    "COSTING_PREFIX", "COSTING_COUNTER_START",
+    "ECO_PREFIX", "ECO_COUNTER_START",
+    "AML_PREFIX", "AML_COUNTER_START",
+    "AVL_PREFIX", "AVL_COUNTER_START",
+    "CAD_PREFIX", "CAD_COUNTER_START",
+    "DOC_PREFIX", "DOC_COUNTER_START",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -80,11 +107,51 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Workflow engine statuses (global only — not per-tenant overridable)
     "WORKFLOW_INSTANCE_STATUSES": ["DRAFT", "IN_PROGRESS", "APPROVED", "REJECTED", "COMPLETED"],
     "WORKFLOW_TASK_STATUSES": ["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"],
+
+    # ── LLM parameters (moved from .env so tenants can override) ──
+    # In-code defaults seed the global (plm-iq) rows once; individual model
+    # names default to the current env bootstrap values for continuity.
+    "LLM_API_KEY": os.environ.get("LLM_API_KEY", ""),
+    "LLM_BASE_URL": os.environ.get("LLM_BASE_URL", ""),
+    "CHAT_MODEL": os.environ.get("CHAT_MODEL", "deepseek-v4-flash"),
+    "EMBEDDING_MODEL": os.environ.get("EMBEDDING_MODEL", "bge-m3"),
+    "EMBEDDING_DIMENSIONS": int(os.environ.get("EMBEDDING_DIMENSIONS", "1024") or 1024),
+    "RERANKER_MODEL": os.environ.get("RERANKER_MODEL", "qwen3-reranker-0.6b"),
+    "VISION_MODEL": os.environ.get("VISION_MODEL", "deepseek-v4-flash"),
+    "ASSISTANT_MODEL": os.environ.get("ASSISTANT_MODEL", "deepseek-v4-flash"),
+
+    # ── Object id numbering: prefix + first counter value ──
+    # The auto-generated object id is `<prefix><counter>` (e.g. PLM-0001).
+    # Tenants override these globally-configured prefix/start per object type.
+    # Prefixes are strings; start values are ints.
+    "PART_PREFIX": "PART-",
+    "PART_COUNTER_START": 1000,
+    "BOM_PREFIX": "BOM-",
+    "BOM_COUNTER_START": 1000,
+    "COSTING_PREFIX": "COST-",
+    "COSTING_COUNTER_START": 1000,
+    "ECO_PREFIX": "ECO-",
+    "ECO_COUNTER_START": 1000,
+    "AML_PREFIX": "AML-",
+    "AML_COUNTER_START": 1000,
+    "AVL_PREFIX": "AVL-",
+    "AVL_COUNTER_START": 1000,
+    "CAD_PREFIX": "CAD-",
+    "CAD_COUNTER_START": 1000,
+    "DOC_PREFIX": "DOC-",
+    "DOC_COUNTER_START": 1000,
 }
 
 
 def _encode(value: Any) -> str:
     return json.dumps(value)
+
+
+def encode_setting_value(key: str, value: Any) -> str:
+    """Return the storage string for a setting: JSON for lists, plain for scalars."""
+    if key in SCALAR_SETTINGS:
+        return str(value)
+    return _encode(value)
 
 
 def _decode(raw: str, default: Any):
@@ -182,6 +249,54 @@ class TenantSettings:
     def WORKFLOW_TASK_STATUSES(self) -> list:
         return self.get("WORKFLOW_TASK_STATUSES", [])
 
+    # ── LLM parameters ─────────────────────────────────────────
+    @property
+    def LLM_API_KEY(self) -> str:
+        return str(self.get("LLM_API_KEY", "") or "")
+
+    @property
+    def LLM_BASE_URL(self) -> str:
+        return str(self.get("LLM_BASE_URL", "") or "")
+
+    @property
+    def CHAT_MODEL(self) -> str:
+        return str(self.get("CHAT_MODEL", "") or "")
+
+    @property
+    def EMBEDDING_MODEL(self) -> str:
+        return str(self.get("EMBEDDING_MODEL", "") or "")
+
+    @property
+    def EMBEDDING_DIMENSIONS(self) -> int:
+        try:
+            return int(self.get("EMBEDDING_DIMENSIONS", 1024) or 1024)
+        except (TypeError, ValueError):
+            return 1024
+
+    @property
+    def RERANKER_MODEL(self) -> str:
+        return str(self.get("RERANKER_MODEL", "") or "")
+
+    @property
+    def VISION_MODEL(self) -> str:
+        return str(self.get("VISION_MODEL", "") or "")
+
+    @property
+    def ASSISTANT_MODEL(self) -> str:
+        return str(self.get("ASSISTANT_MODEL", "") or "")
+
+    # ── Object prefixes ────────────────────────────────────────
+    def OBJ_PREFIX(self, obj_type: str) -> str:
+        key = f"{obj_type.upper()}_PREFIX"
+        return str(self.get(key, "")) or ""
+
+    def OBJ_COUNTER_START(self, obj_type: str) -> int:
+        key = f"{obj_type.upper()}_COUNTER_START"
+        try:
+            return int(self.get(key, 1000) or 1000)
+        except (TypeError, ValueError):
+            return 1000
+
 
 def _rows_to_map(rows) -> Dict[str, Any]:
     """Turn AppSetting rows for one tenant into a {key: decoded value} map.
@@ -192,7 +307,7 @@ def _rows_to_map(rows) -> Dict[str, Any]:
     """
     out = {}
     for r in rows:
-        if r.key in DEFAULT_SETTINGS:
+        if r.key in DEFAULT_SETTINGS and r.key not in SCALAR_SETTINGS:
             out[r.key] = _decode(r.value, DEFAULT_SETTINGS.get(r.key))
         else:
             out[r.key] = r.value
@@ -333,5 +448,9 @@ def ensure_global_settings(db) -> None:
             .first()
         )
         if existing is None:
-            db.add(AppSetting(tenant_key=GLOBAL_TENANT_KEY, key=key, value=_encode(value)))
+            db.add(AppSetting(tenant_key=GLOBAL_TENANT_KEY, key=key, value=encode_setting_value(key, value)))
+        elif key in SCALAR_SETTINGS and not (existing.value or "").strip():
+            # Backfill empty scalar globals from the in-code default without
+            # overwriting operator-set non-empty values.
+            existing.value = encode_setting_value(key, value)
     db.commit()

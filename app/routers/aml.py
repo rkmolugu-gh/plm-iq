@@ -10,6 +10,7 @@ from app.database import TenantScopedSession
 from app.models import ApprovedManufacturer, User
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/aml")
@@ -141,6 +142,7 @@ def aml_new_submit(
     user = require_user(request, db)
     item = ApprovedManufacturer(
         part_number=part_number,
+        number=next_object_id(db, "aml", user.tenant_key if user else None),
         manufacturer_name=manufacturer_name,
         manufacturer_part_number=manufacturer_part_number or None,
         source_type=source_type,

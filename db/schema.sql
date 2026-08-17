@@ -102,6 +102,7 @@ CREATE INDEX idx_parts_owner       ON parts(modified_owner);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS bom (
     id              INTEGER PRIMARY KEY,
+    number          TEXT,
     level           INTEGER NOT NULL CHECK (level >= 0),
     part_number     TEXT    NOT NULL,
     part_revision   TEXT,
@@ -135,6 +136,7 @@ CREATE INDEX idx_bom_tenant_key     ON bom(tenant_key);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS costing_bom (
     id              INTEGER PRIMARY KEY,
+    number          TEXT,
     level           INTEGER NOT NULL CHECK (level >= 0),
     part_number     TEXT    NOT NULL,
     part_name       TEXT,
@@ -219,6 +221,7 @@ CREATE INDEX idx_eco_tenant_key   ON engineering_change_orders(tenant_key);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     id                      INTEGER PRIMARY KEY,
+    number                  TEXT,
     part_number             TEXT    NOT NULL,
     part_revision           TEXT,
     part_name               TEXT,
@@ -263,6 +266,7 @@ CREATE INDEX idx_aml_tenant_key       ON approved_manufacturer_list(tenant_key);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS approved_vendor_list (
     id                  INTEGER PRIMARY KEY,
+    number              TEXT,
     part_number         TEXT    NOT NULL,
     part_revision       TEXT,
     part_name           TEXT,
@@ -313,6 +317,7 @@ CREATE INDEX idx_avl_tenant_key    ON approved_vendor_list(tenant_key);
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS cad_metadata (
     id                  INTEGER PRIMARY KEY,
+    number              TEXT,
     part_number         TEXT    NOT NULL,
     part_revision       TEXT,
     part_name           TEXT,
@@ -363,6 +368,7 @@ CREATE INDEX idx_cad_tenant_key  ON cad_metadata(tenant_key);
 CREATE TABLE IF NOT EXISTS documents (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     parent_id       INTEGER REFERENCES documents(id),
+    document_number TEXT,
     kind            TEXT    NOT NULL DEFAULT 'file',
     name            TEXT    NOT NULL,
     title           TEXT,
@@ -535,6 +541,15 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key        TEXT    NOT NULL,
     value      TEXT    NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_key, key)
+);
+
+-- Per-tenant object-id sequences (auto-generated part/bom/... numbers).
+CREATE TABLE IF NOT EXISTS id_sequences (
+    tenant_key TEXT    NOT NULL,
+    obj_type   TEXT    NOT NULL,
+    prefix     TEXT    NOT NULL DEFAULT '',
+    value      INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (tenant_key, obj_type)
 );
 
 -- ----------------------------------------------------------------------------

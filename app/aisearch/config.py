@@ -20,12 +20,18 @@ ES_USER = os.environ["ES_USER"]
 ES_PASSWORD = os.environ["ES_PASSWORD"]
 
 # ── LLM API (OpenAI-compatible) ───────────────────────────────
-LLM_API_KEY = os.environ["LLM_API_KEY"]
-LLM_BASE_URL = os.environ["LLM_BASE_URL"]
-EMBEDDING_MODEL = os.environ["EMBEDDING_MODEL"]
-CHAT_MODEL = os.environ["CHAT_MODEL"]
-RERANKER_MODEL = os.environ["RERANKER_MODEL"]
-EMBEDDING_DIMENSIONS = int(os.environ["EMBEDDING_DIMENSIONS"])
+# Prefer values resolved from the DB (app_settings) at call time — see
+# llm_client._resolve(). These env constants remain as a decoupled bootstrap
+# fallback so the process can boot without a DB row.
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "")
+RERANKER_MODEL = os.environ.get("RERANKER_MODEL", "")
+try:
+    EMBEDDING_DIMENSIONS = int(os.environ.get("EMBEDDING_DIMENSIONS", "1024") or 1024)
+except ValueError:
+    EMBEDDING_DIMENSIONS = 1024
 
 # ── Index Names ────────────────────────────────────────────────
 INDEX_PARTS = os.environ["INDEX_PARTS"]
@@ -47,7 +53,7 @@ BULK_BATCH_SIZE = int(os.environ["BULK_BATCH_SIZE"])
 SEARCH_BACKEND = os.environ["SEARCH_BACKEND"]
 
 # ── Vision Model Config ─────────────────────────────────────────
-VISION_MODEL = os.environ["VISION_MODEL"]
+VISION_MODEL = os.environ.get("VISION_MODEL", "")
 VISION_MAX_IMAGE_DIMENSION = int(os.environ["VISION_MAX_IMAGE_DIMENSION"])
 VISION_MAX_TOKENS = int(os.environ["VISION_MAX_TOKENS"])
 VISION_TIMEOUT_SECONDS = int(os.environ["VISION_TIMEOUT_SECONDS"])

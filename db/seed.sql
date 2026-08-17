@@ -404,7 +404,33 @@ INSERT OR IGNORE INTO app_settings (tenant_key, key, value) VALUES
     ('plm-iq', 'OBJECT_TYPES', '["part", "eco", "document"]'),
     ('plm-iq', 'DEFAULT_ROLES', '["reader", "author", "tenantadmin", "quality", "manufacturing", "reviewer", "approver", "superadmin"]'),
     ('plm-iq', 'WORKFLOW_INSTANCE_STATUSES', '["DRAFT", "IN_PROGRESS", "APPROVED", "REJECTED", "COMPLETED"]'),
-    ('plm-iq', 'WORKFLOW_TASK_STATUSES', '["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]');
+    ('plm-iq', 'WORKFLOW_TASK_STATUSES', '["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]'),
+    -- LLM parameters (plain scalar values, overridable per tenant)
+    ('plm-iq', 'LLM_BASE_URL', ''),
+    ('plm-iq', 'LLM_API_KEY', ''),
+    ('plm-iq', 'CHAT_MODEL', 'deepseek-v4-flash'),
+    ('plm-iq', 'EMBEDDING_MODEL', 'bge-m3'),
+    ('plm-iq', 'EMBEDDING_DIMENSIONS', '1024'),
+    ('plm-iq', 'RERANKER_MODEL', 'qwen3-reranker-0.6b'),
+    ('plm-iq', 'VISION_MODEL', 'deepseek-v4-flash'),
+    ('plm-iq', 'ASSISTANT_MODEL', 'deepseek-v4-flash'),
+    -- Object id prefix / counter start (plain scalar values)
+    ('plm-iq', 'PART_PREFIX', 'PART-'),
+    ('plm-iq', 'PART_COUNTER_START', '1000'),
+    ('plm-iq', 'BOM_PREFIX', 'BOM-'),
+    ('plm-iq', 'BOM_COUNTER_START', '1000'),
+    ('plm-iq', 'COSTING_PREFIX', 'COST-'),
+    ('plm-iq', 'COSTING_COUNTER_START', '1000'),
+    ('plm-iq', 'ECO_PREFIX', 'ECO-'),
+    ('plm-iq', 'ECO_COUNTER_START', '1000'),
+    ('plm-iq', 'AML_PREFIX', 'AML-'),
+    ('plm-iq', 'AML_COUNTER_START', '1000'),
+    ('plm-iq', 'AVL_PREFIX', 'AVL-'),
+    ('plm-iq', 'AVL_COUNTER_START', '1000'),
+    ('plm-iq', 'CAD_PREFIX', 'CAD-'),
+    ('plm-iq', 'CAD_COUNTER_START', '1000'),
+    ('plm-iq', 'DOC_PREFIX', 'DOC-'),
+    ('plm-iq', 'DOC_COUNTER_START', '1000');
 
 -- workflow_definitions (sample workflow definitions in v2 format)
 -- Using industry-appropriate roles: design_engineer, quality, manufacturing, release_engineer

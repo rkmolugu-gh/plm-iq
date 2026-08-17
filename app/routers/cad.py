@@ -32,6 +32,7 @@ from app.config import (
     GITEA_COMMIT_EMAIL,
 )
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.sequence import next_object_id
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -291,6 +292,7 @@ def cad_new_submit(
     user = require_user(request, db)
     item = CadMetadata(
         part_number=part_number,
+        number=next_object_id(db, "cad", user.tenant_key if user else None),
         cad_file_name=cad_file_name,
         cad_file_format=cad_file_format,
         cad_system=cad_system or None,
@@ -444,8 +446,10 @@ async def cad_upload(
     # Create the CAD metadata record
     logger.debug("UPLOAD [DB] creating CadMetadata record")
     try:
+        user = require_user(request, db)
         item = CadMetadata(
             part_number=part_number,
+            number=next_object_id(db, "cad", user.tenant_key if user else None),
             cad_file_name=cad_file_name,
             cad_file_format=cad_file_format,
             cad_system="",

@@ -19,7 +19,7 @@ from pathlib import Path
 from app.database import engine, SessionLocal
 from app.models import (
     SavedQuery, WorkflowDefinition, WorkflowInstance,
-    WorkflowTask, Notification, Role, Favorite, User, Tenant
+    WorkflowTask, Notification, Role, Favorite, User, Tenant, IdSequence
 )
 from app.routers.auth import _hash_password
 
@@ -49,6 +49,7 @@ def init_orm_tables():
         Notification.__table__,
         Role.__table__,
         Favorite.__table__,
+        IdSequence.__table__,
     ])
     logger.info("ORM tables verified/created")
 
@@ -121,6 +122,7 @@ def migrate_schema():
                 ("modified_by", "INTEGER REFERENCES users(user_id)"),
                 ("created_date", "DATE"),
                 ("modified_date", "DATE"),
+                ("number", "TEXT"),
             ]:
                 if col not in cols:
                     conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
@@ -131,6 +133,9 @@ def migrate_schema():
         if "modified_date" not in doc_cols:
             conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN modified_date TEXT")
             logger.info("Added column documents.modified_date")
+        if "document_number" not in doc_cols:
+            conn.exec_driver_sql("ALTER TABLE documents ADD COLUMN document_number TEXT")
+            logger.info("Added column documents.document_number")
 
         # Add is_global column to roles table
         role_cols = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(roles)").all()}
@@ -184,6 +189,15 @@ def migrate_schema():
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_wf_inst_unique_active "
             "ON workflow_instances(object_type, object_id) "
             "WHERE status IN ('DRAFT', 'IN_PROGRESS')"
+        )
+        # Object-id sequences (idempotent create for existing databases).
+        conn.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS id_sequences ("
+            "tenant_key TEXT NOT NULL, "
+            "obj_type TEXT NOT NULL, "
+            "prefix TEXT NOT NULL DEFAULT '', "
+            "value INTEGER NOT NULL DEFAULT 1, "
+            "PRIMARY KEY (tenant_key, obj_type))"
         )
     logger.info("Schema migrations complete")
 

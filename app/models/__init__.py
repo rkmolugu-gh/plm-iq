@@ -14,6 +14,7 @@ from app.models.workflow import WorkflowDefinition, WorkflowInstance, WorkflowTa
 from app.models.role import Role, role_names
 from app.models.favorite import Favorite
 from app.models.setting import AppSetting
+from app.models.sequence import IdSequence
 from app.models.graph import (
     GraphNode,
     GraphEdgeType,
@@ -43,6 +44,7 @@ __all__ = [
     "role_names",
     "Favorite",
     "AppSetting",
+    "IdSequence",
     "GraphNode",
     "GraphEdgeType",
     "GraphEdge",

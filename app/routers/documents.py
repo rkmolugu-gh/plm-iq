@@ -41,6 +41,7 @@ from app.config import (
     DOC_ALLOWED_EXTENSIONS,
 )
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.sequence import next_object_id
 from app.template_utils import render
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,10 @@ def _upsert_file(db: Session, parent_id, name: str, tenant_id: int, user_id: int
         tenant_id=tenant_id,
     )
     db.add(file_doc)
+    db.flush()
+    # Only assign a human-friendly document number to newly created files.
+    tkey = getattr(db, "tenant_key", None)
+    file_doc.document_number = next_object_id(db, "doc", tkey)
     db.flush()
     return file_doc, True
 

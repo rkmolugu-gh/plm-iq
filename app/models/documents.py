@@ -16,6 +16,7 @@ class Document(Base):
 
     id = Column("id", Integer, primary_key=True, autoincrement=True)
     parent_id = Column("parent_id", Integer, ForeignKey("documents.id"), nullable=True)
+    document_number = Column("document_number", String, nullable=True)
     kind = Column("kind", String, nullable=False, default="file")  # "file" | "folder"
     name = Column("name", String, nullable=False)
     title = Column("title", String)

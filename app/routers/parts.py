@@ -10,6 +10,7 @@ from app.database import TenantScopedSession
 from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, User, WorkflowDefinition, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/parts")
@@ -204,6 +205,8 @@ def part_new_submit(
 ):
     """Create new part."""
     user = require_user(request, db)
+    tenant_key = user.tenant_key if user else None
+    part_number = part_number or next_object_id(db, "part", tenant_key)
     part = Part(
         part_number=part_number,
         part_name=part_name,

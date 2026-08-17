@@ -10,6 +10,7 @@ from app.database import TenantScopedSession
 from app.models import EngineeringChangeOrder, User, WorkflowDefinition, WorkflowInstance, Favorite
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.sequence import next_object_id
 from app.template_utils import render
 
 router = APIRouter(prefix="/eco")
@@ -196,7 +197,7 @@ def eco_edit_submit(
 @router.post("/new", response_class=HTMLResponse)
 def eco_new_submit(
     request: Request,
-    eco_number: str = Form(...),
+    eco_number: str = Form(""),
     eco_title: str = Form(...),
     part_number: str = Form(""),
     eco_description: str = Form(""),
@@ -211,6 +212,7 @@ def eco_new_submit(
 ):
     """Create new ECO."""
     user = require_user(request, db)
+    eco_number = eco_number or next_object_id(db, "eco", user.tenant_key if user else None)
     item = EngineeringChangeOrder(
         eco_number=eco_number,
         eco_title=eco_title,

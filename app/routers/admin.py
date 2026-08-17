@@ -776,7 +776,7 @@ def _all_settings(db: Session, tenant_key: str):
     Note: when the editing tenant IS 'plm-iq', its rows are the globals.
     """
     from app.settings import (
-        DEFAULT_SETTINGS, GLOBAL_TENANT_KEY as _GTK, _encode,
+        DEFAULT_SETTINGS, GLOBAL_TENANT_KEY as _GTK, encode_setting_value,
     )
 
     raw = db._db if isinstance(db, TenantScopedSession) else db
@@ -789,7 +789,7 @@ def _all_settings(db: Session, tenant_key: str):
         if key in global_rows:
             return global_rows[key].value
         if key in DEFAULT_SETTINGS:
-            return _encode(DEFAULT_SETTINGS[key])
+            return encode_setting_value(key, DEFAULT_SETTINGS[key])
         return ""
 
     # Start from DEFAULT_SETTINGS so every constant is shown even if unseeded.
@@ -800,7 +800,7 @@ def _all_settings(db: Session, tenant_key: str):
         elif key in global_rows:
             row = {"key": key, "value": global_rows[key].value, "source": "global"}
         else:
-            row = {"key": key, "value": _encode(DEFAULT_SETTINGS[key]), "source": "default"}
+            row = {"key": key, "value": encode_setting_value(key, DEFAULT_SETTINGS[key]), "source": "default"}
         # Show the global default next to the value so tenants can copy it.
         row["global_value"] = None if tenant_key == _GTK else _global_value(key)
         out.append(row)
