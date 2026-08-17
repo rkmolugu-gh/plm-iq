@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}App Settings - PLM-IQ{% endblock %}
+{% block title %}Tenant Settings - PLM-IQ{% endblock %}
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4><i class="bi bi-gear"></i> App Settings</h4>
+    <h4><i class="bi bi-gear"></i> Tenant Settings</h4>
     <a href="/admin" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Back to Admin
     </a>
@@ -35,28 +35,31 @@
     <div class="card-body">
         <p class="text-muted small mb-3">
             These settings act like a user-managed <code>.env</code> file, stored in the database.
-            Saving writes overrides for the current tenant; values you don't set here inherit the
-            <code>plm-iq</code> global defaults. Changes take effect immediately.
+            The <strong>Global value</strong> column shows the shared <code>plm-iq</code> default (read-only unless
+            editing globals). Enter a value in the <strong>Tenant</strong> column and save to override it
+            for this tenant; leave it blank to inherit the global default. Source shows <code>Global</code> when
+            not overridden, <code>Tenant</code> when overridden. Changes take effect immediately.
         </p>
         <form method="POST" action="/admin/settings">
             <div class="table-responsive">
                 <table class="table table-sm">
                     <thead>
                         <tr>
-                            <th style="width: 230px;">Setting</th>
-                            <th>Value</th>
-                            <th style="width: 160px;">Source</th>
-                            {% if not is_global_editor %}
-                            <th style="width: 220px;">Global default (copy)</th>
+                            <th style="width: 260px;">Setting</th>
+                            {% if is_global_editor %}
+                            <th>Global value (editable)</th>
+                            {% else %}
+                            <th>Global value</th>
+                            <th>Tenant</th>
                             {% endif %}
+                            <th style="width: 120px;">Source</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in setting_rows %}
-                        {% if s.key == "LLM_API_KEY" %}<tr><td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="bg-light"><strong><i class="bi bi-cpu"></i> LLM Parameters</strong><br><span class="text-muted small">Configured globally, overridable per tenant. Applied at call time.</span></td></tr>{% endif %}
-                        {% if s.key == "PART_PREFIX" %}<tr><td colspan="{% if is_global_editor %}3{% else %}4{% endif %}" class="bg-light"><strong><i class="bi bi-hash"></i> Object ID Numbering</strong><br><span class="text-muted small">Prefix + counter start. Auto-generated ids look like <code>PART-1000</code>.</span></td></tr>{% endif %}
                         <tr>
                             <td><code>{{ s.key }}</code></td>
+                            {% if is_global_editor %}
                             <td>
                                 {% if s.key == "showinactiveusers" %}
                                 <select name="setting__{{ s.key }}" class="form-select form-select-sm" style="width: auto;">
@@ -64,30 +67,37 @@
                                     <option value="false" {% if s.value == "false" %}selected{% endif %}>False (hide inactive users)</option>
                                 </select>
                                 {% elif s.key == "LLM_API_KEY" %}
-                                <input type="password" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target" autocomplete="off">
+                                <input type="password" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm" autocomplete="off">
                                 {% elif "COUNTER_START" in s.key %}
-                                <input type="number" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target" style="width: 140px;">
+                                <input type="number" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm" style="width: 140px;">
                                 {% else %}
-                                <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm form-control-copy-target">
+                                <input type="text" name="setting__{{ s.key }}" value="{{ s.value }}" class="form-control form-control-sm">
                                 {% endif %}
                             </td>
+                            {% else %}
+                            <td><input type="text" class="form-control form-control-sm" value="{{ s.global_value }}" readonly onclick="this.select()"></td>
                             <td>
-                                {% if s.source == "tenant" %}
-                                <span class="badge bg-success">overridden</span>
-                                {% elif s.source == "global" %}
-                                <span class="badge bg-info text-dark">global</span>
+                                {% if s.key == "showinactiveusers" %}
+                                <select name="setting__{{ s.key }}" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="true" {% if s.tenant_value == "true" %}selected{% endif %}>True</option>
+                                    <option value="false" {% if s.tenant_value == "false" %}selected{% endif %}>False</option>
+                                </select>
+                                {% elif s.key == "LLM_API_KEY" %}
+                                <input type="password" name="setting__{{ s.key }}" value="{{ s.tenant_value }}" class="form-control form-control-sm" autocomplete="off" placeholder="Not overridden">
+                                {% elif "COUNTER_START" in s.key %}
+                                <input type="number" name="setting__{{ s.key }}" value="{{ s.tenant_value }}" class="form-control form-control-sm" style="width: 160px;" placeholder="Global value">
                                 {% else %}
-                                <span class="badge bg-light text-muted">default</span>
+                                <input type="text" name="setting__{{ s.key }}" value="{{ s.tenant_value }}" class="form-control form-control-sm" placeholder="{{ s.global_value }}">
                                 {% endif %}
-                            </td>
-                            {% if not is_global_editor %}
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control form-control-sm" value="{{ s.global_value }}" readonly>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyGlobalToValue(this)"><i class="bi bi-clipboard"></i></button>
-                                </div>
                             </td>
                             {% endif %}
+                            <td>
+                                {% if s.source == "tenant" %}
+                                <span class="badge bg-success">Tenant</span>
+                                {% else %}
+                                <span class="badge bg-info text-dark">Global</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
@@ -129,21 +139,5 @@
         </p>
     </div>
 </div>
-
-<script>
-// Copy the read-only global default into the editable value input for the
-// same row, so a tenant admin can adopt the global value then tweak it.
-function copyGlobalToValue(btn) {
-    var group = btn.closest('.input-group');
-    if (!group) return;
-    var globalInput = group.querySelector('input');
-    if (!globalInput) return;
-    var row = btn.closest('tr');
-    if (!row) return;
-    var target = row.querySelector('.form-control-copy-target');
-    if (!target) return;
-    target.value = globalInput.value;
-}
-</script>
 
 {% endblock %}

@@ -801,8 +801,9 @@ def _all_settings(db: Session, tenant_key: str):
             row = {"key": key, "value": global_rows[key].value, "source": "global"}
         else:
             row = {"key": key, "value": encode_setting_value(key, DEFAULT_SETTINGS[key]), "source": "default"}
-        # Show the global default next to the value so tenants can copy it.
+        # The effective value ('' when editing globals) and the tenant override only.
         row["global_value"] = None if tenant_key == _GTK else _global_value(key)
+        row["tenant_value"] = tenant_rows[key].value if key in tenant_rows else ""
         out.append(row)
 
     # Add any DB-only keys not in DEFAULT_SETTINGS (e.g. legacy scalar settings).
@@ -845,19 +846,61 @@ async def admin_settings_save(
     _role: User = Depends(require_role(["tenantadmin"])),
 ):
     """Save all setting key-value pairs for the current tenant as overrides."""
-    from app.settings import GLOBAL_TENANT_KEY as _GTK
+    from app.settings import (
+        GLOBAL_TENANT_KEY as _GTK, DEFAULT_SETTINGS, SCALAR_SETTINGS,
+    )
 
     tkey = _current_tenant_key(request, db)
     raw = db._db if isinstance(db, TenantScopedSession) else db
+    is_global = (tkey == _GTK)
 
     form = await request.form()
+
+    # "Add New Setting" form: it posts setting__new_key / setting__new_value on
+    # top of the regular setting__* fields, so handle it first and skip those
+    # two pseudo-fields in the loop below.
+    new_key = (form.get("setting__new_key") or "").strip()
+    new_value = (form.get("setting__new_value") or "").strip()
+    adding_new = False
+    if new_key:
+        adding_new = True
+        if not new_value:
+            return RedirectResponse(url="/admin/settings?error=New+setting+requires+a+value", status_code=303)
+        if new_key in set(DEFAULT_SETTINGS) or new_key in SCALAR_SETTINGS:
+            return RedirectResponse(url="/admin/settings?error=Setting+already+exists", status_code=303)
+        existing = raw.query(AppSetting).filter(
+            AppSetting.tenant_key == tkey, AppSetting.key == new_key).first()
+        if existing:
+            return RedirectResponse(url="/admin/settings?error=Setting+already+exists", status_code=303)
+        raw.add(AppSetting(tenant_key=tkey, key=new_key, value=new_value))
+        # Re-render so the new row appears before any further saves below.
+
     for key, value in form.items():
         if key.startswith("setting__"):
+            if key in ("setting__new_key", "setting__new_value"):
+                continue
             setting_key = key[len("setting__"):]
             row = raw.query(AppSetting).filter(
                 AppSetting.tenant_key == tkey,
                 AppSetting.key == setting_key,
             ).first()
+            value = (value or "").strip()
+
+            # Validate "COUNTER_START" values are numeric before saving.
+            if "COUNTER_START" in setting_key and value and not value.lstrip("-").isdigit():
+                from urllib.parse import quote
+                return RedirectResponse(
+                    url=f"/admin/settings?error={quote(setting_key)}+must+be+a+number",
+                    status_code=303,
+                )
+
+            if not value:
+                # Clearing the override reverts to the global default.
+                if row and not is_global:
+                    raw.delete(row)
+                elif row:
+                    row.value = value
+                continue
             if row:
                 row.value = value
             else:
