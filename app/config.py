@@ -44,6 +44,16 @@ DOCUMENTS_GITEA_REPO = os.environ["DOCUMENTS_GITEA_REPO"]
 # Cached (resumable) ZIP downloads, keyed by content hash.
 DOWNLOADS_CACHE_DIR = os.getenv("DOWNLOADS_CACHE_DIR", "data/downloads")
 
+# Autodesk Platform Services (APS) viewer credentials + model storage.
+APS_CLIENT_ID = os.getenv("APS_CLIENT_ID", "")
+APS_CLIENT_SECRET = os.getenv("APS_CLIENT_SECRET", "")
+APS_REGION = os.getenv("APS_REGION", "US")
+# Bucket used to hold uploaded models before/after translation; auto-derived from the
+# client id if not set (matches the APS Simple Viewer sample convention).
+APS_BUCKET = os.getenv("APS_BUCKET", "").strip() or f"{os.getenv('APS_CLIENT_ID', '').lower()}-basic-app"
+# Directory on the server where local model files are looked up for upload/translation.
+APS_MODEL_DIR = os.getenv("APS_MODEL_DIR", "data/apsviewer")
+
 # Multi-tenant subdomains
 BASE_DOMAIN = os.environ["BASE_DOMAIN"]
 TENANT_REQUIRE_SUBDOMAIN = os.environ["TENANT_REQUIRE_SUBDOMAIN"].lower() == "true"
