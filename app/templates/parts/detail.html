@@ -9,105 +9,151 @@
     </ol>
 </nav>
 
-<div class="card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            <i class="bi bi-box-seam"></i> {{ part.part_number }}-{{ part.part_revision }}
-            {% if part.status == 'RELEASED' %}
-            <i class="bi bi-flag-fill text-success" title="Released"></i>
-            {% elif part.status == 'OBSOLETED' %}
-            <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
-            {% else %}
-            <i class="bi bi-flag fs-6" title="{{ part.status or 'Draft' }}"></i>
-            {% endif %}
-        </h5>
-        <div class="d-flex align-items-center gap-2">
-            {% if current_user and current_user.role == 'author' %}
-            {% if not part.in_workflow %}
-            <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#startReleaseModal">
-                <i class="bi bi-play-circle"></i> Start Release
-            </button>
-            {% if part.status == 'RELEASED' %}
-            <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#unreleaseModal">
-                <i class="bi bi-arrow-counterclockwise"></i> Unrelease
-            </button>
-            {% endif %}
-            {% endif %}
-            {% if release_instance %}
-            <a href="/workflow/instance/{{ release_instance.id }}" class="btn btn-sm btn-outline-info"><i class="bi bi-diagram-3"></i> Workflow</a>
-            {% endif %}
-            <a href="/parts/{{ part.part_number }}/edit" class="btn btn-sm btn-outline-light"><i class="bi bi-pencil"></i> Edit</a>
-            <form method="POST" action="/parts/{{ part.part_number }}/delete" onsubmit="return confirm('Delete part {{ part.part_number }}?');">
-                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
-            </form>
-            {% endif %}
-            <a href="/graph/{{ part.part_number|urlencode }}" class="btn btn-sm btn-outline-info" title="View connectivity graph"><i class="bi bi-diagram-3"></i> Graph</a>
-            <span class="badge bg-{% if part.status == 'RELEASED' %}success{% elif part.status == 'OBSOLETED' %}danger{% else %}secondary{% endif %} fs-6">
-                {{ part.status }}
-            </span>
-        </div>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Part Name</dt>
-                    <dd class="col-sm-8">{{ part.part_name }}</dd>
-                    <dt class="col-sm-4">Material</dt>
-                    <dd class="col-sm-8">{{ part.material or '-' }}</dd>
-                    <dt class="col-sm-4">UOM</dt>
-                    <dd class="col-sm-8">{{ part.uom }}</dd>
-                    <dt class="col-sm-4">Qty</dt>
-                    <dd class="col-sm-8">{{ part.qty }}</dd>
-                </dl>
-            </div>
-            <div class="col-md-6">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Spec File</dt>
-                    <dd class="col-sm-8"><code>{{ part.spec_file or '-' }}</code></dd>
-                    <dt class="col-sm-4">Created By</dt>
-                    <dd class="col-sm-8">{{ user_map.get(part.created_by, '—') if user_map else (part.created_by or '—') }}</dd>
-                    <dt class="col-sm-4">Created</dt>
-                    <dd class="col-sm-8">{{ part.created_date or '-' }}</dd>
-                    <dt class="col-sm-4">Modified By</dt>
-                    <dd class="col-sm-8">{{ user_map.get(part.modified_owner, '—') if user_map else (part.modified_owner or '—') }}</dd>
-                    <dt class="col-sm-4">Modified</dt>
-                    <dd class="col-sm-8">{{ part.modified_date or '-' }}</dd>
-                </dl>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Tabs: every card from the part detail is its own tab -->
+<ul class="nav nav-tabs mb-3" id="partTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-overview-btn" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button" role="tab">
+            <i class="bi bi-card-list"></i> Overview
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-bom-btn" data-bs-toggle="tab" data-bs-target="#tab-bom" type="button" role="tab">
+            <i class="bi bi-diagram-3"></i> BOM <span class="badge bg-secondary">{{ bom_items|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-costing-btn" data-bs-toggle="tab" data-bs-target="#tab-costing" type="button" role="tab">
+            <i class="bi bi-currency-dollar"></i> Costing <span class="badge bg-secondary">{{ costing_items|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-eco-btn" data-bs-toggle="tab" data-bs-target="#tab-eco" type="button" role="tab">
+            <i class="bi bi-arrow-left-right"></i> Change Orders <span class="badge bg-secondary">{{ ecos|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-aml-btn" data-bs-toggle="tab" data-bs-target="#tab-aml" type="button" role="tab">
+            <i class="bi bi-buildings"></i> Manufacturers <span class="badge bg-secondary">{{ amls|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-avl-btn" data-bs-toggle="tab" data-bs-target="#tab-avl" type="button" role="tab">
+            <i class="bi bi-truck"></i> Vendors <span class="badge bg-secondary">{{ avls|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-cad-btn" data-bs-toggle="tab" data-bs-target="#tab-cad" type="button" role="tab">
+            <i class="bi bi-file-earmark-code"></i> CAD Files <span class="badge bg-secondary">{{ cads|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-graph-btn" data-bs-toggle="tab" data-bs-target="#tab-graph" type="button" role="tab">
+            <i class="bi bi-share-nodes"></i> Graph
+        </button>
+    </li>
+</ul>
 
-<div class="row g-3">
-    <!-- BOM Items -->
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header"><i class="bi bi-diagram-3"></i> BOM Items <span class="badge bg-secondary">{{ bom_items|length }}</span></div>
+<div class="tab-content">
+
+    <!-- Overview (part attributes) -->
+    <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-card-list"></i> Part Attributes</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Part ID</dt>
+                            <dd class="col-sm-8"><code>{{ part.part_number }}</code></dd>
+                            <dt class="col-sm-4">Revision</dt>
+                            <dd class="col-sm-8">{{ part.part_revision }}</dd>
+                            <dt class="col-sm-4">Part Name</dt>
+                            <dd class="col-sm-8">{{ part.part_name }}</dd>
+                            <dt class="col-sm-4">Material</dt>
+                            <dd class="col-sm-8">{{ part.material or '-' }}</dd>
+                            <dt class="col-sm-4">UOM</dt>
+                            <dd class="col-sm-8">{{ part.uom }}</dd>
+                            <dt class="col-sm-4">Qty</dt>
+                            <dd class="col-sm-8">{{ part.qty }}</dd>
+                            <dt class="col-sm-4">Status</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-{% if part.status == 'RELEASED' %}success{% elif part.status == 'OBSOLETED' %}danger{% else %}secondary{% endif %} badge-status">{{ part.status }}</span>
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Spec File</dt>
+                            <dd class="col-sm-8"><code>{{ part.spec_file or '-' }}</code></dd>
+                            <dt class="col-sm-4">Created By</dt>
+                            <dd class="col-sm-8">{{ user_map.get(part.created_by, '—') if user_map else (part.created_by or '—') }}</dd>
+                            <dt class="col-sm-4">Created</dt>
+                            <dd class="col-sm-8">{{ part.created_date or '-' }}</dd>
+                            <dt class="col-sm-4">Modified By</dt>
+                            <dd class="col-sm-8">{{ user_map.get(part.modified_owner, '—') if user_map else (part.modified_owner or '—') }}</dd>
+                            <dt class="col-sm-4">Modified</dt>
+                            <dd class="col-sm-8">{{ part.modified_date or '-' }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOM (expanded tree) -->
+    <div class="tab-pane fade" id="tab-bom" role="tabpanel">
+        {% macro render_bom_node(node) %}
+        <li class="list-group-item d-flex justify-content-between align-items-center py-2" style="padding-left: {{ (node.item.level * 24 + 16) }}px !important;">
+            <div class="d-flex align-items-center gap-2">
+                {% if node.children %}
+                <i class="bi bi-folder2-open text-warning small"></i>
+                {% else %}
+                <i class="bi bi-file-earmark text-muted small"></i>
+                {% endif %}
+                <a href="/parts/{{ node.item.part_number }}" class="fw-bold">{{ node.item.part_number }}</a>
+                {% if node.item.part_revision %}<span class="badge bg-dark badge-status ms-1">{{ node.item.part_revision }}</span>{% endif %}
+                {% set node_status = node.item.part.status if node.item.part else 'DRAFT' %}
+                {% if node_status == 'RELEASED' %}
+                <i class="bi bi-flag-fill text-success" title="Released"></i>
+                {% elif node_status == 'OBSOLETED' %}
+                <i class="bi bi-flag-fill text-danger" title="Obsoleted"></i>
+                {% elif node_status == 'IN_DEVELOPMENT' %}
+                <i class="bi bi-flag-fill text-info" title="In Development"></i>
+                {% else %}
+                <i class="bi bi-flag fs-6" title="{{ node_status or 'Draft' }}"></i>
+                {% endif %}
+                <small class="text-muted ms-1">{{ node.item.part_name }}</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-info badge-status">{{ node.item.bom_type }}</span>
+                <span class="text-muted small">Qty: {{ node.item.qty }} {{ node.item.uom }}</span>
+            </div>
+        </li>
+        {% if node.children %}
+            {% for child in node.children %}
+                {{ render_bom_node(child) }}
+            {% endfor %}
+        {% endif %}
+        {% endmacro %}
+        <div class="card">
+            <div class="card-header"><i class="bi bi-diagram-3"></i> Expanded BOM — {{ part.part_number }} <span class="badge bg-secondary">{{ bom_items|length }}</span></div>
             <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                    <thead><tr><th>Level</th><th>Part</th><th>Qty</th><th>Type</th><th>Parent</th></tr></thead>
-                    <tbody>
-                        {% for b in bom_items %}
-                        <tr>
-                            <td>{{ b.level }}</td>
-                            <td><a href="/parts/{{ b.part_number }}">{{ b.part_number }}</a></td>
-                            <td>{{ b.qty }}</td>
-                            <td><span class="badge bg-info badge-status">{{ b.bom_type }}</span></td>
-                            <td><small>{{ b.parent_assembly or '-' }}</small></td>
-                        </tr>
-                        {% else %}
-                        <tr><td colspan="5" class="text-center text-muted py-3">No BOM items</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                {% if bom_tree %}
+                <ul class="list-group list-group-flush">
+                    {% for root in bom_tree %}
+                        {{ render_bom_node(root) }}
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-center text-muted py-4">No BOM items found for this assembly.</div>
+                {% endif %}
             </div>
         </div>
     </div>
 
     <!-- Costing -->
-    <div class="col-md-6">
-        <div class="card h-100">
+    <div class="tab-pane fade" id="tab-costing" role="tabpanel">
+        <div class="card">
             <div class="card-header"><i class="bi bi-currency-dollar"></i> Costing <span class="badge bg-secondary">{{ costing_items|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
@@ -129,9 +175,9 @@
         </div>
     </div>
 
-    <!-- ECOs -->
-    <div class="col-md-6">
-        <div class="card h-100">
+    <!-- Change Orders -->
+    <div class="tab-pane fade" id="tab-eco" role="tabpanel">
+        <div class="card">
             <div class="card-header"><i class="bi bi-arrow-left-right"></i> Change Orders <span class="badge bg-secondary">{{ ecos|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
@@ -156,9 +202,9 @@
         </div>
     </div>
 
-    <!-- AML -->
-    <div class="col-md-6">
-        <div class="card h-100">
+    <!-- Manufacturers -->
+    <div class="tab-pane fade" id="tab-aml" role="tabpanel">
+        <div class="card">
             <div class="card-header"><i class="bi bi-buildings"></i> Manufacturers <span class="badge bg-secondary">{{ amls|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
@@ -181,9 +227,9 @@
         </div>
     </div>
 
-    <!-- AVL -->
-    <div class="col-md-6">
-        <div class="card h-100">
+    <!-- Vendors -->
+    <div class="tab-pane fade" id="tab-avl" role="tabpanel">
+        <div class="card">
             <div class="card-header"><i class="bi bi-truck"></i> Vendors <span class="badge bg-secondary">{{ avls|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
@@ -207,8 +253,8 @@
     </div>
 
     <!-- CAD Files -->
-    <div class="col-md-6">
-        <div class="card h-100">
+    <div class="tab-pane fade" id="tab-cad" role="tabpanel">
+        <div class="card">
             <div class="card-header"><i class="bi bi-file-earmark-code"></i> CAD Files <span class="badge bg-secondary">{{ cads|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
@@ -229,82 +275,67 @@
             </div>
         </div>
     </div>
+
+    <!-- Graph -->
+    <div class="tab-pane fade" id="tab-graph" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="small text-muted">Derived connectivity for <code>{{ part.part_number }}</code> from BOM, ECO, AML, AVL, CAD and documents.</div>
+            <a class="btn btn-sm btn-outline-info" href="/graph/{{ part.part_number|urlencode }}"><i class="bi bi-arrows-fullscreen"></i> Open full graph</a>
+        </div>
+        {% set out_edges = graph_edges|selectattr('direction', 'equalto', 'out')|list %}
+        {% set in_edges = graph_edges|selectattr('direction', 'equalto', 'in')|list %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header"><i class="bi bi-arrow-down-circle"></i> Downstream (outgoing) <span class="badge bg-secondary">{{ out_edges|length }}</span></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Edge</th><th>Node</th><th>Type</th></tr></thead>
+                            <tbody>
+                                {% for e in out_edges %}
+                                <tr>
+                                    <td><span class="badge bg-primary badge-status">{{ e.edge_type }}</span></td>
+                                    <td>{{ e.label }}</td>
+                                    <td><small class="text-muted">{{ e.node_type }}</small></td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-center text-muted py-3">No downstream relationships.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header"><i class="bi bi-arrow-up-circle"></i> Upstream (incoming) <span class="badge bg-secondary">{{ in_edges|length }}</span></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead><tr><th>Edge</th><th>Node</th><th>Type</th></tr></thead>
+                            <tbody>
+                                {% for e in in_edges %}
+                                <tr>
+                                    <td><span class="badge bg-info badge-status">{{ e.edge_type }}</span></td>
+                                    <td>{{ e.label }}</td>
+                                    <td><small class="text-muted">{{ e.node_type }}</small></td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="3" class="text-center text-muted py-3">No upstream relationships.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {% if release_instance %}
 {% with instance = release_instance %}
 {% include "workflow/_instance_panel.html" %}
 {% endwith %}
-{% endif %}
-
-{% if current_user and current_user.role == 'author' and not part.in_workflow %}
-<div class="modal fade" id="startReleaseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/workflow/start">
-                <input type="hidden" name="object_type" value="part">
-                <input type="hidden" name="object_id" value="{{ part.part_number }}">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-play-circle"></i> Start Release — {{ part.part_number }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Workflow Definition</label>
-                        <select class="form-select" name="definition_id" required>
-                            {% for t in release_templates %}
-                            <option value="{{ t.id }}">{{ t.name }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if not release_templates %}
-                        <div class="form-text text-warning">No release definitions exist. Ask an admin to create one.</div>
-                        {% endif %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Due Date (optional)</label>
-                        <input type="date" class="form-control" name="due_date">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success" {% if not release_templates %}disabled{% endif %}>Start Release</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-{% if part.status == 'RELEASED' and unrelease_templates %}
-<div class="modal fade" id="unreleaseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="/workflow/start">
-                <input type="hidden" name="object_type" value="part">
-                <input type="hidden" name="object_id" value="{{ part.part_number }}">
-                <input type="hidden" name="definition_id" value="{{ unrelease_templates[0].id }}">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise"></i> Unrelease — {{ part.part_number }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> This will move <strong>{{ part.part_number }}</strong> from <code>RELEASED</code> back to <code>DRAFT</code>.
-                        All workflow instances will be cleared. This action cannot be easily undone.
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Comment (optional)</label>
-                        <textarea class="form-control" name="comment" rows="3" placeholder="Reason for unrelease..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning">Unrelease</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endif %}
 
 {% endblock %}

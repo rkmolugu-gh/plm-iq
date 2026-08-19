@@ -11,45 +11,6 @@
     }
   },
   "provider": {
-    "siemens": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "code.siemens.com",
-      "options": {
-        "baseURL": "https://api.siemens.com/llm/v1"
-      },
-      "models": {
-        "deepseek-v4-flash": {
-          "limit": {
-            "context": 1048576,
-            "output": 1048576
-          },
-          "modalities": {
-            "input": ["text"],
-            "output": ["text"]
-          }
-        },
-        "qwen-3.6-27b": {
-          "limit": {
-            "context": 262144,
-            "output": 262144
-          },
-          "modalities": {
-            "input": ["text", "image"],
-            "output": ["text"]
-          }
-        },
-        "ministral-3-14b-instruct-2512": {
-          "limit": {
-            "context": 256000,
-            "output": 256000
-          },
-          "modalities": {
-            "input": ["text", "image"],
-            "output": ["text"]
-          }
-        }
-      }
-    }
   },
   "share": "disabled",
   "disabled_providers": ["opencode", "openai"]

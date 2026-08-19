@@ -1,15 +1,29 @@
 """Parts CRUD router."""
 
-from typing import Optional
-from fastapi import APIRouter, Depends, Form, Query, Request
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
-from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.database import TenantScopedSession
-from app.models import Part, BomItem, CostingBomItem, EngineeringChangeOrder, ApprovedManufacturer, ApprovedVendor, CadMetadata, User, WorkflowDefinition, WorkflowInstance, Favorite
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
+
 from app.config import DEFAULT_PAGE_SIZE
-from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
+from app.database import TenantScopedSession
+from app.graph_service import node_edges as domain_node_edges
+from app.routers.bom import _build_tree
+from app.models import (
+    ApprovedManufacturer,
+    ApprovedVendor,
+    BomItem,
+    CadMetadata,
+    CostingBomItem,
+    EngineeringChangeOrder,
+    Favorite,
+    Part,
+    User,
+    WorkflowDefinition,
+    WorkflowInstance,
+)
+from app.routers.auth import auth_context, get_settings, get_tenant_db, require_role, require_user
 from app.sequence import next_object_id
 from app.template_utils import render
 
@@ -19,8 +33,8 @@ router = APIRouter(prefix="/parts")
 @router.get("", response_class=HTMLResponse)
 def list_parts(
     request: Request,
-    q: Optional[str] = Query(None, description="Search query"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    q: str | None = Query(None, description="Search query"),
+    status: str | None = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1),
     db: TenantScopedSession = Depends(get_tenant_db),
 ):
@@ -87,6 +101,31 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
     amls = db.query(ApprovedManufacturer).filter(ApprovedManufacturer.part_number == part_number).all()
     avls = db.query(ApprovedVendor).filter(ApprovedVendor.part_number == part_number).all()
     cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
+    graph_edges = domain_node_edges(db, "PART", part_number)
+
+    # Expanded BOM subtree rooted at this part (mirrors /bom/tree/{part_number}).
+    bom_tree_items = []
+    _bom_seen = set()
+    _bom_visited = set()
+    frontier = [part_number]
+    while frontier:
+        current = frontier.pop()
+        if current in _bom_visited:
+            continue
+        _bom_visited.add(current)
+        rows = (
+            db.query(BomItem).options(selectinload(BomItem.part))
+            .filter((BomItem.part_number == current) | (BomItem.parent_assembly == current))
+            .order_by(BomItem.level, BomItem.part_number)
+            .all()
+        )
+        for row in rows:
+            if row.id not in _bom_seen:
+                _bom_seen.add(row.id)
+                bom_tree_items.append(row)
+                if row.part_number != current:
+                    frontier.append(row.part_number)
+    bom_tree = _build_tree(bom_tree_items)
 
     # Query global templates + this tenant's templates (bypass tenant_key scoping)
     release_templates = (
@@ -125,6 +164,8 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         amls=amls,
         avls=avls,
         cads=cads,
+        graph_edges=graph_edges,
+        bom_tree=bom_tree,
         release_templates=release_templates,
         unrelease_templates=unrelease_templates,
         release_instance=release_instance,
