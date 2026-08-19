@@ -336,6 +336,10 @@ INSERT INTO cad_metadata (id, part_number, part_revision, part_name, status, cad
     (29, 'PLM-004', 'C', 'UI Dashboard Widget', 'DRAFT', 'PLM-004_C.tsx', 'TSX', 'React/TypeScript', '18.2.0', 'Git', 'https://git.plm-iq.com/ui/dashboard-widget.tsx', 34567, 'X2T9ZW45W8497A01', 27, '2026-08-03', '2026-08-06', 'DOC-PLM-004-C', 'SOURCE_CODE', 'SOFTWARE', 'React component source.', 6, 'tk_plm_iq_superadmin'),
     (30, 'PLM-005', 'A', 'MCP Server Plugin', 'RELEASED', 'PLM-005_A.py', 'PY', 'Python', '3.11', 'Git', 'https://git.plm-iq.com/mcp/server-plugin.py', 23456, 'Y3U0AX56X9508B12', 27, '2026-08-04', '2026-08-06', 'DOC-PLM-005-A', 'SOURCE_CODE', 'SOFTWARE', 'MCP plugin source code.', 6, 'tk_plm_iq_superadmin');
 
+-- documents (1 row: sample local file for BicycleCo)
+INSERT OR IGNORE INTO documents (id, parent_id, document_number, kind, name, title, doc_category, doc_format, doc_system, doc_version, status, description, file_size_bytes, file_checksum, git_repo_path, git_commit_sha, git_manifest, storage_backend, created_by, modified_by, created_date, modified_date, tenant_id, tenant_key) VALUES
+    (1, NULL, 'DOC-0001', 'file', 'BB-002-N.pdf', 'BB-002-N.pdf', 'OTHER', 'PDF', NULL, '1.0', 'DRAFT', NULL, 2634, 'D799754FF9B0ED66237210F39D0F34C4', 'data/volume/documents/root/BB-002-N.pdf', NULL, NULL, 'LocalServer', 1, 1, '2026-08-19', '2026-08-19', 1, 'tk_bicycleco_a1b2c3d4');
+
 -- ============================================================
 -- Default Roles Seed Data (6 rows, all global so available across tenants)
 -- ============================================================

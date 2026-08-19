@@ -39,6 +39,7 @@ from app.config import (
     GITEA_BRANCH,
     GITEA_COMMIT_EMAIL,
     DOC_ALLOWED_EXTENSIONS,
+    VOLUME_DIR,
 )
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.sequence import next_object_id
@@ -124,6 +125,15 @@ def _gitea_doc_delete(repo_path: str, cfg=None):
     delete_file(cfg, cfg.repo_docs, repo_path)
 
 
+def _store_document_locally(content: bytes, parent_id, file_name: str, tenant_id: int) -> str:
+    """Store a document file under VOLUME_DIR/documents/ and return the stored path."""
+    rel = Path(str(parent_id or "root")) / file_name
+    dest = Path(VOLUME_DIR) / "documents" / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(content)
+    return str(dest)
+
+
 # ── Hierarchy helpers ───────────────────────────────────────
 
 def _today() -> str:
@@ -175,7 +185,7 @@ def _breadcrumb(db: Session, parent_id) -> list:
     return crumbs
 
 
-def _get_or_create_folder(db: Session, parent_id, name: str, tenant_id: int, user_id: int) -> tuple:
+def _get_or_create_folder(db: Session, parent_id, name: str, tenant_id: int, user_id: int, tenant_key: str, storage_backend: str = "LocalServer") -> tuple:
     existing = (
         db.query(Document)
         .filter(
@@ -195,19 +205,20 @@ def _get_or_create_folder(db: Session, parent_id, name: str, tenant_id: int, use
         title=name,
         doc_category="OTHER",
         status="DRAFT",
-        storage_backend="Gitea",
+        storage_backend=storage_backend,
         created_by=user_id,
         modified_by=user_id,
         created_date=_today(),
         modified_date=_today(),
         tenant_id=tenant_id,
+        tenant_key=tenant_key,
     )
     db.add(folder)
     db.flush()
     return folder, True
 
 
-def _upsert_file(db: Session, parent_id, name: str, tenant_id: int, user_id: int) -> tuple:
+def _upsert_file(db: Session, parent_id, name: str, tenant_id: int, user_id: int, tenant_key: str, storage_backend: str = "LocalServer") -> tuple:
     """Return (file_doc, is_new). Caller decides version bumping on revision."""
     existing = (
         db.query(Document)
@@ -231,12 +242,13 @@ def _upsert_file(db: Session, parent_id, name: str, tenant_id: int, user_id: int
         doc_category="OTHER",
         status="DRAFT",
         doc_version="1.0",
-        storage_backend="Gitea",
+        storage_backend=storage_backend,
         created_by=user_id,
         modified_by=user_id,
         created_date=_today(),
         modified_date=_today(),
         tenant_id=tenant_id,
+        tenant_key=tenant_key,
     )
     db.add(file_doc)
     db.flush()
@@ -325,6 +337,7 @@ def create_folder(
 ):
     user = require_user(request, db)
     tenant_id = user.tenant_id
+    tenant_key = getattr(request.state, "tenant_key", None) or user.tenant_key
     name = (name or "").strip()
     parent_id = int(parent_id) if parent_id else None
     if not name:
@@ -333,7 +346,7 @@ def create_folder(
             content=render("404.html", **ctx, error="Folder name is required."),
             status_code=400,
         )
-    folder, _ = _get_or_create_folder(db, parent_id, name, tenant_id, user.user_id)
+    folder, _ = _get_or_create_folder(db, parent_id, name, tenant_id, user.user_id, tenant_key, "LocalServer")
     folder.doc_category = doc_category if doc_category in _DOC_CATEGORIES else "OTHER"
     folder.status = status if status in _DOC_STATUSES else "DRAFT"
     folder.description = description or None
@@ -431,7 +444,7 @@ async def upload_documents(
     request: Request,
     parent_id: Optional[str] = Form(None),
     files: list[UploadFile] = File(...),
-    doc_category: str = Form("OTHER"),
+    storage_backend: str = Form("LocalServer"),
     status: str = Form("DRAFT"),
     title: str = Form(""),
     description: str = Form(""),
@@ -442,46 +455,67 @@ async def upload_documents(
 
     A folder selection (webkitdirectory) yields relative paths like
     "Manuals/sub/file.pdf"; each segment becomes a folder object and each leaf
-    a file object pushed to Gitea individually (no zipping). Re-uploading a file
-    of the same name bumps its version and replaces the Git blob.
+    a file object. Re-uploading a file of the same name bumps its version.
     """
     user = require_user(request, db)
     tenant_id = user.tenant_id
+    tenant_key = getattr(request.state, "tenant_key", None) or user.tenant_key
     parent_id = int(parent_id) if parent_id else None
+    backend = storage_backend if storage_backend in ("LocalServer", "Gitea") else "LocalServer"
+    st = status if status in _DOC_STATUSES else "DRAFT"
 
-    def _error(msg: str, code: int = 400) -> HTMLResponse:
+    def _render_list_error(msg: str, code: int = 400) -> HTMLResponse:
         ctx = auth_context(request, db)
-        return HTMLResponse(content=render("404.html", **ctx, error=msg), status_code=code)
+        tid = ctx["current_user"].tenant_id
+        total = (
+            db.query(Document)
+            .filter(Document.tenant_id == tid, Document.parent_id == parent_id)
+            .count()
+        )
+        children = (
+            db.query(Document)
+            .filter(Document.tenant_id == tid, Document.parent_id == parent_id)
+            .order_by(Document.kind, Document.name)
+            .all()
+        )
+        return HTMLResponse(content=render(
+            "documents/list.html",
+            **ctx,
+            parent_id=parent_id,
+            breadcrumb=_breadcrumb(db, parent_id),
+            children=children,
+            q="",
+            page=1,
+            total=total,
+            pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
+            categories=_DOC_CATEGORIES,
+            statuses=get_settings(request).DOC_STATUSES,
+            error=msg,
+        ), status_code=code)
 
     if not files:
-        return _error("no file(s) provided")
+        return _render_list_error("no file(s) provided")
 
-    # Validate extensions up front; reject the whole upload if any are disallowed.
     for f in files:
         if not f.filename:
-            return _error("a file with no name was provided")
+            return _render_list_error("a file with no name was provided")
         ext = Path(f.filename).suffix.lower()
         if ext not in DOC_ALLOWED_EXTENSIONS:
-            return _error(
+            return _render_list_error(
                 f"disallowed extension '{ext or '(none)'}' — allowed: "
                 f"{', '.join(sorted(e.lstrip('.') for e in DOC_ALLOWED_EXTENSIONS))}"
             )
 
-    cat = doc_category if doc_category in _DOC_CATEGORIES else "OTHER"
-    st = status if status in _DOC_STATUSES else "DRAFT"
-
-    # Ensure the tenant's Gitea docs repo exists before pushing (and provision
-    # the tenant's isolated Gitea identity on first use). Fall back to the
-    # resolved (legacy/dev) config if provisioning cannot complete so uploads
-    # still work and the non-isolation is visible in logs.
-    from app.git.tenant_gitea import ensure_tenant_gitea, resolve_config
-    tenant_key = getattr(request.state, "tenant_key", None)
-    doc_cfg = resolve_config(tenant_key)
-    try:
-        doc_cfg = ensure_tenant_gitea(tenant_key or "")
-        await asyncio.to_thread(_gitea_doc_ensure_repo, doc_cfg)
-    except Exception as e:
-        logger.warning("DOCUP [REPO_WARN] %s", e)
+    if backend == "Gitea":
+        from app.git.tenant_gitea import ensure_tenant_gitea, resolve_config
+        doc_cfg = resolve_config(tenant_key)
+        try:
+            doc_cfg = ensure_tenant_gitea(tenant_key or "")
+            await asyncio.to_thread(_gitea_doc_ensure_repo, doc_cfg)
+        except Exception as e:
+            logger.warning("DOCUP [REPO_WARN] %s", e)
+    else:
+        doc_cfg = None
 
     created_files = 0
     updated_files = 0
@@ -494,59 +528,63 @@ async def upload_documents(
             file_name = segments[-1]
             folder_segments = segments[:-1]
 
-            # Walk/create the folder chain under parent_id.
             cur_parent = parent_id
             for seg in folder_segments:
                 folder, folder_is_new = _get_or_create_folder(
-                    db, cur_parent, seg, tenant_id, user.user_id
+                    db, cur_parent, seg, tenant_id, user.user_id, tenant_key, backend
                 )
                 if folder_is_new:
                     created_folders += 1
-                    folder.doc_category = cat
                     folder.status = st
                     if description:
                         folder.description = description
                 cur_parent = folder.id
 
-            # Create or revise the file under the resolved parent.
-            file_doc, is_new = _upsert_file(db, cur_parent, file_name, tenant_id, user.user_id)
+            file_doc, is_new = _upsert_file(db, cur_parent, file_name, tenant_id, user.user_id, tenant_key, backend)
             if is_new:
                 created_files += 1
             else:
                 updated_files += 1
                 file_doc.doc_version = _bump_version(file_doc.doc_version)
 
-            file_doc.doc_category = cat
             file_doc.status = st
             file_doc.title = title or file_name
             if description:
                 file_doc.description = description
             if not file_doc.doc_format:
                 file_doc.doc_format = Path(file_name).suffix.lstrip(".").upper() or None
-            db.flush()
 
-            repo_path = _compute_repo_path(db, file_doc)
-            raw_url, commit_sha, size = await asyncio.to_thread(
-                _gitea_doc_put, content, repo_path, doc_cfg
-            )
-            file_doc.git_repo_path = repo_path
-            file_doc.git_commit_sha = commit_sha
-            file_doc.file_size_bytes = size
-            file_doc.file_checksum = hashlib.md5(content).hexdigest()
+            if backend == "LocalServer":
+                local_path = _store_document_locally(content, cur_parent, file_name, tenant_id)
+                file_doc.git_repo_path = local_path
+                file_doc.file_size_bytes = len(content)
+                file_doc.file_checksum = hashlib.md5(content).hexdigest()
+            else:
+                repo_path = _compute_repo_path(db, file_doc)
+                raw_url, commit_sha, size = await asyncio.to_thread(
+                    _gitea_doc_put, content, repo_path, doc_cfg
+                )
+                file_doc.git_repo_path = repo_path
+                file_doc.git_commit_sha = commit_sha
+                file_doc.file_size_bytes = size
+                file_doc.file_checksum = hashlib.md5(content).hexdigest()
+
             file_doc.modified_date = _today()
+            db.flush()
 
         db.commit()
     except Exception as e:
         db.rollback()
         logger.exception("DOCUP [FAIL] %s", e)
         detail = getattr(getattr(e, "response", None), "text", str(e))
-        return _error(f"Upload failed: {detail}", code=502)
+        return _render_list_error(f"Upload failed: {detail}", code=502)
 
     logger.info(
-        "DOCUP [DONE] tenant=%s parent=%s new_files=%d updated=%d new_folders=%d",
-        tenant_id, parent_id, created_files, updated_files, created_folders,
+        "DOCUP [DONE] tenant=%s parent=%s new_files=%d updated=%d new_folders=%d backend=%s",
+        tenant_id, parent_id, created_files, updated_files, created_folders, backend,
     )
-    return RedirectResponse(url=f"/documents?parent_id={parent_id or ''}", status_code=303)
+    redirect_url = "/documents" + (f"?parent_id={parent_id}" if parent_id is not None else "")
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.get("/{item_id}/download", response_class=HTMLResponse)
@@ -564,9 +602,21 @@ def document_download(request: Request, item_id: int, db: TenantScopedSession = 
 
     # Single file → resumable (Range-aware) proxy of the private repo blob.
     if item.kind == "file":
+        if item.storage_backend == "LocalServer" and item.git_repo_path:
+            path = Path(item.git_repo_path)
+            if not path.exists():
+                return HTMLResponse(
+                    content=render("404.html", **ctx, error="Local file not found."),
+                    status_code=404,
+                )
+            return FileResponse(
+                path=str(path),
+                filename=safe_name,
+                media_type="application/octet-stream",
+            )
         if not item.git_repo_path:
             return HTMLResponse(
-                content=render("404.html", **ctx, error="No Git path recorded for this file."),
+                content=render("404.html", **ctx, error="No storage path recorded for this file."),
                 status_code=404,
             )
         return file_response(
@@ -643,10 +693,15 @@ def document_delete(
             db.query(Document).filter(Document.parent_id == item.id).all()
             if item.kind == "folder" else []
         )
-        # Best-effort Git cleanup for files (tenant's docs repo).
+        # Best-effort cleanup for files.
         doc_cfg = _gitea_doc_cfg(request)
         for f in descendants:
-            if f.git_repo_path:
+            if f.storage_backend == "LocalServer" and f.git_repo_path:
+                try:
+                    Path(f.git_repo_path).unlink(missing_ok=True)
+                except Exception as e:
+                    logger.warning("DOCDEL [LOCAL_WARN] %s: %s", f.git_repo_path, e)
+            elif f.git_repo_path:
                 try:
                     _gitea_doc_delete(f.git_repo_path, doc_cfg)
                 except Exception as e:

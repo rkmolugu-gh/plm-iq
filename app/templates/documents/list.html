@@ -173,14 +173,15 @@
                         <label class="form-label" for="doc_files">File(s) or Folder</label>
                         <input type="file" name="files" id="doc_files" class="form-control" required multiple>
                         <div id="uploadHint" class="form-text text-info mt-1">
-                            <i class="bi bi-info-circle"></i> Select a file. It will be stored in Gitea at <code>{{ current_user.tenant_id if current_user else 1 }}/&lt;folder path&gt;/&lt;name&gt;</code>.
+                            <i class="bi bi-info-circle"></i> Files are stored on the local server by default.
                         </div>
                     </div>
                     <div class="row g-2">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label" for="doc_cat">Category</label>
-                            <select name="doc_category" id="doc_cat" class="form-select">
-                                {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                            <label class="form-label" for="doc_backend">Storage</label>
+                            <select name="storage_backend" id="doc_backend" class="form-select">
+                                <option value="LocalServer" selected>Local Server</option>
+                                <option value="Gitea">Gitea</option>
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
@@ -213,23 +214,29 @@ function setMode(mode) {
     const input = document.getElementById('doc_files');
     const hint = document.getElementById('uploadHint');
     const title = document.getElementById('uploadModalTitle');
+    const backend = document.getElementById('doc_backend').value;
+    const backendLabel = backend === 'Gitea' ? 'Gitea' : 'the local server';
     if (mode === 'folder') {
         input.setAttribute('webkitdirectory', '');
         input.setAttribute('directory', '');
         input.multiple = true;
         title.innerHTML = '<i class="bi bi-folder-symlink"></i> Upload Folder';
-        hint.innerHTML = '<i class="bi bi-info-circle"></i> The selected folder becomes a folder object; each file is pushed to Gitea individually (not zipped).';
+        hint.innerHTML = '<i class="bi bi-info-circle"></i> The selected folder becomes a folder object; each file is stored on ' + backendLabel + '.';
         hint.className = 'form-text text-success mt-1';
     } else {
         input.removeAttribute('webkitdirectory');
         input.removeAttribute('directory');
         input.multiple = false;
         title.innerHTML = '<i class="bi bi-file-earmark-arrow-up"></i> Upload File';
-        hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a file. It will be stored in Gitea at <code>{{ current_user.tenant_id if current_user else 1 }}/&lt;folder path&gt;/&lt;name&gt;</code>.';
+        hint.innerHTML = '<i class="bi bi-info-circle"></i> Select a file. It will be stored on ' + backendLabel + '.';
         hint.className = 'form-text text-info mt-1';
     }
     input.value = '';
 }
+
+document.getElementById('doc_backend').addEventListener('change', function () {
+    setMode(document.getElementById('doc_files').hasAttribute('webkitdirectory') ? 'folder' : 'file');
+});
 </script>
 
 {% endblock %}

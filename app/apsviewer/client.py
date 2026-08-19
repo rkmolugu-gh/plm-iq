@@ -48,7 +48,7 @@ class APSClient:
     def get_token(self, scopes: list[str]) -> str:
         """Return a two-legged access token for the given scopes."""
         resp = requests.post(
-            f"{_AUTH_HOST}/authentication/v2/oauth/token",
+            f"{_AUTH_HOST}/authentication/v2/token",
             data={
                 "client_id": self._client_id,
                 "client_secret": self._client_secret,
@@ -64,7 +64,7 @@ class APSClient:
     def get_viewer_token(self) -> dict:
         """Return {access_token, expires_in} for scopes the browser viewer needs."""
         resp = requests.post(
-            f"{_AUTH_HOST}/authentication/v2/oauth/token",
+            f"{_AUTH_HOST}/authentication/v2/token",
             data={
                 "client_id": self._client_id,
                 "client_secret": self._client_secret,
