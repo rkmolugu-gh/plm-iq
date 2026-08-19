@@ -305,3 +305,35 @@ def subgraph(db: Session, node_ids: Iterable[int]) -> dict:
             for e in edges
         ],
     }
+
+
+_DOC_EDGE_TYPES = {
+    "HAS_SPEC", "HAS_MANUAL", "HAS_CERTIFICATE", "HAS_DRAWING",
+    "HAS_REPORT", "HAS_CONTRACT", "HAS_STANDARD", "HAS_OTHER", "HAS_DOCUMENT",
+}
+
+
+def document_linked_parts(db: Session, doc_node_id: int) -> list[dict]:
+    """Return incoming PART->DOCUMENT edges for a document node, with part info."""
+    edges = (
+        db.query(GraphEdge)
+        .filter(
+            GraphEdge.target_node_id == doc_node_id,
+            GraphEdge.tenant_key == getattr(db, "tenant_key", None) or "plm-iq",
+        )
+        .all()
+    )
+    results = []
+    for edge in edges:
+        etype = _edge_type_name(edge)
+        if etype not in _DOC_EDGE_TYPES:
+            continue
+        info = node_info(db, edge.source_node_id)
+        if info and info.get("object_type") == "PART":
+            results.append({
+                "node_id": info["node_id"],
+                "part_number": info["object_key"],
+                "label": info["label"],
+                "edge_type": etype,
+            })
+    return results

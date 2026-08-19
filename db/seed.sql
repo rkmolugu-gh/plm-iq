@@ -102,6 +102,9 @@ INSERT INTO parts (part_number, part_revision, part_name, spec_file, material, u
     ('PLM-004', 'C', 'UI Dashboard Widget', 'volume\UI Dashboard', 'React component', 'EA', 1, 'DRAFT', '2026-08-03', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
     ('PLM-005', 'A', 'MCP Server Plugin', 'volume\MCP Server', 'Python plugin', 'EA', 1, 'RELEASED', '2026-08-04', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin');
 
+INSERT OR IGNORE INTO parts (part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES
+    ('BIKE-001', 'G', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4');
+
 -- bom (30 rows: 5 BOM entries per tenant, representing assembly hierarchies)
 INSERT INTO bom (id, level, part_number, part_revision, part_name, qty, uom, parent_assembly, material_notes, bom_type, tenant_id, tenant_key) VALUES
     -- Tenant 1: BicycleCo (5 BOM rows)
@@ -570,7 +573,24 @@ INSERT OR IGNORE INTO plmiq_edge_type (name, description, canonical_direction, i
     ('RESPONSIBILITY_OF', 'Object responsibility belongs to a user/team', 'NODE -> USER', 'RESPONSIBLE_FOR', TRUE, '2026-08-14', 'plm-iq'),
     -- Org structure
     ('HAS_SITE', 'Organization has a site', 'ORGANIZATION -> NODE', 'SITE_OF', TRUE, '2026-08-14', 'plm-iq'),
-    ('SITE_OF', 'Site belongs to an organization', 'NODE -> ORGANIZATION', 'HAS_SITE', TRUE, '2026-08-14', 'plm-iq');
+    ('SITE_OF', 'Site belongs to an organization', 'NODE -> ORGANIZATION', 'HAS_SITE', TRUE, '2026-08-14', 'plm-iq'),
+    -- Document-specific edge types
+    ('HAS_SPEC', 'Part has specification document', 'PART -> DOCUMENT', 'SPEC_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('SPEC_OF', 'Specification document belongs to part', 'DOCUMENT -> PART', 'HAS_SPEC', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_MANUAL', 'Part has user/service manual', 'PART -> DOCUMENT', 'MANUAL_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('MANUAL_OF', 'Manual document belongs to part', 'DOCUMENT -> PART', 'HAS_MANUAL', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_CERTIFICATE', 'Part has certificate of conformance', 'PART -> DOCUMENT', 'CERTIFICATE_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('CERTIFICATE_OF', 'Certificate document belongs to part', 'DOCUMENT -> PART', 'HAS_CERTIFICATE', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_DRAWING', 'Part has 2D drawing/print', 'PART -> DOCUMENT', 'DRAWING_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('DRAWING_OF', 'Drawing document belongs to part', 'DOCUMENT -> PART', 'HAS_DRAWING', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_REPORT', 'Part has test/inspection report', 'PART -> DOCUMENT', 'REPORT_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('REPORT_OF', 'Report document belongs to part', 'DOCUMENT -> PART', 'HAS_REPORT', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_CONTRACT', 'Part has contract/procurement document', 'PART -> DOCUMENT', 'CONTRACT_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('CONTRACT_OF', 'Contract document belongs to part', 'DOCUMENT -> PART', 'HAS_CONTRACT', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_STANDARD', 'Part has industry standard reference', 'PART -> DOCUMENT', 'STANDARD_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('STANDARD_OF', 'Standard reference document belongs to part', 'DOCUMENT -> PART', 'HAS_STANDARD', TRUE, '2026-08-14', 'plm-iq'),
+    ('HAS_OTHER', 'Part has other document', 'PART -> DOCUMENT', 'OTHER_OF', TRUE, '2026-08-14', 'plm-iq'),
+    ('OTHER_OF', 'Other document belongs to part', 'DOCUMENT -> PART', 'HAS_OTHER', TRUE, '2026-08-14', 'plm-iq');
 
 PRAGMA foreign_keys = ON;
 
@@ -622,7 +642,8 @@ INSERT INTO plmiq_node (node_id, node_label, attributes, created_by, created_dat
 (417, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (418, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (419, 'BIKE-001_RH.stp', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
-(420, 'FRM-001_J.sldasm', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+(420, 'FRM-001_J.sldasm', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(421, 'BB-002-N.pdf', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
 
 INSERT INTO plmiq_edge (id, source_node_id, target_node_id, edge_type_id, state, quantity, unit, sequence, attributes, created_by, updated_by, created_date, updated_date, tenant_id, tenant_key) VALUES
 (1, 262, 263, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 2}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
@@ -654,7 +675,8 @@ INSERT INTO plmiq_edge (id, source_node_id, target_node_id, edge_type_id, state,
 (147, 264, 418, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (148, 265, 419, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (149, 266, 420, 9, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
-(175, 231, 262, 21, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+(175, 231, 262, 21, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(176, 262, 421, 27, 'ACTIVE', NULL, NULL, NULL, NULL, NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
 
 INSERT INTO plmiq_edge_evidence (id, edge_id, evidence_type, reference, confidence, created_by, created_date, tenant_id, tenant_key) VALUES
 (1, 1, 'BOM_RECORD', 'bom:2', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
@@ -686,7 +708,8 @@ INSERT INTO plmiq_edge_evidence (id, edge_id, evidence_type, reference, confiden
 (147, 147, 'SOURCE_OBJECT', 'cad:3', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (148, 148, 'SOURCE_OBJECT', 'cad:4', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (149, 149, 'SOURCE_OBJECT', 'cad:5', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
-(175, 175, 'SOURCE_OBJECT', 'megan', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+(175, 175, 'SOURCE_OBJECT', 'megan', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(176, 176, 'USER_ASSERTION', 'seed:BB-002-N.pdf', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
 
 UPDATE parts SET node_id = 262 WHERE part_number = 'BIKE-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE parts SET node_id = 263 WHERE part_number = 'FRM-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
@@ -722,5 +745,6 @@ UPDATE cad_metadata SET node_id = 417 WHERE id = 2 AND tenant_key = 'tk_bicyclec
 UPDATE cad_metadata SET node_id = 418 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE cad_metadata SET node_id = 419 WHERE id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE cad_metadata SET node_id = 420 WHERE id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE documents SET node_id = 421 WHERE name = 'BB-002-N.pdf' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 
 PRAGMA foreign_keys = ON;

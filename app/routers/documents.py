@@ -28,7 +28,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response, Streamin
 from sqlalchemy.orm import Session
 
 from app.database import TenantScopedSession
-from app.models import Document, User, Favorite
+from app.models import Document, User, Favorite, Part, GraphNode, GraphEdge, GraphEdgeType, GraphEdgeEvidence
+from app.graph.service import document_linked_parts
 from app.config import (
     DEFAULT_PAGE_SIZE,
     DOCUMENTS_GITEA_REPO,
@@ -309,18 +310,46 @@ def list_documents(
         .all()
     )
 
+    doc_ids = [c.id for c in children if c.kind == "file"]
+    link_map = {}
+    if doc_ids:
+        edges = (
+            db.query(GraphEdge)
+            .filter(GraphEdge.target_node_id.in_(
+                db.query(Document.node_id).filter(Document.id.in_(doc_ids)).subquery()
+            ))
+            .all()
+        )
+        part_node_ids = {e.source_node_id for e in edges}
+        part_map = {}
+        if part_node_ids:
+            for row in db.query(Part).filter(Part.node_id.in_(part_node_ids)).all():
+                part_map[row.node_id] = row
+        edge_type_map = {e.id: e.edge_type for e in db.query(GraphEdgeType).all()}
+        for e in edges:
+            if e.target_node_id not in link_map:
+                link_map[e.target_node_id] = []
+            part = part_map.get(e.source_node_id)
+            link_map[e.target_node_id].append({
+                "part_number": part.part_number if part else str(e.source_node_id),
+                "edge_type": edge_type_map.get(e.edge_type_id, {}).name if e.edge_type_id in edge_type_map else str(e.edge_type_id),
+            })
+
     return HTMLResponse(content=render(
         "documents/list.html",
         **ctx,
         parent_id=parent_id,
         breadcrumb=_breadcrumb(db, parent_id),
         children=children,
+        link_map=link_map,
         q=q or "",
         page=page,
         total=total,
         pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
         categories=_DOC_CATEGORIES,
         statuses=get_settings(request).DOC_STATUSES,
+        parts=db.query(Part).order_by(Part.part_number).all(),
+        document_edge_types=get_settings(request).DOCUMENT_EDGE_TYPES,
     ))
 
 
@@ -364,6 +393,12 @@ def document_detail(request: Request, item_id: int, db: TenantScopedSession = De
     if not item:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
+    linked_part = None
+    if item.node_id:
+        links = document_linked_parts(db, item.node_id)
+        if links:
+            linked_part = links[0]
+
     child_list = []
     if item.kind == "folder":
         child_list = (
@@ -378,6 +413,7 @@ def document_detail(request: Request, item_id: int, db: TenantScopedSession = De
         item=item,
         children=child_list,
         breadcrumb=_breadcrumb(db, item.parent_id),
+        linked_part=linked_part,
     ))
 
 
@@ -394,12 +430,28 @@ def document_edit_form(
     if not item:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
-    # Check if this document is in user's favorites
     is_favorite = db.query(Favorite).filter(
         Favorite.user_id == user.user_id,
         Favorite.object_type == "document",
         Favorite.object_id == str(item_id),
     ).first() is not None
+
+    linked_parts = []
+    if item.node_id:
+        edges = (
+            db.query(GraphEdge, GraphEdgeType, Part)
+            .join(GraphEdgeType, GraphEdge.edge_type_id == GraphEdgeType.id)
+            .join(Part, Part.node_id == GraphEdge.source_node_id)
+            .filter(GraphEdge.target_node_id == item.node_id)
+            .all()
+        )
+        for edge, etype, part in edges:
+            linked_parts.append({
+                "node_id": part.node_id,
+                "part_number": part.part_number,
+                "edge_type": etype.name,
+                "edge_id": edge.id,
+            })
 
     return HTMLResponse(content=render(
         "documents/edit.html",
@@ -408,6 +460,9 @@ def document_edit_form(
         categories=_DOC_CATEGORIES,
         statuses=get_settings(request).DOC_STATUSES,
         is_favorite=is_favorite,
+        linked_parts=linked_parts,
+        parts=db.query(Part).order_by(Part.part_number).all(),
+        document_edge_types=get_settings(request).DOCUMENT_EDGE_TYPES,
     ))
 
 
@@ -439,6 +494,134 @@ def document_edit_submit(
     return RedirectResponse(url=f"/documents/{item.id}", status_code=303)
 
 
+@router.post("/{item_id}/link", response_class=HTMLResponse)
+def link_document_to_part(
+    request: Request,
+    item_id: int,
+    part_number: str = Form(...),
+    edge_type: str = Form("HAS_SPEC"),
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_role(["author"])),
+):
+    user = require_user(request, db)
+    item = db.query(Document).filter(Document.id == item_id).first()
+    if not item:
+        ctx = auth_context(request, db)
+        return HTMLResponse(content=render("404.html", **ctx), status_code=404)
+    part = db.query(Part).filter(Part.part_number == part_number).first()
+    if not part or not part.node_id:
+        return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+
+    doc_node_id = item.node_id
+    if not doc_node_id:
+        node = GraphNode(
+            node_label=item.title or item.name,
+            created_by=item.created_by,
+            created_date=_today(),
+            tenant_id=item.tenant_id,
+            tenant_key=item.tenant_key,
+        )
+        db.add(node)
+        db.flush()
+        item.node_id = node.node_id
+        doc_node_id = node.node_id
+        db.add(item)
+        db.commit()
+
+    etype = db.query(GraphEdgeType).filter(GraphEdgeType.name == edge_type).first()
+    if not etype:
+        return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+
+    exists = db.query(GraphEdge).filter(
+        GraphEdge.source_node_id == part.node_id,
+        GraphEdge.target_node_id == doc_node_id,
+        GraphEdge.edge_type_id == etype.id,
+        GraphEdge.tenant_key == item.tenant_key,
+    ).first()
+    if not exists:
+        db.add(GraphEdge(
+            source_node_id=part.node_id,
+            target_node_id=doc_node_id,
+            edge_type_id=etype.id,
+            state="ACTIVE",
+            created_date=_today(),
+            updated_date=_today(),
+            tenant_id=item.tenant_id,
+            tenant_key=item.tenant_key,
+        ))
+        db.flush()
+        edge = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == part.node_id,
+            GraphEdge.target_node_id == doc_node_id,
+            GraphEdge.edge_type_id == etype.id,
+            GraphEdge.tenant_key == item.tenant_key,
+        ).first()
+        if edge:
+            db.add(GraphEdgeEvidence(
+                edge_id=edge.id,
+                evidence_type="USER_ASSERTION",
+                reference=f"link:{item_id}",
+                confidence=1.0,
+                created_date=_today(),
+                tenant_id=item.tenant_id,
+                tenant_key=item.tenant_key,
+            ))
+        db.commit()
+    return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+
+
+@router.post("/{item_id}/edges/{edge_id}/edit", response_class=HTMLResponse)
+def edit_document_edge(
+    request: Request,
+    item_id: int,
+    edge_id: int,
+    edge_type: str = Form(...),
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_role(["author"])),
+):
+    user = require_user(request, db)
+    item = db.query(Document).filter(Document.id == item_id).first()
+    if not item:
+        ctx = auth_context(request, db)
+        return HTMLResponse(content=render("404.html", **ctx), status_code=404)
+    etype = db.query(GraphEdgeType).filter(GraphEdgeType.name == edge_type).first()
+    if not etype:
+        return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+    edge = db.query(GraphEdge).filter(
+        GraphEdge.id == edge_id,
+        GraphEdge.target_node_id == item.node_id,
+    ).first()
+    if edge:
+        edge.edge_type_id = etype.id
+        edge.updated_date = _today()
+        db.commit()
+    return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+
+
+@router.post("/{item_id}/edges/{edge_id}/delete", response_class=HTMLResponse)
+def delete_document_edge(
+    request: Request,
+    item_id: int,
+    edge_id: int,
+    db: TenantScopedSession = Depends(get_tenant_db),
+    _role: User = Depends(require_role(["author"])),
+):
+    user = require_user(request, db)
+    item = db.query(Document).filter(Document.id == item_id).first()
+    if not item:
+        ctx = auth_context(request, db)
+        return HTMLResponse(content=render("404.html", **ctx), status_code=404)
+    edge = db.query(GraphEdge).filter(
+        GraphEdge.id == edge_id,
+        GraphEdge.target_node_id == item.node_id,
+    ).first()
+    if edge:
+        db.query(GraphEdgeEvidence).filter(GraphEdgeEvidence.edge_id == edge_id).delete()
+        db.delete(edge)
+        db.commit()
+    return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
+
+
 @router.post("/upload", response_class=HTMLResponse)
 async def upload_documents(
     request: Request,
@@ -448,6 +631,8 @@ async def upload_documents(
     status: str = Form("DRAFT"),
     title: str = Form(""),
     description: str = Form(""),
+    part_number: str = Form(""),
+    edge_type: str = Form("HAS_SPEC"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
 ):
@@ -463,6 +648,8 @@ async def upload_documents(
     parent_id = int(parent_id) if parent_id else None
     backend = storage_backend if storage_backend in ("LocalServer", "Gitea") else "LocalServer"
     st = status if status in _DOC_STATUSES else "DRAFT"
+    link_part = part_number.strip() if part_number.strip() else None
+    link_edge_type = edge_type if edge_type else "HAS_SPEC"
 
     def _render_list_error(msg: str, code: int = 400) -> HTMLResponse:
         ctx = auth_context(request, db)
@@ -517,9 +704,80 @@ async def upload_documents(
     else:
         doc_cfg = None
 
+    link_part = part_number.strip() if part_number.strip() else None
+    link_edge_type = edge_type if edge_type else "HAS_SPEC"
+
+    def _resolve_edge_type_id(name: str) -> Optional[int]:
+        et = db.query(GraphEdgeType).filter(GraphEdgeType.name == name).first()
+        return et.id if et else None
+
+    def _resolve_part_node(pn: str) -> Optional[int]:
+        part = db.query(Part).filter(Part.part_number == pn).first()
+        return part.node_id if part and part.node_id else None
+
+    def _ensure_doc_node(doc: Document) -> Optional[int]:
+        if doc.node_id:
+            return doc.node_id
+        node = GraphNode(
+            node_label=doc.title or doc.name,
+            created_by=doc.created_by,
+            created_date=_today(),
+            tenant_id=doc.tenant_id,
+            tenant_key=doc.tenant_key,
+        )
+        db.add(node)
+        db.flush()
+        doc.node_id = node.node_id
+        db.add(doc)
+        db.commit()
+        return node.node_id
+
+    def _create_edge(source_nid: int, target_nid: int, etype_name: str) -> bool:
+        etype_id = _resolve_edge_type_id(etype_name)
+        if etype_id is None:
+            return False
+        exists = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == source_nid,
+            GraphEdge.target_node_id == target_nid,
+            GraphEdge.edge_type_id == etype_id,
+            GraphEdge.tenant_key == tenant_key,
+        ).first()
+        if exists:
+            return False
+        db.add(GraphEdge(
+            source_node_id=source_nid,
+            target_node_id=target_nid,
+            edge_type_id=etype_id,
+            state="ACTIVE",
+            created_date=_today(),
+            updated_date=_today(),
+            tenant_id=tenant_id,
+            tenant_key=tenant_key,
+        ))
+        db.flush()
+        edge = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == source_nid,
+            GraphEdge.target_node_id == target_nid,
+            GraphEdge.edge_type_id == etype_id,
+            GraphEdge.tenant_key == tenant_key,
+        ).first()
+        if edge:
+            db.add(GraphEdgeEvidence(
+                edge_id=edge.id,
+                evidence_type="USER_ASSERTION",
+                reference=f"upload:{file_name}",
+                confidence=1.0,
+                created_date=_today(),
+                tenant_id=tenant_id,
+                tenant_key=tenant_key,
+            ))
+        db.commit()
+        return True
+
     created_files = 0
     updated_files = 0
     created_folders = 0
+    linked = False
     try:
         for f in files:
             content = await f.read()
@@ -571,6 +829,13 @@ async def upload_documents(
 
             file_doc.modified_date = _today()
             db.flush()
+
+            if link_part and not linked:
+                part_node_id = _resolve_part_node(link_part)
+                doc_node_id = _ensure_doc_node(file_doc)
+                if part_node_id and doc_node_id:
+                    _create_edge(part_node_id, doc_node_id, link_edge_type)
+                    linked = True
 
         db.commit()
     except Exception as e:

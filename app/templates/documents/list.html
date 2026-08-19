@@ -49,6 +49,8 @@
                 <th>Version</th>
                 <th>Size</th>
                 <th>Status</th>
+                <th>Linked Part</th>
+                <th>Relationship</th>
                 <th>Created By</th>
                 <th>Modified By</th>
                 <th>Modified</th>
@@ -79,6 +81,27 @@
                 <td>{% if item.file_size_bytes %}{{ (item.file_size_bytes / 1024)|round(1) }} KB{% else %}-{% endif %}</td>
                 <td>
                     <span class="badge {% if item.status == 'APPROVED' %}bg-success{% elif item.status == 'OBSOLETE' %}bg-danger{% elif item.status == 'REVIEW' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ item.status }}</span>
+                </td>
+                <td>
+                    {% set links = link_map.get(item.id, []) %}
+                    {% if links %}
+                        {% for lnk in links %}
+                            <a href="/parts/{{ lnk.part_number }}">{{ lnk.part_number }}</a>
+                            {% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% set links = link_map.get(item.id, []) %}
+                    {% if links %}
+                        {% for lnk in links %}
+                            <span class="badge bg-secondary">{{ lnk.edge_type }}</span>
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
                 </td>
                 <td><small>{{ user_map.get(item.created_by, '—') if user_map else (item.created_by or '—') }}</small></td>
                 <td><small>{{ user_map.get(item.modified_by, '—') if user_map else (item.modified_by or '—') }}</small></td>
@@ -199,6 +222,33 @@
                         <label class="form-label" for="doc_desc">Description (optional)</label>
                         <textarea name="description" id="doc_desc" class="form-control" rows="2"></textarea>
                     </div>
+                    {% if current_user and current_user.role == 'author' %}
+                    <div class="mb-3 border rounded p-2" id="link-to-part">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="linkPartToggle">
+                            <label class="form-label fw-bold" for="linkPartToggle">Link document to part</label>
+                        </div>
+                        <div id="linkPartFields" class="mt-2" style="display:none">
+                            <div class="row g-2">
+                                <div class="col-md-5">
+                                    <label class="form-label" for="link_part_number">Part Number</label>
+                                    <input type="text" name="part_number" id="link_part_number" class="form-control" list="partNumberList" placeholder="e.g. FRM-003">
+                                    <datalist id="partNumberList">
+                                        {% for p in parts %}<option value="{{ p.part_number }}">{{ p.part_name or p.part_number }}</option>{% endfor %}
+                                    </datalist>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="link_edge_type">Relationship</label>
+                                    <select name="edge_type" id="link_edge_type" class="form-select">
+                                        {% for et in document_edge_types %}
+                                        <option value="{{ et.name }}">{{ et.name }} — {{ et.description }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -236,6 +286,10 @@ function setMode(mode) {
 
 document.getElementById('doc_backend').addEventListener('change', function () {
     setMode(document.getElementById('doc_files').hasAttribute('webkitdirectory') ? 'folder' : 'file');
+});
+
+document.getElementById('linkPartToggle').addEventListener('change', function () {
+    document.getElementById('linkPartFields').style.display = this.checked ? 'block' : 'none';
 });
 </script>
 

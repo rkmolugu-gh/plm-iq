@@ -98,6 +98,18 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Workflow object types (DB CHECK also allows 'document')
     "OBJECT_TYPES": ["part", "eco", "document"],
 
+    # Document-part graph edge types
+    "DOCUMENT_EDGE_TYPES": [
+        {"name": "HAS_SPEC", "description": "Specification document"},
+        {"name": "HAS_MANUAL", "description": "User / service manual"},
+        {"name": "HAS_CERTIFICATE", "description": "Certificate of conformance"},
+        {"name": "HAS_DRAWING", "description": "2D drawing / print"},
+        {"name": "HAS_REPORT", "description": "Test / inspection report"},
+        {"name": "HAS_CONTRACT", "description": "Contract / procurement"},
+        {"name": "HAS_STANDARD", "description": "Industry standard reference"},
+        {"name": "HAS_OTHER", "description": "Other"},
+    ],
+
     # Default / reserved roles
     "DEFAULT_ROLES": [
         "reader", "author", "tenantadmin", "quality", "manufacturing",
@@ -236,6 +248,10 @@ class TenantSettings:
     @property
     def OBJECT_TYPES(self) -> list:
         return self.get("OBJECT_TYPES", [])
+
+    @property
+    def DOCUMENT_EDGE_TYPES(self) -> list:
+        return self.get("DOCUMENT_EDGE_TYPES", [])
 
     @property
     def DEFAULT_ROLES(self) -> list:

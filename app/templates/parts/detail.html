@@ -47,6 +47,11 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-docs-btn" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button" role="tab">
+            <i class="bi bi-file-earmark"></i> PartDocs <span class="badge bg-secondary">{{ part_docs|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-graph-btn" data-bs-toggle="tab" data-bs-target="#tab-graph" type="button" role="tab">
             <i class="bi bi-share-nodes"></i> Graph
         </button>
@@ -269,6 +274,31 @@
                         </tr>
                         {% else %}
                         <tr><td colspan="4" class="text-center text-muted py-3">No CAD files</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PartDocs -->
+    <div class="tab-pane fade" id="tab-docs" role="tabpanel">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-file-earmark"></i> Documents — {{ part.part_number }}</div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>Document</th><th>Name</th><th>Relationship</th><th>Format</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for doc in part_docs %}
+                        <tr>
+                            <td><a href="/documents/{{ doc.id }}">{{ doc.document_number or doc.id }}</a></td>
+                            <td>{{ doc.name }}</td>
+                            <td><span class="badge bg-secondary">{{ doc.edge_type }}</span></td>
+                            <td>{{ doc.doc_format or '-' }}</td>
+                            <td>{{ doc.status }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">No documents linked to this part.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

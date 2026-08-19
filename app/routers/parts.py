@@ -22,6 +22,9 @@ from app.models import (
     User,
     WorkflowDefinition,
     WorkflowInstance,
+    GraphEdge,
+    GraphEdgeType,
+    Document,
 )
 from app.routers.auth import auth_context, get_settings, get_tenant_db, require_role, require_user
 from app.sequence import next_object_id
@@ -103,6 +106,36 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
     cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
     graph_edges = domain_node_edges(db, "PART", part_number)
 
+    part_docs = []
+    if part.node_id:
+        edges = db.query(GraphEdge).filter(GraphEdge.source_node_id == part.node_id).all()
+        doc_edge_types = {
+            "HAS_SPEC", "HAS_MANUAL", "HAS_CERTIFICATE", "HAS_DRAWING",
+            "HAS_REPORT", "HAS_CONTRACT", "HAS_STANDARD", "HAS_OTHER", "HAS_DOCUMENT",
+        }
+        if edges:
+            edge_type_ids = {e.edge_type_id for e in edges if e.target_node_id}
+            edge_types = {et.id: et.name for et in db.query(GraphEdgeType).filter(GraphEdgeType.id.in_(edge_type_ids)).all()}
+            doc_node_ids = {e.target_node_id for e in edges if edge_types.get(e.edge_type_id) in doc_edge_types}
+            if doc_node_ids:
+                docs = db.query(Document).filter(Document.node_id.in_(doc_node_ids)).all()
+                doc_map = {d.node_id: d for d in docs}
+                for e in edges:
+                    etype = edge_types.get(e.edge_type_id)
+                    if etype not in doc_edge_types:
+                        continue
+                    doc = doc_map.get(e.target_node_id)
+                    if doc:
+                        part_docs.append({
+                            "id": doc.id,
+                            "name": doc.name,
+                            "document_number": doc.document_number,
+                            "doc_format": doc.doc_format,
+                            "status": doc.status,
+                            "edge_type": etype,
+                        })
+    part_docs.sort(key=lambda x: (x["edge_type"], x["name"]))
+
     # Expanded BOM subtree rooted at this part (mirrors /bom/tree/{part_number}).
     bom_tree_items = []
     _bom_seen = set()
@@ -169,6 +202,7 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         release_templates=release_templates,
         unrelease_templates=unrelease_templates,
         release_instance=release_instance,
+        part_docs=part_docs,
     ))
 
 

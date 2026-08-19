@@ -50,6 +50,9 @@ from app.models import (
     WorkflowInstance,
     WorkflowTask,
     User,
+    GraphEdge,
+    GraphEdgeType,
+    GraphEdgeEvidence,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,7 +256,6 @@ def _next_eco_seq(db) -> int:
 def _ensure_workflows(db) -> int:
     """One workflow instance + tasks per part (OPERATES_ON / ASSIGNED_TO)."""
     u = _user(db)
-    # A part-release definition is seeded globally (id=1); reuse it if present.
     definition = db.query(WorkflowDefinition).filter(
         WorkflowDefinition.object_type == 'part').first()
     n = 0
@@ -287,6 +289,57 @@ def _ensure_workflows(db) -> int:
     return n
 
 
+def _ensure_doc_part_edges(db) -> int:
+    """Create HAS_SPEC edges from each part to its seed document."""
+    has_spec = db.query(GraphEdgeType).filter(
+        GraphEdgeType.name == 'HAS_SPEC').first()
+    if not has_spec:
+        logger.warning("HAS_SPEC edge type not found; skipping doc-part edges")
+        return 0
+    n = 0
+    for p in _parts(db):
+        doc = db.query(Document).filter(
+            Document.name == p.part_number,
+            Document.tenant_key == TENANT_KEY).first()
+        if not doc or not doc.node_id or not p.node_id:
+            continue
+        exists = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == p.node_id,
+            GraphEdge.target_node_id == doc.node_id,
+            GraphEdge.edge_type_id == has_spec.id,
+            GraphEdge.tenant_key == TENANT_KEY).first()
+        if exists:
+            continue
+        db.add(GraphEdge(
+            source_node_id=p.node_id,
+            target_node_id=doc.node_id,
+            edge_type_id=has_spec.id,
+            state='ACTIVE',
+            created_date=_now(),
+            updated_date=_now(),
+            tenant_id=TENANT_ID,
+            tenant_key=TENANT_KEY,
+        ))
+        db.flush()
+        db.add(GraphEdgeEvidence(
+            edge_id=db.query(GraphEdge).filter(
+                GraphEdge.source_node_id == p.node_id,
+                GraphEdge.target_node_id == doc.node_id,
+                GraphEdge.edge_type_id == has_spec.id,
+                GraphEdge.tenant_key == TENANT_KEY,
+            ).order_by(GraphEdge.id.desc()).first().id,
+            evidence_type='USER_ASSERTION',
+            reference=f'graph_seed:{p.part_number}',
+            confidence=1.0,
+            created_date=_now(),
+            tenant_id=TENANT_ID,
+            tenant_key=TENANT_KEY,
+        ))
+        db.commit()
+        n += 1
+    return n
+
+
 # ----------------------------------------------------------------------
 # Top-level
 # ----------------------------------------------------------------------
@@ -314,6 +367,12 @@ def seed(do_build: bool = True) -> dict:
         from db.indexing.build_graph import build
         graph = build(force=True)
         logger.info("Graph build result: %s", graph)
+        db2 = SessionLocal()
+        try:
+            doc_edges = _ensure_doc_part_edges(db2)
+            logger.info("Doc-part HAS_SPEC edges created: %d", doc_edges)
+        finally:
+            db2.close()
     return {"enriched": counts, "graph": graph}
 
 
