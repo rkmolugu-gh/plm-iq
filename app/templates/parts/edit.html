@@ -28,10 +28,24 @@
                     <label class="form-label">Part Name</label>
                     <input type="text" name="part_name" class="form-control" value="{{ part.part_name }}" required>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Revision</label>
-                    <input type="text" name="part_revision" class="form-control" value="{{ part.part_revision }}" required>
-                </div>
+        <div class="col-md-3">
+            <label class="form-label">Part Number</label>
+            <div class="input-group">
+                <input type="text" name="part_number" class="form-control" value="{{ part.part_number }}" required>
+                <button type="button" class="btn btn-outline-secondary" id="generatePartNumber" title="Increment part number">
+                    <i class="bi bi-lightning"></i> Generate
+                </button>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Revision</label>
+            <div class="input-group">
+                <input type="text" name="part_revision" class="form-control" value="{{ part.part_revision }}" required>
+                <button type="button" class="btn btn-outline-secondary" id="generateRevision" title="Increment revision">
+                    <i class="bi bi-lightning"></i> Generate
+                </button>
+            </div>
+        </div>
                 <div class="col-md-3">
                     <label class="form-label">Material</label>
                     <input type="text" name="material" class="form-control" value="{{ part.material or '' }}">

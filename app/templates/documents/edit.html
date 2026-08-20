@@ -98,10 +98,12 @@
                 <h6>Add Link</h6>
                 <form method="POST" action="/documents/{{ item.id }}/link" class="row g-2">
                     <div class="col-md-5">
-                        <input type="text" name="part_number" class="form-control" list="partNumberList" placeholder="Part number" required>
-                        <datalist id="partNumberList">
-                            {% for p in parts %}<option value="{{ p.part_number }}">{{ p.part_name or p.part_number }}</option>{% endfor %}
-                        </datalist>
+                        <select name="part_id" class="form-select" required>
+                            <option value="">Select a part...</option>
+                            {% for p in parts %}
+                            <option value="{{ p.part_id }}">{{ p.part_number }} Rev {{ p.part_revision }} — {{ p.part_name or p.part_number }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="col-md-4">
                         <select name="edge_type" class="form-select">

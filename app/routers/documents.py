@@ -313,11 +313,16 @@ def list_documents(
     doc_ids = [c.id for c in children if c.kind == "file"]
     link_map = {}
     if doc_ids:
+        doc_node_map = {
+            d.node_id: d.id
+            for d in db.query(Document.id, Document.node_id)
+            .filter(Document.id.in_(doc_ids), Document.node_id.isnot(None))
+            .all()
+        }
+        node_ids = list(doc_node_map.keys())
         edges = (
             db.query(GraphEdge)
-            .filter(GraphEdge.target_node_id.in_(
-                db.query(Document.node_id).filter(Document.id.in_(doc_ids)).subquery()
-            ))
+            .filter(GraphEdge.target_node_id.in_(node_ids))
             .all()
         )
         part_node_ids = {e.source_node_id for e in edges}
@@ -327,10 +332,13 @@ def list_documents(
                 part_map[row.node_id] = row
         edge_type_map = {e.id: e.edge_type for e in db.query(GraphEdgeType).all()}
         for e in edges:
-            if e.target_node_id not in link_map:
-                link_map[e.target_node_id] = []
+            doc_id = doc_node_map.get(e.target_node_id)
+            if doc_id is None:
+                continue
+            if doc_id not in link_map:
+                link_map[doc_id] = []
             part = part_map.get(e.source_node_id)
-            link_map[e.target_node_id].append({
+            link_map[doc_id].append({
                 "part_number": part.part_number if part else str(e.source_node_id),
                 "edge_type": edge_type_map.get(e.edge_type_id, {}).name if e.edge_type_id in edge_type_map else str(e.edge_type_id),
             })
@@ -348,7 +356,7 @@ def list_documents(
         pages=(total + DEFAULT_PAGE_SIZE - 1) // DEFAULT_PAGE_SIZE,
         categories=_DOC_CATEGORIES,
         statuses=get_settings(request).DOC_STATUSES,
-        parts=db.query(Part).order_by(Part.part_number).all(),
+        parts=db.query(Part).order_by(Part.part_number, Part.part_revision).all(),
         document_edge_types=get_settings(request).DOCUMENT_EDGE_TYPES,
     ))
 
@@ -461,7 +469,7 @@ def document_edit_form(
         statuses=get_settings(request).DOC_STATUSES,
         is_favorite=is_favorite,
         linked_parts=linked_parts,
-        parts=db.query(Part).order_by(Part.part_number).all(),
+        parts=db.query(Part).order_by(Part.part_number, Part.part_revision).all(),
         document_edge_types=get_settings(request).DOCUMENT_EDGE_TYPES,
     ))
 
@@ -498,7 +506,7 @@ def document_edit_submit(
 def link_document_to_part(
     request: Request,
     item_id: int,
-    part_number: str = Form(...),
+    part_id: str = Form(...),
     edge_type: str = Form("HAS_SPEC"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
@@ -508,7 +516,7 @@ def link_document_to_part(
     if not item:
         ctx = auth_context(request, db)
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
-    part = db.query(Part).filter(Part.part_number == part_number).first()
+    part = db.query(Part).filter(Part.part_id == int(part_id)).first()
     if not part or not part.node_id:
         return RedirectResponse(url=f"/documents/{item_id}/edit", status_code=303)
 
@@ -631,7 +639,7 @@ async def upload_documents(
     status: str = Form("DRAFT"),
     title: str = Form(""),
     description: str = Form(""),
-    part_number: str = Form(""),
+    part_id: str = Form(""),
     edge_type: str = Form("HAS_SPEC"),
     db: TenantScopedSession = Depends(get_tenant_db),
     _role: User = Depends(require_role(["author"])),
@@ -648,7 +656,6 @@ async def upload_documents(
     parent_id = int(parent_id) if parent_id else None
     backend = storage_backend if storage_backend in ("LocalServer", "Gitea") else "LocalServer"
     st = status if status in _DOC_STATUSES else "DRAFT"
-    link_part = part_number.strip() if part_number.strip() else None
     link_edge_type = edge_type if edge_type else "HAS_SPEC"
 
     def _render_list_error(msg: str, code: int = 400) -> HTMLResponse:
@@ -704,15 +711,15 @@ async def upload_documents(
     else:
         doc_cfg = None
 
-    link_part = part_number.strip() if part_number.strip() else None
+    link_part_id = int(part_id) if part_id.strip() else None
     link_edge_type = edge_type if edge_type else "HAS_SPEC"
 
     def _resolve_edge_type_id(name: str) -> Optional[int]:
         et = db.query(GraphEdgeType).filter(GraphEdgeType.name == name).first()
         return et.id if et else None
 
-    def _resolve_part_node(pn: str) -> Optional[int]:
-        part = db.query(Part).filter(Part.part_number == pn).first()
+    def _resolve_part_node(pid: int) -> Optional[int]:
+        part = db.query(Part).filter(Part.part_id == pid).first()
         return part.node_id if part and part.node_id else None
 
     def _ensure_doc_node(doc: Document) -> Optional[int]:
@@ -830,8 +837,8 @@ async def upload_documents(
             file_doc.modified_date = _today()
             db.flush()
 
-            if link_part and not linked:
-                part_node_id = _resolve_part_node(link_part)
+            if link_part_id and not linked:
+                part_node_id = _resolve_part_node(link_part_id)
                 doc_node_id = _ensure_doc_node(file_doc)
                 if part_node_id and doc_node_id:
                     _create_edge(part_node_id, doc_node_id, link_edge_type)

@@ -1,0 +1,6 @@
+left nav bar - ui rename PLM news to activity. backend rename any code having news into activity.
+Part costing tab - traverse its bom list all part revisions and their cost and show total costing. 
+Parts PartDocs tab. not showing related or linked documents. change title to show part revision not just part.
+Parts Graph not showing the documents linked or related.
+ECO number add generate button. use settings to generate. Part number change to select part revision. reorder attribute by eco attributes, then part change attributes.
+Title of parts page showing only part number show part revision also

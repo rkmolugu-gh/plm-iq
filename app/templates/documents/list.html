@@ -231,11 +231,13 @@
                         <div id="linkPartFields" class="mt-2" style="display:none">
                             <div class="row g-2">
                                 <div class="col-md-5">
-                                    <label class="form-label" for="link_part_number">Part Number</label>
-                                    <input type="text" name="part_number" id="link_part_number" class="form-control" list="partNumberList" placeholder="e.g. FRM-003">
-                                    <datalist id="partNumberList">
-                                        {% for p in parts %}<option value="{{ p.part_number }}">{{ p.part_name or p.part_number }}</option>{% endfor %}
-                                    </datalist>
+                                    <label class="form-label" for="link_part_id">Part</label>
+                                    <select name="part_id" id="link_part_id" class="form-select">
+                                        <option value="">Select a part...</option>
+                                        {% for p in parts %}
+                                        <option value="{{ p.part_id }}">{{ p.part_number }} Rev {{ p.part_revision }} — {{ p.part_name or p.part_number }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label" for="link_edge_type">Relationship</label>
