@@ -1,6 +1,16 @@
-left nav bar - ui rename PLM news to activity. backend rename any code having news into activity.
-Part costing tab - traverse its bom list all part revisions and their cost and show total costing. 
-Parts PartDocs tab. not showing related or linked documents. change title to show part revision not just part.
-Parts Graph not showing the documents linked or related.
-ECO number add generate button. use settings to generate. Part number change to select part revision. reorder attribute by eco attributes, then part change attributes.
-Title of parts page showing only part number show part revision also
+seed file add a ECO linked to BIKE-001 revision H
+change route for part from http://localhost:8000/parts/BIKE-001 to http://localhost:8000/parts/BIKE-001/H to show revision also 
+Part PartDocs not showing linked Document. whereas we liked BB-002-N.pdf to BIKE-001 rev H.
+Fix http://localhost:8000/documents/1 error  File "C:\Users\tntmx6\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 622, in _literal_coercion
+        return self._text_coercion(element, argname, **kw)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\tntmx6\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 927, in _text_coercion
+        return _no_text_coercion(element, argname)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\tntmx6\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 585, in _no_text_coercion
+        raise exc_cls(
+    sqlalchemy.exc.ArgumentError: Textual SQL expression 'plm-iq' should be explicitly declared as text('plm-iq')
+http://localhost:8000/documents document list not showing edge type in relationship column showing only a number
+
+
+

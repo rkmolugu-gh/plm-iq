@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ part.part_number }} - PLM-IQ{% endblock %}
+{% block title %}{{ part.part_number }} Rev {{ part.part_revision }} - PLM-IQ{% endblock %}
 {% block content %}
 
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
         <li class="breadcrumb-item"><a href="/parts">Parts</a></li>
-        <li class="breadcrumb-item active">{{ part.part_number }}</li>
+        <li class="breadcrumb-item active">{{ part.part_number }} <span class="badge bg-dark badge-status">{{ part.part_revision }}</span></li>
     </ol>
 </nav>
 
@@ -162,18 +162,26 @@
             <div class="card-header"><i class="bi bi-currency-dollar"></i> Costing <span class="badge bg-secondary">{{ costing_items|length }}</span></div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
-                    <thead><tr><th>Cost Type</th><th>Unit Cost</th><th>Extended</th><th>Rolled Total</th></tr></thead>
+                    <thead><tr><th>Part</th><th>Rev</th><th>Name</th><th>Qty</th><th>Unit Cost</th><th>Extended</th></tr></thead>
                     <tbody>
-                        {% for c in costing_items %}
+                        {% for c in bom_costing_items %}
                         <tr>
-                            <td><span class="badge bg-{% if c.cost_type == 'LEAF' %}secondary{% else %}primary{% endif %} badge-status">{{ c.cost_type }}</span></td>
+                            <td><a href="/parts/{{ c.part_number }}">{{ c.part_number }}</a></td>
+                            <td>{{ c.part_revision }}</td>
+                            <td><small>{{ c.part_name or '-' }}</small></td>
+                            <td>{{ c.qty }}</td>
                             <td>{{ c.unit_cost|currency }}</td>
                             <td>{{ c.extended_cost|currency }}</td>
-                            <td><strong>{{ c.rolled_total|currency }}</strong></td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="4" class="text-center text-muted py-3">No costing data</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-3">No costing data</td></tr>
                         {% endfor %}
+                        {% if bom_costing_items %}
+                        <tr class="table-active fw-bold">
+                            <td colspan="5" class="text-end">Total BOM Cost</td>
+                            <td>{{ total_bom_cost|currency }}</td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -284,7 +292,7 @@
     <!-- PartDocs -->
     <div class="tab-pane fade" id="tab-docs" role="tabpanel">
         <div class="card">
-            <div class="card-header"><i class="bi bi-file-earmark"></i> Documents — {{ part.part_number }}</div>
+            <div class="card-header"><i class="bi bi-file-earmark"></i> Documents — {{ part.part_number }} Rev {{ part.part_revision }}</div>
             <div class="card-body p-0">
                 <table class="table table-sm mb-0">
                     <thead><tr><th>Document</th><th>Name</th><th>Relationship</th><th>Format</th><th>Status</th></tr></thead>

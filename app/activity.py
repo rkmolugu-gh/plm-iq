@@ -1,7 +1,7 @@
-"""Company Activity helper — aggregates tenant-wide activity data for the PLM News page.
+"""Company Activity helper — aggregates tenant-wide activity data for the Activity page.
 
 Data is derived entirely from existing tables; no new models or tracking are
-introduced.  All queries are tenant-scoped by ``tenant_key``.
+required. The returned dict is consumed by the ``activity.html`` template.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def get_company_activity(
     db: Session,
     settings: TenantSettings,
 ) -> Dict[str, Any]:
-    """Return structured activity data for the PLM News page.
+    """Return structured activity data for the Activity page.
 
     Args:
         request: FastAPI request (used for tenant resolution).
@@ -68,7 +68,7 @@ def get_company_activity(
         settings: Merged ``TenantSettings`` for the current tenant.
 
     Returns:
-        A dict with keys consumed by the ``plm_news.html`` template.
+        A dict with keys consumed by the ``activity.html`` template.
     """
     tenant_key = getattr(request.state, "tenant_key", None)
     if not tenant_key:

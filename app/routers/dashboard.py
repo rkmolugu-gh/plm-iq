@@ -1,4 +1,4 @@
-"""Dashboard router — PLM News (company activity feed)."""
+"""Dashboard router — Company Activity (activity feed)."""
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -13,16 +13,16 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-def plm_news(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
-    """Render the PLM News page with company-wide activity."""
+def activity(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
+    """Render the Activity page with company-wide activity."""
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    activity = get_company_activity(request, db, get_settings(request))
+    activity_data = get_company_activity(request, db, get_settings(request))
 
     return HTMLResponse(content=render(
-        "plm_news.html",
+        "activity.html",
         **ctx,
-        **activity,
+        **activity_data,
     ))
 
 

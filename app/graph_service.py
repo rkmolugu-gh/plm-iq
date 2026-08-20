@@ -23,7 +23,16 @@ from app.models import (
     ApprovedVendor,
     CadMetadata,
     Document,
+    GraphEdge,
+    GraphEdgeType,
+    GraphNode,
 )
+
+
+def _part_node(db, key: str) -> Optional[int]:
+    """Return the graph node_id for a part_number, or None if not linked."""
+    p = db.query(Part.node_id).filter(Part.part_number == key).first()
+    return p[0] if p else None
 
 
 def resolve_root(db, object_id: str) -> Optional[tuple[str, str, str]]:
@@ -157,7 +166,22 @@ def node_edges(db, object_type: str, key: str) -> list[dict]:
         for cad_id, fname in cads:
             add("HAS_CAD", "out", "CAD_MODEL", str(cad_id), fname)
 
-        # Documents linked to this part (matched by name prefix, when available).
+        # Documents linked to this part via graph edges.
+        linked_docs = (
+            db.query(GraphEdge, GraphEdgeType, Document)
+            .join(GraphEdgeType, GraphEdge.edge_type_id == GraphEdgeType.id)
+            .join(Document, Document.node_id == GraphEdge.target_node_id)
+            .filter(GraphEdge.source_node_id == _part_node(db, key))
+            .filter(GraphEdgeType.name.in_([
+                "HAS_SPEC", "HAS_MANUAL", "HAS_CERTIFICATE", "HAS_DRAWING",
+                "HAS_REPORT", "HAS_CONTRACT", "HAS_STANDARD", "HAS_OTHER", "HAS_DOCUMENT",
+            ]))
+            .all()
+        )
+        for edge, etype, doc in linked_docs:
+            add(etype.name, "out", "DOCUMENT", str(doc.id), doc.title or doc.name)
+
+        # Documents matched by name prefix (fallback for docs without graph edges).
         docs = (
             db.query(Document.id, Document.name, Document.title)
             .filter(Document.name.like(f"{key}%"))

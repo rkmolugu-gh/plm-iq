@@ -16,23 +16,30 @@
             <div class="row g-3">
                 <div class="col-md-4">
                     <label class="form-label">ECO Number</label>
-                    <input type="text" name="eco_number" class="form-control" placeholder="Auto-generated if blank">
-                    <div class="form-text text-secondary">Leave blank to auto-generate from tenant numbering.</div>
+                    <div class="input-group">
+                        <input type="text" name="eco_number" id="eco_number" class="form-control" placeholder="Click Generate">
+                        <button type="button" class="btn btn-outline-secondary" id="generateEcoNumber"><i class="bi bi-lightning"></i> Generate</button>
+                    </div>
                 </div>
                 <div class="col-md-5">
                     <label class="form-label">ECO Title</label>
                     <input type="text" name="eco_title" class="form-control" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Part Number</label>
-                    <input type="text" name="part_number" class="form-control" placeholder="Select or enter part number">
+                    <label class="form-label">Part</label>
+                    <select name="part_number" id="part_number_select" class="form-select">
+                        <option value="">Select a part...</option>
+                        {% for p in parts %}
+                        <option value="{{ p.part_number }}" data-revision="{{ p.part_revision }}">{{ p.part_number }} Rev {{ p.part_revision }} — {{ p.part_name or p.part_number }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
             <hr>
             <div class="row g-3">
                 <div class="col-md-2">
                     <label class="form-label">Current Rev</label>
-                    <input type="text" name="current_revision" class="form-control" value="A">
+                    <input type="text" name="current_revision" id="current_revision" class="form-control" value="A">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">New Rev</label>
@@ -41,18 +48,14 @@
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
                     <select name="eco_status" class="form-select">
-                        {% for s in statuses %}
-                        <option value="{{ s }}">{{ s }}</option>
-                        {% endfor %}
+                        {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Change Type</label>
                     <select name="change_type" class="form-select">
                         <option value="">(none)</option>
-                        {% for ct in change_types %}
-                        <option value="{{ ct }}" {% if form_change_type == ct %}selected{% endif %}>{{ ct }}</option>
-                        {% endfor %}
+                        {% for ct in change_types %}<option value="{{ ct }}">{{ ct }}</option>{% endfor %}
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -75,5 +78,22 @@
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('generateEcoNumber').addEventListener('click', async function () {
+    const input = document.getElementById('eco_number');
+    try {
+        const res = await fetch('/eco/api/next-number');
+        const data = await res.json();
+        input.value = data.eco_number || '';
+    } catch (e) {
+        input.value = '';
+    }
+});
+document.getElementById('part_number_select').addEventListener('change', function () {
+    const rev = this.options[this.selectedIndex]?.getAttribute('data-revision') || '';
+    document.getElementById('current_revision').value = rev || 'A';
+});
+</script>
 
 {% endblock %}

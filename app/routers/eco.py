@@ -4,10 +4,10 @@ from typing import Optional, Dict
 from fastapi import APIRouter, Depends, Query, Form, Request
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
 from app.database import TenantScopedSession
-from app.models import EngineeringChangeOrder, User, WorkflowDefinition, WorkflowInstance, Favorite
+from app.models import EngineeringChangeOrder, User, WorkflowDefinition, WorkflowInstance, Favorite, Part
 from app.config import DEFAULT_PAGE_SIZE
 from app.routers.auth import require_user, require_role, auth_context, get_tenant_db, get_settings
 from app.sequence import next_object_id
@@ -57,6 +57,14 @@ def list_ecos(
     ))
 
 
+@router.get("/api/next-number", response_class=JSONResponse)
+def next_eco_number(request: Request, db: TenantScopedSession = Depends(get_tenant_db)):
+    user = require_user(request, db)
+    tenant_key = user.tenant_key if user else None
+    next_number = next_object_id(db, "eco", tenant_key)
+    return {"eco_number": next_number}
+
+
 @router.get("/new", response_class=HTMLResponse)
 def eco_new_form(
     request: Request,
@@ -68,10 +76,12 @@ def eco_new_form(
     user = require_user(request, db)
     ctx = auth_context(request, db)
     change_types = get_settings(request).ECO_CHANGE_TYPES
+    parts = db.query(Part).order_by(Part.part_number, Part.part_revision).all()
     return HTMLResponse(content=render(
         "eco/new.html", **ctx,
         statuses=get_settings(request).ECO_STATUSES,
         change_types=change_types,
+        parts=parts,
         form_change_type=q or "",
     ))
 
@@ -144,8 +154,9 @@ def eco_edit_form(
     ).order_by(User.username).all()
 
     change_types = get_settings(request).ECO_CHANGE_TYPES
+    parts = db.query(Part).order_by(Part.part_number, Part.part_revision).all()
 
-    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=get_settings(request).ECO_STATUSES, is_favorite=is_favorite, users=users_for_select, change_types=change_types))
+    return HTMLResponse(content=render("eco/edit.html", **ctx, item=item, statuses=get_settings(request).ECO_STATUSES, is_favorite=is_favorite, users=users_for_select, change_types=change_types, parts=parts))
 
 
 @router.post("/{eco_number}/edit", response_class=HTMLResponse)

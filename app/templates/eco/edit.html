@@ -29,8 +29,13 @@
                     <input type="text" name="eco_title" class="form-control" value="{{ item.eco_title }}" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Part Number</label>
-                    <input type="text" name="part_number" class="form-control" value="{{ item.part_number or '' }}">
+                    <label class="form-label">Part</label>
+                    <select name="part_number" id="part_number_select" class="form-select">
+                        <option value="">Select a part...</option>
+                        {% for p in parts %}
+                        <option value="{{ p.part_number }}" data-revision="{{ p.part_revision }}" {% if item.part_number == p.part_number %}selected{% endif %}>{{ p.part_number }} Rev {{ p.part_revision }} — {{ p.part_name or p.part_number }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Status</label>
@@ -49,15 +54,18 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-1">
+            </div>
+            <hr>
+            <div class="row g-3">
+                <div class="col-md-2">
                     <label class="form-label">Current Rev</label>
-                    <input type="text" name="current_revision" class="form-control" value="{{ item.current_revision or 'A' }}">
+                    <input type="text" name="current_revision" id="current_revision" class="form-control" value="{{ item.current_revision or 'A' }}">
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-2">
                     <label class="form-label">New Rev</label>
                     <input type="text" name="new_revision" class="form-control" value="{{ item.new_revision or 'B' }}">
                 </div>
-                <div class="col-md-1">
+                <div class="col-md-2">
                     <label class="form-label">BOM Level</label>
                     <input type="number" name="affected_bom_level" class="form-control" min="0" value="{{ item.affected_bom_level or 0 }}">
                 </div>
@@ -107,5 +115,12 @@
         </form>
     </div>
 </div>
+
+<script>
+document.getElementById('part_number_select').addEventListener('change', function () {
+    const rev = this.options[this.selectedIndex]?.getAttribute('data-revision') || '';
+    document.getElementById('current_revision').value = rev || 'A';
+});
+</script>
 
 {% endblock %}

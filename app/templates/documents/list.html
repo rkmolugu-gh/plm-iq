@@ -50,6 +50,7 @@
                 <th>Size</th>
                 <th>Status</th>
                 <th>Linked Part</th>
+                <th>Rev</th>
                 <th>Relationship</th>
                 <th>Created By</th>
                 <th>Modified By</th>
@@ -97,6 +98,17 @@
                     {% set links = link_map.get(item.id, []) %}
                     {% if links %}
                         {% for lnk in links %}
+                            <span class="badge bg-dark badge-status">{{ lnk.part_revision }}</span>
+                            {% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% set links = link_map.get(item.id, []) %}
+                    {% if links %}
+                        {% for lnk in links %}
                             <span class="badge bg-secondary">{{ lnk.edge_type }}</span>
                         {% endfor %}
                     {% else %}
@@ -124,7 +136,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="12" class="text-center text-muted py-4">This folder is empty. Upload a file or folder to get started.</td></tr>
+            <tr><td colspan="15" class="text-center text-muted py-4">This folder is empty. Upload a file or folder to get started.</td></tr>
             {% endfor %}
         </tbody>
     </table>

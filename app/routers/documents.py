@@ -330,7 +330,7 @@ def list_documents(
         if part_node_ids:
             for row in db.query(Part).filter(Part.node_id.in_(part_node_ids)).all():
                 part_map[row.node_id] = row
-        edge_type_map = {e.id: e.edge_type for e in db.query(GraphEdgeType).all()}
+        edge_type_map = {et.id: et.name for et in db.query(GraphEdgeType).all()}
         for e in edges:
             doc_id = doc_node_map.get(e.target_node_id)
             if doc_id is None:
@@ -340,7 +340,8 @@ def list_documents(
             part = part_map.get(e.source_node_id)
             link_map[doc_id].append({
                 "part_number": part.part_number if part else str(e.source_node_id),
-                "edge_type": edge_type_map.get(e.edge_type_id, {}).name if e.edge_type_id in edge_type_map else str(e.edge_type_id),
+                "part_revision": part.part_revision if part else "-",
+                "edge_type": edge_type_map.get(e.edge_type_id, str(e.edge_type_id)),
             })
 
     return HTMLResponse(content=render(

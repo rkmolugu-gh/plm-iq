@@ -100,41 +100,6 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
 
     bom_items = db.query(BomItem).filter(BomItem.part_number == part_number).all()
     costing_items = db.query(CostingBomItem).filter(CostingBomItem.part_number == part_number).all()
-    ecos = db.query(EngineeringChangeOrder).filter(EngineeringChangeOrder.part_number == part_number).all()
-    amls = db.query(ApprovedManufacturer).filter(ApprovedManufacturer.part_number == part_number).all()
-    avls = db.query(ApprovedVendor).filter(ApprovedVendor.part_number == part_number).all()
-    cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
-    graph_edges = domain_node_edges(db, "PART", part_number)
-
-    part_docs = []
-    if part.node_id:
-        edges = db.query(GraphEdge).filter(GraphEdge.source_node_id == part.node_id).all()
-        doc_edge_types = {
-            "HAS_SPEC", "HAS_MANUAL", "HAS_CERTIFICATE", "HAS_DRAWING",
-            "HAS_REPORT", "HAS_CONTRACT", "HAS_STANDARD", "HAS_OTHER", "HAS_DOCUMENT",
-        }
-        if edges:
-            edge_type_ids = {e.edge_type_id for e in edges if e.target_node_id}
-            edge_types = {et.id: et.name for et in db.query(GraphEdgeType).filter(GraphEdgeType.id.in_(edge_type_ids)).all()}
-            doc_node_ids = {e.target_node_id for e in edges if edge_types.get(e.edge_type_id) in doc_edge_types}
-            if doc_node_ids:
-                docs = db.query(Document).filter(Document.node_id.in_(doc_node_ids)).all()
-                doc_map = {d.node_id: d for d in docs}
-                for e in edges:
-                    etype = edge_types.get(e.edge_type_id)
-                    if etype not in doc_edge_types:
-                        continue
-                    doc = doc_map.get(e.target_node_id)
-                    if doc:
-                        part_docs.append({
-                            "id": doc.id,
-                            "name": doc.name,
-                            "document_number": doc.document_number,
-                            "doc_format": doc.doc_format,
-                            "status": doc.status,
-                            "edge_type": etype,
-                        })
-    part_docs.sort(key=lambda x: (x["edge_type"], x["name"]))
 
     # Expanded BOM subtree rooted at this part (mirrors /bom/tree/{part_number}).
     bom_tree_items = []
@@ -159,6 +124,77 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
                 if row.part_number != current:
                     frontier.append(row.part_number)
     bom_tree = _build_tree(bom_tree_items)
+
+    bom_costing_items = []
+    total_bom_cost = 0.0
+    if bom_tree_items:
+        part_numbers_in_bom = {b.part_number for b in bom_tree_items if b.part_number != part_number}
+        part_revisions = {
+            p.part_number: p.part_revision
+            for p in db.query(Part.part_number, Part.part_revision)
+            .filter(Part.part_number.in_(part_numbers_in_bom))
+            .all()
+        }
+        costing_map = {
+            c.part_number: c
+            for c in db.query(CostingBomItem)
+            .filter(CostingBomItem.part_number.in_(part_numbers_in_bom))
+            .all()
+        }
+        for bom_item in bom_tree_items:
+            if bom_item.part_number == part_number:
+                continue
+            cost = costing_map.get(bom_item.part_number)
+            unit_cost = float(cost.unit_cost) if cost and cost.unit_cost else 0.0
+            extended = float(bom_item.qty or 0) * unit_cost
+            total_bom_cost += extended
+            bom_costing_items.append({
+                "part_number": bom_item.part_number,
+                "part_revision": part_revisions.get(bom_item.part_number, "-"),
+                "part_name": bom_item.part_name,
+                "qty": bom_item.qty,
+                "uom": bom_item.uom,
+                "unit_cost": unit_cost,
+                "extended_cost": extended,
+                "level": bom_item.level,
+            })
+    ecos = db.query(EngineeringChangeOrder).filter(EngineeringChangeOrder.part_number == part_number).all()
+    amls = db.query(ApprovedManufacturer).filter(ApprovedManufacturer.part_number == part_number).all()
+    avls = db.query(ApprovedVendor).filter(ApprovedVendor.part_number == part_number).all()
+    cads = db.query(CadMetadata).filter(CadMetadata.part_number == part_number).all()
+    graph_edges = domain_node_edges(db, "PART", part_number)
+
+    part_docs = []
+    if part.node_id:
+        edges = db.query(GraphEdge).filter(
+            (GraphEdge.source_node_id == part.node_id) | (GraphEdge.target_node_id == part.node_id)
+        ).all()
+        doc_edge_types = {
+            "HAS_SPEC", "HAS_MANUAL", "HAS_CERTIFICATE", "HAS_DRAWING",
+            "HAS_REPORT", "HAS_CONTRACT", "HAS_STANDARD", "HAS_OTHER", "HAS_DOCUMENT",
+        }
+        if edges:
+            edge_type_ids = {e.edge_type_id for e in edges if e.target_node_id and e.source_node_id}
+            edge_types = {et.id: et.name for et in db.query(GraphEdgeType).filter(GraphEdgeType.id.in_(edge_type_ids)).all()}
+            doc_node_ids = {e.target_node_id for e in edges if edge_types.get(e.edge_type_id) in doc_edge_types}
+            if doc_node_ids:
+                docs = db.query(Document).filter(Document.node_id.in_(doc_node_ids)).all()
+                doc_map = {d.node_id: d for d in docs}
+                for e in edges:
+                    etype = edge_types.get(e.edge_type_id)
+                    if etype not in doc_edge_types:
+                        continue
+                    doc = doc_map.get(e.target_node_id if e.source_node_id == part.node_id else e.source_node_id)
+                    if doc:
+                        part_docs.append({
+                            "id": doc.id,
+                            "name": doc.name,
+                            "document_number": doc.document_number,
+                            "doc_format": doc.doc_format,
+                            "status": doc.status,
+                            "edge_type": etype,
+                        })
+    part_docs.sort(key=lambda x: (x["edge_type"], x["name"]))
 
     # Query global templates + this tenant's templates (bypass tenant_key scoping)
     release_templates = (
@@ -193,6 +229,8 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         part=part,
         bom_items=bom_items,
         costing_items=costing_items,
+        bom_costing_items=bom_costing_items,
+        total_bom_cost=total_bom_cost,
         ecos=ecos,
         amls=amls,
         avls=avls,
