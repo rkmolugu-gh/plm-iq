@@ -10,7 +10,8 @@ class CadMetadata(Base):
 
     id = Column("id", Integer, primary_key=True, autoincrement=True)
     number = Column("number", String, nullable=True)
-    part_number = Column("part_number", String, ForeignKey("parts.part_number"), nullable=False)
+    part_id = Column("part_id", Integer, ForeignKey("parts.part_id"))
+    part_number = Column("part_number", String, nullable=False)
     part_revision = Column("part_revision", String)
     part_name = Column("part_name", String)
     status = Column("status", String)

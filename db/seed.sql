@@ -58,52 +58,50 @@ INSERT OR IGNORE INTO users (user_id, username, full_name, email, password_hash,
     (29, 'plmiq_quality', 'Vince Quality', 'vince.quality@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'quality'),
     (30, 'plmiq_mfg', 'Wendy Manufacturing', 'wendy.mfg@plm-iq.com', '$2b$12$rc3Hp4Dy57vQaK24YyrQueVL2yRlPT1XUORS4z9brQXVtozw5q0Xe', 6, 'tk_plm_iq_superadmin', TRUE, '2026-08-06', 'manufacturing');
 
--- parts (34 rows: 5 parts per tenant, except tenant 1 which has 9)
-INSERT INTO parts (part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES
-    -- Tenant 1: BicycleCo (9 parts)
-    ('BIKE-001', 'H', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('FRM-001', 'J', 'Frame Assembly', 'volume\Frame Assembly', 'TIG-welded aluminum 6061', 'EA', 1, 'DRAFT', '03-01-2014', '18-08-2024', 2, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('FRM-002', 'A', 'Frame - Main Triangle', 'volume\Frame - Main Triangle', 'Double-butted aluminum', 'EA', 1, 'DRAFT', '03-02-2014', '26-11-2016', 3, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('FRM-003', 'F', 'Top Tube', 'volume\Top Tube', 'Aluminum 6061-T6 - 560mm', 'EA', 1, 'RELEASED', '31-05-2021', '24-12-2022', 3, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('FRM-004', 'O', 'Down Tube', 'volume\Down Tube', 'Aluminum 6061-T6 - tapered', 'EA', 1, 'RELEASED', '21-10-2010', '19-01-2021', 1, 1, 'tk_bicycleco_a1b2c3d4'),
+-- parts (35 rows: 5 parts per tenant, except tenant 1 which has 10 including BIKE-001 G)
+INSERT INTO parts (part_id, part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES
+    -- Tenant 1: BicycleCo (10 parts including BIKE-001 G)
+    (1, 'BIKE-001', 'H', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    (2, 'BIKE-001', 'G', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    (3, 'FRM-001', 'J', 'Frame Assembly', 'volume\Frame Assembly', 'TIG-welded aluminum 6061', 'EA', 1, 'DRAFT', '03-01-2014', '18-08-2024', 2, 1, 'tk_bicycleco_a1b2c3d4'),
+    (4, 'FRM-002', 'A', 'Frame - Main Triangle', 'volume\Frame - Main Triangle', 'Double-butted aluminum', 'EA', 1, 'DRAFT', '03-02-2014', '26-11-2016', 3, 1, 'tk_bicycleco_a1b2c3d4'),
+    (5, 'FRM-003', 'F', 'Top Tube', 'volume\Top Tube', 'Aluminum 6061-T6 - 560mm', 'EA', 1, 'RELEASED', '31-05-2021', '24-12-2022', 3, 1, 'tk_bicycleco_a1b2c3d4'),
+    (6, 'FRM-004', 'O', 'Down Tube', 'volume\Down Tube', 'Aluminum 6061-T6 - tapered', 'EA', 1, 'RELEASED', '21-10-2010', '19-01-2021', 1, 1, 'tk_bicycleco_a1b2c3d4'),
     -- Added to resolve FK violation: ECO-0002..0005 reference these parts (endorsed by user)
-    ('FRM-010', 'N', 'Rear Dropouts', 'volume\Rear Dropouts', 'CNC 7075 aluminum', 'SET', 2, 'RELEASED', '2025-11-20', '2026-01-08', 2, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('DRV-009', 'I', 'Chain 11-Speed', 'volume\Chain 11-Speed', 'Nickel-plated steel', 'EA', 1, 'RELEASED', '2026-02-10', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('WHL-007', 'M', 'Front Inner Tube', 'volume\Front Inner Tube', 'Butyl rubber', 'EA', 1, 'RELEASED', '2026-03-22', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
-    ('BRK-004', 'C', 'Front Brake Pad', 'volume\Front Brake Pad', 'Brake pad compound', 'SET', 2, 'RELEASED', '2025-10-05', '2025-11-15', 4, 1, 'tk_bicycleco_a1b2c3d4'),
+    (7, 'FRM-010', 'N', 'Rear Dropouts', 'volume\Rear Dropouts', 'CNC 7075 aluminum', 'SET', 2, 'RELEASED', '2025-11-20', '2026-01-08', 2, 1, 'tk_bicycleco_a1b2c3d4'),
+    (8, 'DRV-009', 'I', 'Chain 11-Speed', 'volume\Chain 11-Speed', 'Nickel-plated steel', 'EA', 1, 'RELEASED', '2026-02-10', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    (9, 'WHL-007', 'M', 'Front Inner Tube', 'volume\Front Inner Tube', 'Butyl rubber', 'EA', 1, 'RELEASED', '2026-03-22', NULL, 1, 1, 'tk_bicycleco_a1b2c3d4'),
+    (10, 'BRK-004', 'C', 'Front Brake Pad', 'volume\Front Brake Pad', 'Brake pad compound', 'SET', 2, 'RELEASED', '2025-10-05', '2025-11-15', 4, 1, 'tk_bicycleco_a1b2c3d4'),
     -- Tenant 2: CycleWorks (5 parts)
-    ('CYC-001', 'A', 'Carbon Fiber Wheel Set', 'volume\Carbon Fiber Wheel Set', 'Carbon fiber composite', 'SET', 1, 'RELEASED', '2020-08-01', '2021-03-15', 11, 2, 'tk_cycleworks_e5f6g7h8'),
-    ('CYC-002', 'B', 'Disc Brake Caliper', 'volume\Disc Brake Caliper', 'CNC aluminum 7075', 'EA', 2, 'RELEASED', '2020-09-01', '2021-06-20', 11, 2, 'tk_cycleworks_e5f6g7h8'),
-    ('CYC-003', 'A', 'Chainring Set 52/36T', 'volume\Chainring Set', '7075 aluminum alloy', 'SET', 1, 'DRAFT', '2021-01-10', '2021-05-12', 11, 2, 'tk_cycleworks_e5f6g7h8'),
-    ('CYC-004', 'C', 'Aero Handlebar', 'volume\Aero Handlebar', 'Carbon fiber T800', 'EA', 1, 'RELEASED', '2021-03-15', '2022-01-10', 11, 2, 'tk_cycleworks_e5f6g7h8'),
-    ('CYC-005', 'A', 'Titanium Seatpost', 'volume\Titanium Seatpost', 'Grade 9 titanium', 'EA', 1, 'DRAFT', '2021-06-20', '2022-04-18', 11, 2, 'tk_cycleworks_e5f6g7h8'),
+    (11, 'CYC-001', 'A', 'Carbon Fiber Wheel Set', 'volume\Carbon Fiber Wheel Set', 'Carbon fiber composite', 'SET', 1, 'RELEASED', '2020-08-01', '2021-03-15', 11, 2, 'tk_cycleworks_e5f6g7h8'),
+    (12, 'CYC-002', 'B', 'Disc Brake Caliper', 'volume\Disc Brake Caliper', 'CNC aluminum 7075', 'EA', 2, 'RELEASED', '2020-09-01', '2021-06-20', 11, 2, 'tk_cycleworks_e5f6g7h8'),
+    (13, 'CYC-003', 'A', 'Chainring Set 52/36T', 'volume\Chainring Set', '7075 aluminum alloy', 'SET', 1, 'DRAFT', '2021-01-10', '2021-05-12', 11, 2, 'tk_cycleworks_e5f6g7h8'),
+    (14, 'CYC-004', 'C', 'Aero Handlebar', 'volume\Aero Handlebar', 'Carbon fiber T800', 'EA', 1, 'RELEASED', '2021-03-15', '2022-01-10', 11, 2, 'tk_cycleworks_e5f6g7h8'),
+    (15, 'CYC-005', 'A', 'Titanium Seatpost', 'volume\Titanium Seatpost', 'Grade 9 titanium', 'EA', 1, 'DRAFT', '2021-06-20', '2022-04-18', 11, 2, 'tk_cycleworks_e5f6g7h8'),
     -- Tenant 3: VeloParts (5 parts)
-    ('VEL-001', 'B', 'Derailleur Hanger', 'volume\Derailleur Hanger', 'Aluminum 6061', 'EA', 1, 'RELEASED', '2021-04-15', '2022-02-10', 15, 3, 'tk_veloparts_i9j0k1l2'),
-    ('VEL-002', 'A', 'Bottom Bracket - BSA', 'volume\Bottom Bracket', 'Chromoly steel', 'EA', 1, 'RELEASED', '2021-05-20', '2022-03-15', 15, 3, 'tk_veloparts_i9j0k1l2'),
-    ('VEL-003', 'C', 'Headset - Integrated', 'volume\Headset Integrated', 'Aluminum 7075', 'SET', 1, 'DRAFT', '2021-07-01', '2022-05-20', 15, 3, 'tk_veloparts_i9j0k1l2'),
-    ('VEL-004', 'A', 'Quick Release Skewer', 'volume\Quick Release Skewer', 'Stainless steel', 'SET', 2, 'RELEASED', '2021-08-10', '2022-06-25', 15, 3, 'tk_veloparts_i9j0k1l2'),
-    ('VEL-005', 'B', 'Cassette 11-Speed', 'volume\Cassette 11-Speed', 'Nickel-plated steel', 'EA', 1, 'RELEASED', '2021-09-15', '2022-08-30', 15, 3, 'tk_veloparts_i9j0k1l2'),
+    (16, 'VEL-001', 'B', 'Derailleur Hanger', 'volume\Derailleur Hanger', 'Aluminum 6061', 'EA', 1, 'RELEASED', '2021-04-15', '2022-02-10', 15, 3, 'tk_veloparts_i9j0k1l2'),
+    (17, 'VEL-002', 'A', 'Bottom Bracket - BSA', 'volume\Bottom Bracket', 'Chromoly steel', 'EA', 1, 'RELEASED', '2021-05-20', '2022-03-15', 15, 3, 'tk_veloparts_i9j0k1l2'),
+    (18, 'VEL-003', 'C', 'Headset - Integrated', 'volume\Headset Integrated', 'Aluminum 7075', 'SET', 1, 'DRAFT', '2021-07-01', '2022-05-20', 15, 3, 'tk_veloparts_i9j0k1l2'),
+    (19, 'VEL-004', 'A', 'Quick Release Skewer', 'volume\Quick Release Skewer', 'Stainless steel', 'SET', 2, 'RELEASED', '2021-08-10', '2022-06-25', 15, 3, 'tk_veloparts_i9j0k1l2'),
+    (20, 'VEL-005', 'B', 'Cassette 11-Speed', 'volume\Cassette 11-Speed', 'Nickel-plated steel', 'EA', 1, 'RELEASED', '2021-09-15', '2022-08-30', 15, 3, 'tk_veloparts_i9j0k1l2'),
     -- Tenant 4: BikeTech Industries (5 parts)
-    ('TECH-001', 'A', 'Electric Motor Hub 250W', 'volume\Electric Motor Hub', 'Brushless DC motor', 'EA', 1, 'RELEASED', '2022-02-15', '2023-01-10', 19, 4, 'tk_biketech_m3n4o5p6'),
-    ('TECH-002', 'B', 'Lithium Battery Pack 36V', 'volume\Lithium Battery Pack', 'Li-ion 18650 cells', 'EA', 1, 'RELEASED', '2022-03-20', '2023-02-15', 19, 4, 'tk_biketech_m3n4o5p6'),
-    ('TECH-003', 'A', 'Motor Controller Unit', 'volume\Motor Controller', 'PCB with MOSFETs', 'EA', 1, 'DRAFT', '2022-05-01', '2023-03-20', 19, 4, 'tk_biketech_m3n4o5p6'),
-    ('TECH-004', 'C', 'LCD Display Console', 'volume\LCD Display', 'TFT color display', 'EA', 1, 'RELEASED', '2022-06-15', '2023-05-10', 19, 4, 'tk_biketech_m3n4o5p6'),
-    ('TECH-005', 'A', 'Torque Sensor', 'volume\Torque Sensor', 'Strain gauge type', 'EA', 1, 'DRAFT', '2022-08-01', '2023-07-15', 19, 4, 'tk_biketech_m3n4o5p6'),
+    (21, 'TECH-001', 'A', 'Electric Motor Hub 250W', 'volume\Electric Motor Hub', 'Brushless DC motor', 'EA', 1, 'RELEASED', '2022-02-15', '2023-01-10', 19, 4, 'tk_biketech_m3n4o5p6'),
+    (22, 'TECH-002', 'B', 'Lithium Battery Pack 36V', 'volume\Lithium Battery Pack', 'Li-ion 18650 cells', 'EA', 1, 'RELEASED', '2022-03-20', '2023-02-15', 19, 4, 'tk_biketech_m3n4o5p6'),
+    (23, 'TECH-003', 'A', 'Motor Controller Unit', 'volume\Motor Controller', 'PCB with MOSFETs', 'EA', 1, 'DRAFT', '2022-05-01', '2023-03-20', 19, 4, 'tk_biketech_m3n4o5p6'),
+    (24, 'TECH-004', 'C', 'LCD Display Console', 'volume\LCD Display', 'TFT color display', 'EA', 1, 'RELEASED', '2022-06-15', '2023-05-10', 19, 4, 'tk_biketech_m3n4o5p6'),
+    (25, 'TECH-005', 'A', 'Torque Sensor', 'volume\Torque Sensor', 'Strain gauge type', 'EA', 1, 'DRAFT', '2022-08-01', '2023-07-15', 19, 4, 'tk_biketech_m3n4o5p6'),
     -- Tenant 5: PedalForce (5 parts)
-    ('PED-001', 'B', 'Carbon Frame - Road', 'volume\Carbon Road Frame', 'Carbon fiber T1000', 'EA', 1, 'RELEASED', '2021-11-01', '2022-09-15', 23, 5, 'tk_pedalforce_q7r8s9t0'),
-    ('PED-002', 'A', 'Carbon Fork - Tapered', 'volume\Carbon Fork Tapered', 'Carbon fiber T800', 'EA', 1, 'RELEASED', '2021-12-10', '2022-10-20', 23, 5, 'tk_pedalforce_q7r8s9t0'),
-    ('PED-003', 'C', 'Integrated Stem', 'volume\Integrated Stem', 'Carbon fiber + aluminum', 'EA', 1, 'DRAFT', '2022-02-15', '2023-01-25', 23, 5, 'tk_pedalforce_q7r8s9t0'),
-    ('PED-004', 'A', 'Aero Wheelset 50mm', 'volume\Aero Wheelset', 'Carbon fiber clincher', 'SET', 1, 'RELEASED', '2022-04-01', '2023-03-10', 23, 5, 'tk_pedalforce_q7r8s9t0'),
-    ('PED-005', 'B', 'Ceramic Bottom Bracket', 'volume\Ceramic Bottom Bracket', 'Ceramic bearings', 'EA', 1, 'RELEASED', '2022-06-15', '2023-05-20', 23, 5, 'tk_pedalforce_q7r8s9t0'),
+    (26, 'PED-001', 'B', 'Carbon Frame - Road', 'volume\Carbon Road Frame', 'Carbon fiber T1000', 'EA', 1, 'RELEASED', '2021-11-01', '2022-09-15', 23, 5, 'tk_pedalforce_q7r8s9t0'),
+    (27, 'PED-002', 'A', 'Carbon Fork - Tapered', 'volume\Carbon Fork Tapered', 'Carbon fiber T800', 'EA', 1, 'RELEASED', '2021-12-10', '2022-10-20', 23, 5, 'tk_pedalforce_q7r8s9t0'),
+    (28, 'PED-003', 'C', 'Integrated Stem', 'volume\Integrated Stem', 'Carbon fiber + aluminum', 'EA', 1, 'DRAFT', '2022-02-15', '2023-01-25', 23, 5, 'tk_pedalforce_q7r8s9t0'),
+    (29, 'PED-004', 'A', 'Aero Wheelset 50mm', 'volume\Aero Wheelset', 'Carbon fiber clincher', 'SET', 1, 'RELEASED', '2022-04-01', '2023-03-10', 23, 5, 'tk_pedalforce_q7r8s9t0'),
+    (30, 'PED-005', 'B', 'Ceramic Bottom Bracket', 'volume\Ceramic Bottom Bracket', 'Ceramic bearings', 'EA', 1, 'RELEASED', '2022-06-15', '2023-05-20', 23, 5, 'tk_pedalforce_q7r8s9t0'),
     -- Tenant 6: plm-iq (5 parts - platform components)
-    ('PLM-001', 'A', 'API Gateway Module', 'volume\API Gateway Module', 'Software module', 'EA', 1, 'RELEASED', '2026-08-01', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
-    ('PLM-002', 'B', 'Auth Service Component', 'volume\Auth Service', 'Software component', 'EA', 1, 'DRAFT', '2026-08-01', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
-    ('PLM-003', 'A', 'Database Schema v2', 'volume\Database Schema', 'SQL schema', 'EA', 1, 'RELEASED', '2026-08-02', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
-    ('PLM-004', 'C', 'UI Dashboard Widget', 'volume\UI Dashboard', 'React component', 'EA', 1, 'DRAFT', '2026-08-03', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
-    ('PLM-005', 'A', 'MCP Server Plugin', 'volume\MCP Server', 'Python plugin', 'EA', 1, 'RELEASED', '2026-08-04', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin');
-
-INSERT OR IGNORE INTO parts (part_number, part_revision, part_name, spec_file, material, uom, qty, status, created_date, modified_date, modified_owner, tenant_id, tenant_key) VALUES
-    ('BIKE-001', 'G', 'Complete Bicycle - 21-Speed Hybrid', 'volume\Complete Bicycle - 21-Speed Hybrid', 'Aluminum frame hybrid bike', 'EA', 1, 'DRAFT', '22-03-2013', '11-08-2013', 1, 1, 'tk_bicycleco_a1b2c3d4');
+    (31, 'PLM-001', 'A', 'API Gateway Module', 'volume\API Gateway Module', 'Software module', 'EA', 1, 'RELEASED', '2026-08-01', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
+    (32, 'PLM-002', 'B', 'Auth Service Component', 'volume\Auth Service', 'Software component', 'EA', 1, 'DRAFT', '2026-08-01', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
+    (33, 'PLM-003', 'A', 'Database Schema v2', 'volume\Database Schema', 'SQL schema', 'EA', 1, 'RELEASED', '2026-08-02', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
+    (34, 'PLM-004', 'C', 'UI Dashboard Widget', 'volume\UI Dashboard', 'React component', 'EA', 1, 'DRAFT', '2026-08-03', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin'),
+    (35, 'PLM-005', 'A', 'MCP Server Plugin', 'volume\MCP Server', 'Python plugin', 'EA', 1, 'RELEASED', '2026-08-04', '2026-08-06', 27, 6, 'tk_plm_iq_superadmin');
 
 -- bom (30 rows: 5 BOM entries per tenant, representing assembly hierarchies)
 INSERT INTO bom (id, level, part_number, part_revision, part_name, qty, uom, parent_assembly, material_notes, bom_type, tenant_id, tenant_key) VALUES
@@ -643,7 +641,8 @@ INSERT INTO plmiq_node (node_id, node_label, attributes, created_by, created_dat
 (418, 'BIKE-001_RH.sldasm', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (419, 'BIKE-001_RH.stp', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (420, 'FRM-001_J.sldasm', NULL, 2, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
-(421, 'BB-002-N.pdf', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
+(421, 'BB-002-N.pdf', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
+(271, 'Complete Bicycle - 21-Speed Hybrid', NULL, 1, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
 
 INSERT INTO plmiq_edge (id, source_node_id, target_node_id, edge_type_id, state, quantity, unit, sequence, attributes, created_by, updated_by, created_date, updated_date, tenant_id, tenant_key) VALUES
 (1, 262, 263, 1, 'ACTIVE', 1, 'EA', NULL, '{"bom_id": 2}', NULL, NULL, '16-08-2026', '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
@@ -711,15 +710,16 @@ INSERT INTO plmiq_edge_evidence (id, edge_id, evidence_type, reference, confiden
 (175, 175, 'SOURCE_OBJECT', 'megan', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4'),
 (176, 176, 'USER_ASSERTION', 'seed:BB-002-N.pdf', 1.0, NULL, '16-08-2026', 1, 'tk_bicycleco_a1b2c3d4');
 
-UPDATE parts SET node_id = 262 WHERE part_number = 'BIKE-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 263 WHERE part_number = 'FRM-001' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 264 WHERE part_number = 'FRM-002' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 265 WHERE part_number = 'FRM-003' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 266 WHERE part_number = 'FRM-004' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 267 WHERE part_number = 'FRM-010' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 268 WHERE part_number = 'DRV-009' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 269 WHERE part_number = 'WHL-007' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
-UPDATE parts SET node_id = 270 WHERE part_number = 'BRK-004' AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 262 WHERE part_id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 271 WHERE part_id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 263 WHERE part_id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 264 WHERE part_id = 4 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 265 WHERE part_id = 5 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 266 WHERE part_id = 6 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 267 WHERE part_id = 7 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 268 WHERE part_id = 8 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 269 WHERE part_id = 9 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
+UPDATE parts SET node_id = 270 WHERE part_id = 10 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE costing_bom SET node_id = 296 WHERE id = 1 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE costing_bom SET node_id = 297 WHERE id = 2 AND tenant_key = 'tk_bicycleco_a1b2c3d4';
 UPDATE costing_bom SET node_id = 298 WHERE id = 3 AND tenant_key = 'tk_bicycleco_a1b2c3d4';

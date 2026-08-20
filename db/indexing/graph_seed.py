@@ -321,22 +321,68 @@ def _ensure_doc_part_edges(db) -> int:
             tenant_key=TENANT_KEY,
         ))
         db.flush()
-        db.add(GraphEdgeEvidence(
-            edge_id=db.query(GraphEdge).filter(
-                GraphEdge.source_node_id == p.node_id,
-                GraphEdge.target_node_id == doc.node_id,
-                GraphEdge.edge_type_id == has_spec.id,
-                GraphEdge.tenant_key == TENANT_KEY,
-            ).order_by(GraphEdge.id.desc()).first().id,
-            evidence_type='USER_ASSERTION',
-            reference=f'graph_seed:{p.part_number}',
-            confidence=1.0,
-            created_date=_now(),
-            tenant_id=TENANT_ID,
-            tenant_key=TENANT_KEY,
-        ))
+        edge = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == p.node_id,
+            GraphEdge.target_node_id == doc.node_id,
+            GraphEdge.edge_type_id == has_spec.id,
+            GraphEdge.tenant_key == TENANT_KEY,
+        ).first()
+        if edge:
+            db.add(GraphEdgeEvidence(
+                edge_id=edge.id,
+                evidence_type='USER_ASSERTION',
+                reference=f'graph_seed:{p.part_number}',
+                confidence=1.0,
+                created_date=_now(),
+                tenant_id=TENANT_ID,
+                tenant_key=TENANT_KEY,
+            ))
         db.commit()
         n += 1
+
+    # Explicitly link BB-002-N.pdf to BIKE-001 as HAS_SPEC
+    bike = db.query(Part).filter(
+        Part.part_number == 'BIKE-001',
+        Part.tenant_key == TENANT_KEY).first()
+    bb_doc = db.query(Document).filter(
+        Document.name == 'BB-002-N.pdf',
+        Document.tenant_key == TENANT_KEY).first()
+    if bike and bb_doc and bike.node_id and bb_doc.node_id:
+        exists = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == bike.node_id,
+            GraphEdge.target_node_id == bb_doc.node_id,
+            GraphEdge.edge_type_id == has_spec.id,
+            GraphEdge.tenant_key == TENANT_KEY).first()
+        if not exists:
+            db.add(GraphEdge(
+                source_node_id=bike.node_id,
+                target_node_id=bb_doc.node_id,
+                edge_type_id=has_spec.id,
+                state='ACTIVE',
+                created_date=_now(),
+                updated_date=_now(),
+                tenant_id=TENANT_ID,
+                tenant_key=TENANT_KEY,
+            ))
+            db.flush()
+            edge = db.query(GraphEdge).filter(
+                GraphEdge.source_node_id == bike.node_id,
+                GraphEdge.target_node_id == bb_doc.node_id,
+                GraphEdge.edge_type_id == has_spec.id,
+                GraphEdge.tenant_key == TENANT_KEY,
+            ).first()
+            if edge:
+                db.add(GraphEdgeEvidence(
+                    edge_id=edge.id,
+                    evidence_type='USER_ASSERTION',
+                    reference='graph_seed:BB-002-N.pdf',
+                    confidence=1.0,
+                    created_date=_now(),
+                    tenant_id=TENANT_ID,
+                    tenant_key=TENANT_KEY,
+                ))
+            db.commit()
+            n += 1
     return n
 
 

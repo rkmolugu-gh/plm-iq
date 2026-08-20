@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS roles (
 -- Core entity. All other tables reference parts by PART_NUMBER.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS parts (
-    part_number     TEXT    NOT NULL PRIMARY KEY,
+    part_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    part_number     TEXT    NOT NULL,
     part_revision   TEXT    NOT NULL,
     part_name       TEXT    NOT NULL,
     spec_file       TEXT,
@@ -84,12 +85,14 @@ CREATE TABLE IF NOT EXISTS parts (
     tenant_id       INTEGER NOT NULL DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
     node_id         INTEGER UNIQUE,
+    UNIQUE(part_number, part_revision),
     FOREIGN KEY (modified_owner)  REFERENCES users(user_id),
     FOREIGN KEY (created_by)      REFERENCES users(user_id),
     FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id),
     FOREIGN KEY (node_id)         REFERENCES plmiq_node(node_id)
 );
 
+CREATE INDEX idx_parts_number      ON parts(part_number);
 CREATE INDEX idx_parts_status      ON parts(status);
 CREATE INDEX idx_parts_node        ON parts(node_id);
 CREATE INDEX idx_parts_tenant      ON parts(tenant_id);
@@ -104,11 +107,13 @@ CREATE TABLE IF NOT EXISTS bom (
     id              INTEGER PRIMARY KEY,
     number          TEXT,
     level           INTEGER NOT NULL CHECK (level >= 0),
+    part_id         INTEGER,
     part_number     TEXT    NOT NULL,
     part_revision   TEXT,
     part_name       TEXT,
     qty             INTEGER NOT NULL DEFAULT 1 CHECK (qty >= 0),
     uom             TEXT,
+    parent_assembly_id INTEGER,
     parent_assembly TEXT,
     material_notes  TEXT,
     bom_type        TEXT    NOT NULL DEFAULT 'DESIGN'
@@ -119,16 +124,38 @@ CREATE TABLE IF NOT EXISTS bom (
     modified_date   DATE,
     tenant_id       INTEGER,
     tenant_key      TEXT    NOT NULL,
-    FOREIGN KEY (part_number) REFERENCES parts(part_number),
-    FOREIGN KEY (parent_assembly) REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)         REFERENCES parts(part_id),
+    FOREIGN KEY (parent_assembly_id) REFERENCES parts(part_id),
     FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id)
 );
 
 CREATE INDEX idx_bom_level          ON bom(level);
+CREATE INDEX idx_bom_part_id        ON bom(part_id);
 CREATE INDEX idx_bom_part_number    ON bom(part_number);
+CREATE INDEX idx_bom_parent_id      ON bom(parent_assembly_id);
 CREATE INDEX idx_bom_parent         ON bom(parent_assembly);
 CREATE INDEX idx_bom_tenant         ON bom(tenant_id);
 CREATE INDEX idx_bom_tenant_key     ON bom(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_bom_part_id AFTER INSERT ON bom
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE bom SET part_id = (
+        SELECT part_id FROM parts 
+        WHERE part_number = NEW.part_number 
+        AND (part_revision = NEW.part_revision OR NEW.part_revision IS NULL)
+        LIMIT 1
+    ) WHERE id = NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS trg_bom_parent_id AFTER INSERT ON bom
+FOR EACH ROW WHEN NEW.parent_assembly_id IS NULL AND NEW.parent_assembly IS NOT NULL
+BEGIN
+    UPDATE bom SET parent_assembly_id = (
+        SELECT part_id FROM parts 
+        WHERE part_number = NEW.parent_assembly 
+        LIMIT 1
+    ) WHERE id = NEW.id;
+END;
 
 -- ----------------------------------------------------------------------------
 -- 3. COSTING BOM
@@ -138,6 +165,7 @@ CREATE TABLE IF NOT EXISTS costing_bom (
     id              INTEGER PRIMARY KEY,
     number          TEXT,
     level           INTEGER NOT NULL CHECK (level >= 0),
+    part_id         INTEGER,
     part_number     TEXT    NOT NULL,
     part_name       TEXT,
     qty             INTEGER NOT NULL DEFAULT 1 CHECK (qty >= 0),
@@ -157,16 +185,25 @@ CREATE TABLE IF NOT EXISTS costing_bom (
     tenant_id       INTEGER,
     tenant_key      TEXT    NOT NULL,
     node_id         INTEGER UNIQUE,
-    FOREIGN KEY (part_number) REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)       REFERENCES parts(part_id),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
+    FOREIGN KEY (created_by)  REFERENCES users(user_id),
+    FOREIGN KEY (modified_by) REFERENCES users(user_id),
     FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
+CREATE INDEX idx_cost_bom_part_id   ON costing_bom(part_id);
 CREATE INDEX idx_cost_bom_part_number ON costing_bom(part_number);
 CREATE INDEX idx_cost_bom_type        ON costing_bom(cost_type);
 CREATE INDEX idx_cost_bom_node        ON costing_bom(node_id);
 CREATE INDEX idx_cost_bom_tenant      ON costing_bom(tenant_id);
 CREATE INDEX idx_cost_bom_tenant_key ON costing_bom(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_costing_part_id AFTER INSERT ON costing_bom
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE costing_bom SET part_id = (SELECT part_id FROM parts WHERE part_number = NEW.part_number) WHERE id = NEW.id;
+END;
 
 -- ----------------------------------------------------------------------------
 -- 4. ENGINEERING CHANGE ORDERS (ECO)
@@ -180,6 +217,7 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
                             CHECK (eco_status IN ('DRAFT', 'REVIEW', 'APPROVED')),
     in_workflow              BOOLEAN NOT NULL DEFAULT FALSE,
     active_workflow_instance_id INTEGER,
+    part_id         INTEGER,
     part_number     TEXT    NOT NULL,
     current_revision TEXT,
     new_revision    TEXT,
@@ -199,7 +237,7 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
     tenant_id       INTEGER NOT NULL DEFAULT 1,
     tenant_key      TEXT    NOT NULL,
     node_id         INTEGER UNIQUE,
-    FOREIGN KEY (part_number)     REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)         REFERENCES parts(part_id),
     FOREIGN KEY (change_drafter)  REFERENCES users(user_id),
     FOREIGN KEY (change_approver) REFERENCES users(user_id),
     FOREIGN KEY (created_by)      REFERENCES users(user_id),
@@ -210,10 +248,17 @@ CREATE TABLE IF NOT EXISTS engineering_change_orders (
 
 CREATE INDEX idx_eco_status       ON engineering_change_orders(eco_status);
 CREATE INDEX idx_eco_node         ON engineering_change_orders(node_id);
+CREATE INDEX idx_eco_part_id      ON engineering_change_orders(part_id);
 CREATE INDEX idx_eco_part_number  ON engineering_change_orders(part_number);
 CREATE INDEX idx_eco_drafter      ON engineering_change_orders(change_drafter);
 CREATE INDEX idx_eco_tenant       ON engineering_change_orders(tenant_id);
 CREATE INDEX idx_eco_tenant_key   ON engineering_change_orders(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_eco_part_id AFTER INSERT ON engineering_change_orders
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE engineering_change_orders SET part_id = (SELECT part_id FROM parts WHERE part_number = NEW.part_number) WHERE eco_number = NEW.eco_number;
+END;
 
 -- ----------------------------------------------------------------------------
 -- 5. APPROVED MANUFACTURER LIST (AML)
@@ -222,6 +267,7 @@ CREATE INDEX idx_eco_tenant_key   ON engineering_change_orders(tenant_key);
 CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     id                      INTEGER PRIMARY KEY,
     number                  TEXT,
+    part_id                 INTEGER,
     part_number             TEXT    NOT NULL,
     part_revision           TEXT,
     part_name               TEXT,
@@ -246,19 +292,31 @@ CREATE TABLE IF NOT EXISTS approved_manufacturer_list (
     tenant_id               INTEGER NOT NULL DEFAULT 1,
     tenant_key              TEXT    NOT NULL,
     node_id                 INTEGER UNIQUE,
-    FOREIGN KEY (part_number) REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)    REFERENCES parts(part_id),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
     FOREIGN KEY (created_by)  REFERENCES users(user_id),
     FOREIGN KEY (modified_by) REFERENCES users(user_id),
     FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
-CREATE INDEX idx_aml_part_number      ON approved_manufacturer_list(part_number);
-CREATE INDEX idx_aml_node            ON approved_manufacturer_list(node_id);
-CREATE INDEX idx_aml_preferred        ON approved_manufacturer_list(preferred_flag);
-CREATE INDEX idx_aml_manufacturer     ON approved_manufacturer_list(manufacturer_name);
-CREATE INDEX idx_aml_tenant           ON approved_manufacturer_list(tenant_id);
-CREATE INDEX idx_aml_tenant_key       ON approved_manufacturer_list(tenant_key);
+CREATE INDEX idx_aml_part_id        ON approved_manufacturer_list(part_id);
+CREATE INDEX idx_aml_part_number    ON approved_manufacturer_list(part_number);
+CREATE INDEX idx_aml_node           ON approved_manufacturer_list(node_id);
+CREATE INDEX idx_aml_preferred      ON approved_manufacturer_list(preferred_flag);
+CREATE INDEX idx_aml_manufacturer   ON approved_manufacturer_list(manufacturer_name);
+CREATE INDEX idx_aml_tenant         ON approved_manufacturer_list(tenant_id);
+CREATE INDEX idx_aml_tenant_key     ON approved_manufacturer_list(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_aml_part_id AFTER INSERT ON approved_manufacturer_list
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE approved_manufacturer_list SET part_id = (
+        SELECT part_id FROM parts 
+        WHERE part_number = NEW.part_number 
+        AND (part_revision = NEW.part_revision OR NEW.part_revision IS NULL)
+        LIMIT 1
+    ) WHERE id = NEW.id;
+END;
 
 -- ----------------------------------------------------------------------------
 -- 6. APPROVED VENDOR LIST (AVL)
@@ -267,6 +325,7 @@ CREATE INDEX idx_aml_tenant_key       ON approved_manufacturer_list(tenant_key);
 CREATE TABLE IF NOT EXISTS approved_vendor_list (
     id                  INTEGER PRIMARY KEY,
     number              TEXT,
+    part_id             INTEGER,
     part_number         TEXT    NOT NULL,
     part_revision       TEXT,
     part_name           TEXT,
@@ -297,19 +356,31 @@ CREATE TABLE IF NOT EXISTS approved_vendor_list (
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
     node_id             INTEGER UNIQUE,
-    FOREIGN KEY (part_number) REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)       REFERENCES parts(part_id),
     FOREIGN KEY (tenant_id)   REFERENCES tenants(tenant_id),
     FOREIGN KEY (created_by)  REFERENCES users(user_id),
     FOREIGN KEY (modified_by) REFERENCES users(user_id),
     FOREIGN KEY (node_id)     REFERENCES plmiq_node(node_id)
 );
 
-CREATE INDEX idx_avl_part_number   ON approved_vendor_list(part_number);
+CREATE INDEX idx_avl_part_id      ON approved_vendor_list(part_id);
+CREATE INDEX idx_avl_part_number  ON approved_vendor_list(part_number);
 CREATE INDEX idx_avl_node         ON approved_vendor_list(node_id);
-CREATE INDEX idx_avl_preferred     ON approved_vendor_list(preferred_flag);
-CREATE INDEX idx_avl_vendor        ON approved_vendor_list(vendor_name);
-CREATE INDEX idx_avl_tenant        ON approved_vendor_list(tenant_id);
-CREATE INDEX idx_avl_tenant_key    ON approved_vendor_list(tenant_key);
+CREATE INDEX idx_avl_preferred    ON approved_vendor_list(preferred_flag);
+CREATE INDEX idx_avl_vendor       ON approved_vendor_list(vendor_name);
+CREATE INDEX idx_avl_tenant       ON approved_vendor_list(tenant_id);
+CREATE INDEX idx_avl_tenant_key   ON approved_vendor_list(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_avl_part_id AFTER INSERT ON approved_vendor_list
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE approved_vendor_list SET part_id = (
+        SELECT part_id FROM parts 
+        WHERE part_number = NEW.part_number 
+        AND (part_revision = NEW.part_revision OR NEW.part_revision IS NULL)
+        LIMIT 1
+    ) WHERE id = NEW.id;
+END;
 
 -- ----------------------------------------------------------------------------
 -- 7. CAD METADATA
@@ -318,6 +389,7 @@ CREATE INDEX idx_avl_tenant_key    ON approved_vendor_list(tenant_key);
 CREATE TABLE IF NOT EXISTS cad_metadata (
     id                  INTEGER PRIMARY KEY,
     number              TEXT,
+    part_id             INTEGER,
     part_number         TEXT    NOT NULL,
     part_revision       TEXT,
     part_name           TEXT,
@@ -327,7 +399,7 @@ CREATE TABLE IF NOT EXISTS cad_metadata (
     cad_system          TEXT,
     cad_version         TEXT,
     file_reference_type TEXT    NOT NULL
-                                CHECK (file_reference_type IN ('AWS S3', 'LocalServer', 'Git', 'NetworkDrive')),
+                            CHECK (file_reference_type IN ('AWS S3', 'LocalServer', 'Git', 'NetworkDrive')),
     file_reference_url  TEXT,
     git_repo_path       TEXT,
     git_commit_sha      TEXT,
@@ -348,21 +420,33 @@ CREATE TABLE IF NOT EXISTS cad_metadata (
     tenant_id           INTEGER NOT NULL DEFAULT 1,
     tenant_key          TEXT    NOT NULL,
     node_id             INTEGER UNIQUE,
-    FOREIGN KEY (part_number)   REFERENCES parts(part_number),
+    FOREIGN KEY (part_id)         REFERENCES parts(part_id),
     FOREIGN KEY (modeling_author) REFERENCES users(user_id),
-    FOREIGN KEY (created_by)    REFERENCES users(user_id),
-    FOREIGN KEY (modified_by)   REFERENCES users(user_id),
-    FOREIGN KEY (tenant_id)     REFERENCES tenants(tenant_id),
-    FOREIGN KEY (node_id)       REFERENCES plmiq_node(node_id)
+    FOREIGN KEY (created_by)      REFERENCES users(user_id),
+    FOREIGN KEY (modified_by)     REFERENCES users(user_id),
+    FOREIGN KEY (tenant_id)       REFERENCES tenants(tenant_id),
+    FOREIGN KEY (node_id)         REFERENCES plmiq_node(node_id)
 );
 
-CREATE INDEX idx_cad_part_number ON cad_metadata(part_number);
-CREATE INDEX idx_cad_node        ON cad_metadata(node_id);
-CREATE INDEX idx_cad_format      ON cad_metadata(cad_file_format);
-CREATE INDEX idx_cad_ref_type    ON cad_metadata(file_reference_type);
-CREATE INDEX idx_cad_author      ON cad_metadata(modeling_author);
-CREATE INDEX idx_cad_tenant      ON cad_metadata(tenant_id);
-CREATE INDEX idx_cad_tenant_key  ON cad_metadata(tenant_key);
+CREATE INDEX idx_cad_part_id      ON cad_metadata(part_id);
+CREATE INDEX idx_cad_part_number  ON cad_metadata(part_number);
+CREATE INDEX idx_cad_node         ON cad_metadata(node_id);
+CREATE INDEX idx_cad_format       ON cad_metadata(cad_file_format);
+CREATE INDEX idx_cad_ref_type     ON cad_metadata(file_reference_type);
+CREATE INDEX idx_cad_author       ON cad_metadata(modeling_author);
+CREATE INDEX idx_cad_tenant       ON cad_metadata(tenant_id);
+CREATE INDEX idx_cad_tenant_key   ON cad_metadata(tenant_key);
+
+CREATE TRIGGER IF NOT EXISTS trg_cad_part_id AFTER INSERT ON cad_metadata
+FOR EACH ROW WHEN NEW.part_id IS NULL
+BEGIN
+    UPDATE cad_metadata SET part_id = (
+        SELECT part_id FROM parts 
+        WHERE part_number = NEW.part_number 
+        AND (part_revision = NEW.part_revision OR NEW.part_revision IS NULL)
+        LIMIT 1
+    ) WHERE id = NEW.id;
+END;
 
 -- ── Documents (standalone Document Management System) ────────────────
 CREATE TABLE IF NOT EXISTS documents (

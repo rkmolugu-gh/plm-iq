@@ -8,7 +8,8 @@ from app.database import Base
 class Part(Base):
     __tablename__ = "parts"
 
-    part_number = Column("part_number", String, primary_key=True)
+    part_id = Column("part_id", Integer, primary_key=True, autoincrement=True)
+    part_number = Column("part_number", String, nullable=False)
     part_revision = Column("part_revision", String, nullable=False)
     part_name = Column("part_name", String, nullable=False)
     spec_file = Column("spec_file", String)
@@ -29,7 +30,7 @@ class Part(Base):
     node = relationship("GraphNode")
 
     tenant = relationship("Tenant", back_populates="parts")
-    bom_items = relationship("BomItem", back_populates="part", foreign_keys="BomItem.part_number")
+    bom_items = relationship("BomItem", back_populates="part", foreign_keys="BomItem.part_id")
     costing_items = relationship("CostingBomItem", back_populates="part")
     eco_items = relationship("EngineeringChangeOrder", back_populates="part")
     aml_items = relationship("ApprovedManufacturer", back_populates="part")
