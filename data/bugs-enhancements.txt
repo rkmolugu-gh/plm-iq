@@ -12,5 +12,9 @@ Fix http://localhost:8000/documents/1 error  File "C:\Users\tntmx6\AppData\Local
     sqlalchemy.exc.ArgumentError: Textual SQL expression 'plm-iq' should be explicitly declared as text('plm-iq')
 http://localhost:8000/documents document list not showing edge type in relationship column showing only a number
 
+all list.html where ever part is shown show revision also.
+AML add CRUD UI
+AVL add CRUD UI
+
 
 

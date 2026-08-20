@@ -50,6 +50,7 @@ from app.models import (
     WorkflowInstance,
     WorkflowTask,
     User,
+    GraphNode,
     GraphEdge,
     GraphEdgeType,
     GraphEdgeEvidence,
@@ -390,6 +391,109 @@ def _ensure_doc_part_edges(db) -> int:
 # Top-level
 # ----------------------------------------------------------------------
 
+def _ensure_bike_eco(db) -> int:
+    """Explicitly link an ECO to BIKE-001 revision H (idempotent).
+
+    Creates the ECO row (if missing), ensures it has a graph node, and draws an
+    AFFECTS edge from the ECO node to the BIKE-001/H part node so it appears in
+    both the Change Orders tab and the part graph.
+    """
+    bike = db.query(Part).filter(
+        Part.part_number == "BIKE-001",
+        Part.part_revision == "H",
+        Part.tenant_key == TENANT_KEY,
+    ).first()
+    if not bike or not bike.node_id:
+        logger.warning("BIKE-001/H not found or has no node; skipping bike ECO")
+        return 0
+
+    affects = db.query(GraphEdgeType).filter(GraphEdgeType.name == "AFFECTS").first()
+    if not affects:
+        logger.warning("AFFECTS edge type not found; skipping bike ECO edge")
+        return 0
+
+    eco_number = "ECO-BIKE-001-H"
+    eco = db.query(EngineeringChangeOrder).filter(
+        EngineeringChangeOrder.eco_number == eco_number,
+        EngineeringChangeOrder.tenant_key == TENANT_KEY,
+    ).first()
+    if eco is None:
+        eco = EngineeringChangeOrder(
+            eco_number=eco_number,
+            eco_title="Linked change for BIKE-001 rev H",
+            eco_description="Graph seed ECO explicitly linked to BIKE-001 revision H.",
+            eco_status="REVIEW",
+            part_number="BIKE-001",
+            current_revision="H",
+            new_revision="H",
+            change_type="DESIGN_CHANGE",
+            change_detail="Linked to BIKE-001 revision H via graph seed.",
+            change_drafter=bike.created_by,
+            change_approver=bike.created_by,
+            drafted_date=_now(),
+            created_by=bike.created_by,
+            created_date=_now(),
+            modified_date=_now(),
+            tenant_id=TENANT_ID,
+            tenant_key=TENANT_KEY,
+        )
+        db.add(eco)
+        db.flush()
+
+    if not eco.node_id:
+        node = GraphNode(
+            node_label=eco_number,
+            created_by=eco.created_by,
+            created_date=_now(),
+            tenant_id=TENANT_ID,
+            tenant_key=TENANT_KEY,
+        )
+        db.add(node)
+        db.flush()
+        eco.node_id = node.node_id
+        db.add(eco)
+        db.flush()
+
+    exists = db.query(GraphEdge).filter(
+        GraphEdge.source_node_id == eco.node_id,
+        GraphEdge.target_node_id == bike.node_id,
+        GraphEdge.edge_type_id == affects.id,
+        GraphEdge.tenant_key == TENANT_KEY,
+    ).first()
+    if not exists:
+        db.add(GraphEdge(
+            source_node_id=eco.node_id,
+            target_node_id=bike.node_id,
+            edge_type_id=affects.id,
+            state="ACTIVE",
+            created_date=_now(),
+            updated_date=_now(),
+            tenant_id=TENANT_ID,
+            tenant_key=TENANT_KEY,
+        ))
+        db.flush()
+        edge = db.query(GraphEdge).filter(
+            GraphEdge.source_node_id == eco.node_id,
+            GraphEdge.target_node_id == bike.node_id,
+            GraphEdge.edge_type_id == affects.id,
+            GraphEdge.tenant_key == TENANT_KEY,
+        ).first()
+        if edge:
+            db.add(GraphEdgeEvidence(
+                edge_id=edge.id,
+                evidence_type="WORKFLOW_RECORD",
+                reference=f"graph_seed:{eco_number}",
+                confidence=1.0,
+                created_date=_now(),
+                tenant_id=TENANT_ID,
+                tenant_key=TENANT_KEY,
+            ))
+        db.commit()
+        return 1
+    db.commit()
+    return 0
+
+
 def seed(do_build: bool = True) -> dict:
     """Fill BicycleCo gaps and (optionally) rebuild the graph."""
     db = SessionLocal()
@@ -402,6 +506,7 @@ def seed(do_build: bool = True) -> dict:
             "costing": _ensure_cost_rows(db),
             "bom": _ensure_bom(db),
             "ecos": _ensure_ecos(db),
+            "bike_eco": _ensure_bike_eco(db),
             "workflows": _ensure_workflows(db),
         }
         logger.info("BicycleCo enrichment counts: %s", counts)

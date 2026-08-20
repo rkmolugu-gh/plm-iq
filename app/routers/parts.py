@@ -90,11 +90,19 @@ def part_new_form(
 
 
 @router.get("/{part_number}", response_class=HTMLResponse)
-def part_detail(request: Request, part_number: str, db: TenantScopedSession = Depends(get_tenant_db)):
-    """Show full part detail with related data."""
+@router.get("/{part_number}/{revision}", response_class=HTMLResponse)
+def part_detail(request: Request, part_number: str, revision: str | None = None, db: TenantScopedSession = Depends(get_tenant_db)):
+    """Show full part detail with related data.
+
+    An optional ``revision`` path segment (e.g. /parts/BIKE-001/H) scopes the
+    lookup to that specific part revision; without it the first matching row is shown.
+    """
     user = require_user(request, db)
     ctx = auth_context(request, db)
-    part = db.query(Part).filter(Part.part_number == part_number).first()
+    part_query = db.query(Part).filter(Part.part_number == part_number)
+    if revision:
+        part_query = part_query.filter(Part.part_revision == revision)
+    part = part_query.first()
     if not part:
         return HTMLResponse(content=render("404.html", **ctx), status_code=404)
 
@@ -175,7 +183,9 @@ def part_detail(request: Request, part_number: str, db: TenantScopedSession = De
         }
         if edges:
             edge_type_ids = {e.edge_type_id for e in edges if e.target_node_id and e.source_node_id}
-            edge_types = {et.id: et.name for et in db.query(GraphEdgeType).filter(GraphEdgeType.id.in_(edge_type_ids)).all()}
+            # Edge types are a global vocabulary; read them unscoped so the
+            # tenant-scoped session resolves names instead of numeric ids.
+            edge_types = {et.id: et.name for et in db._db.query(GraphEdgeType).filter(GraphEdgeType.id.in_(edge_type_ids)).all()}
             doc_node_ids = {e.target_node_id for e in edges if edge_types.get(e.edge_type_id) in doc_edge_types}
             if doc_node_ids:
                 docs = db.query(Document).filter(Document.node_id.in_(doc_node_ids)).all()

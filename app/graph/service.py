@@ -315,17 +315,22 @@ _DOC_EDGE_TYPES = {
 
 def document_linked_parts(db: Session, doc_node_id: int) -> list[dict]:
     """Return incoming PART->DOCUMENT edges for a document node, with part info."""
+    _tenant_key = getattr(db, "tenant_key", None) or "plm-iq"
+    # Edge types are a global, non-tenant vocabulary; read them unscoped so the
+    # tenant-scoped session still resolves names (not numeric ids).
+    _real_db = getattr(db, "_db", db)
+    edge_type_names = {et.id: et.name for et in _real_db.query(GraphEdgeType).all()}
     edges = (
         db.query(GraphEdge)
         .filter(
             GraphEdge.target_node_id == doc_node_id,
-            GraphEdge.tenant_key == getattr(db, "tenant_key", None) or "plm-iq",
+            GraphEdge.tenant_key == _tenant_key,
         )
         .all()
     )
     results = []
     for edge in edges:
-        etype = _edge_type_name(edge)
+        etype = edge_type_names.get(edge.edge_type_id, str(edge.edge_type_id))
         if etype not in _DOC_EDGE_TYPES:
             continue
         info = node_info(db, edge.source_node_id)

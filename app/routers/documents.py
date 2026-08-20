@@ -330,7 +330,10 @@ def list_documents(
         if part_node_ids:
             for row in db.query(Part).filter(Part.node_id.in_(part_node_ids)).all():
                 part_map[row.node_id] = row
-        edge_type_map = {et.id: et.name for et in db.query(GraphEdgeType).all()}
+        # Edge types are a global, non-tenant vocabulary; read them unscoped so
+        # the tenant-scoped session (which filters by the tenant's key) still
+        # resolves names instead of falling back to the numeric edge_type_id.
+        edge_type_map = {et.id: et.name for et in db._db.query(GraphEdgeType).all()}
         for e in edges:
             doc_id = doc_node_map.get(e.target_node_id)
             if doc_id is None:
