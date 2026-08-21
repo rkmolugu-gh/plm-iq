@@ -47,6 +47,8 @@ archive
 data/uploads/
 data/gitea/
 data/elasticsearch/
+data/postgres/
+db/
 
 # Logs
 *.log

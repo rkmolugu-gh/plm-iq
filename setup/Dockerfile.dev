@@ -1,20 +1,51 @@
-FROM python:3.10-slim
+FROM python:3.10
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/plm-iq
+    PYTHONPATH=/plm-iq \
+    VIRTUAL_ENV=/opt/venv \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
 
 WORKDIR /plm-iq
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates git \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        curl \
+        wget \
+        less \
+        vim-tiny \
+        sudo \
+        procps \
+        net-tools \
+        iputils-ping \
+        iproute2 \
+        dnsutils \
+        bash-completion \
     && rm -rf /var/lib/apt/lists/*
+
+# Enable bash programmable completion for interactive shells
+RUN cp -f /etc/skel/.bashrc /root/.bashrc 2>/dev/null || true; \
+    { \
+      echo ''; \
+      echo '# PLM-IQ: enable bash completion'; \
+      echo 'if ! shopt -oq posix; then'; \
+      echo '  if [ -f /usr/share/bash-completion/bash_completion ]; then'; \
+      echo '    . /usr/share/bash-completion/bash_completion'; \
+      echo '  elif [ -f /etc/bash_completion ]; then'; \
+      echo '    . /etc/bash_completion'; \
+      echo '  fi'; \
+      echo 'fi'; \
+    } >> /root/.bashrc
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
 
-# Clone the app source into the container
-RUN git clone https://github.com/rkmolugu-gh/plm-iq.git /plm-iq \
-    && touch /plm-iq/README.md
+# Clone the app source into the container. The venv is built into
+# /opt/venv (outside /plm-iq) so that for dev, docker-compose.dev.yml can
+# bind-mount the local tree over /plm-iq without shadowing installed deps.
+RUN git clone https://github.com/rkmolugu-gh/plm-iq.git /plm-iq 
 
 RUN uv sync
 

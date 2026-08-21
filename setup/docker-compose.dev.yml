@@ -14,6 +14,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
+      # local source tree -> /plm-iq (live code, no rebuild needed for edits)
+      - ${PLMIQ_ROOT}:/plm-iq
       # local env files -> /plm-iq/setup in the container
       - ${PLMIQ_SETUP}/.env:/plm-iq/setup/.env:ro
       - ${PLMIQ_SETUP}/.env.dev.example:/plm-iq/setup/.env.dev.example:ro

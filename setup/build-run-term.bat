@@ -1,11 +1,13 @@
 @echo off
 setlocal EnableExtensions
 
-rem ── PLM-IQ build/run ────────────────────────────────────────────────
-rem   buildrun.bat dev build   -> docker compose build (dev env)
-rem   buildrun.bat dev run     -> docker compose up -d  (dev env)
-rem   buildrun.bat prod build  -> docker compose build (prod env)
-rem   buildrun.bat prod run    -> docker compose up -d  (prod env)
+rem ── PLM-IQ build/run/term ─────────────────────────────────────────────
+rem   build-run-term.bat dev  build -> docker compose build (dev env)
+rem   build-run-term.bat dev  run   -> docker compose up -d  (dev env)
+rem   build-run-term.bat dev  term  -> open a shell in the dev api container
+rem   build-run-term.bat prod build -> docker compose build (prod env)
+rem   build-run-term.bat prod run   -> docker compose up -d  (prod env)
+rem   build-run-term.bat prod term  -> open a shell in the prod api container
 rem ────────────────────────────────────────────────────────────────────
 
 set "PLMIQ_ROOT=%~dp0.."
@@ -41,7 +43,13 @@ if /i "%ACTION%"=="run" (
     echo %G%[OK] %PROFILE% containers running%N%
     exit /b 0
 )
+if /i "%ACTION%"=="term" (
+    echo %Y%Opening terminal in %PROFILE% api container ...%N%
+    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_SETUP%docker-compose.%PROFILE%.yml" exec -it api bash
+    if errorlevel 1 ( echo %R%[FAIL] could not open %PROFILE% container terminal%N% & exit /b 1 )
+    exit /b 0
+)
 
 :usage
-echo %Y%Usage: buildrun.bat ^<dev^|prod^> ^<build^|run^>%N%
+echo %Y%Usage: build-run-term.bat ^<dev^|prod^> ^<build^|run^|term^>%N%
 exit /b 1
