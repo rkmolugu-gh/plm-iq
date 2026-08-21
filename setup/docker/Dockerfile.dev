@@ -45,7 +45,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
 # Clone the app source into the container. The venv is built into
 # /opt/venv (outside /plm-iq) so that for dev, docker-compose.dev.yml can
 # bind-mount the local tree over /plm-iq without shadowing installed deps.
-RUN git clone https://github.com/rkmolugu-gh/plm-iq.git /plm-iq 
+RUN git clone https://github.com/rkmolugu-gh/plm-iq.git /plm-iq \
+    && touch /plm-iq/README.md
 
 RUN uv sync
 

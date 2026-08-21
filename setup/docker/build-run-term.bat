@@ -10,9 +10,13 @@ rem   build-run-term.bat prod run   -> docker compose up -d  (prod env)
 rem   build-run-term.bat prod term  -> open a shell in the prod api container
 rem ────────────────────────────────────────────────────────────────────
 
-set "PLMIQ_ROOT=%~dp0.."
-rem Compose files and .env live next to this script (setup\)
-set "PLMIQ_SETUP=%~dp0"
+rem This script lives in setup\docker. Derive paths from it.
+set "PLMIQ_DOCKER=%~dp0"
+rem setup\ (config: .env, .env.dev.example, deploy\) is one level up
+set "PLMIQ_SETUP=%~dp0.."
+rem repo root (source, data, db) is two levels up
+set "PLMIQ_ROOT=%~dp0..\.."
+
 set "PROFILE=%~1"
 set "ACTION=%~2"
 
@@ -31,21 +35,21 @@ cd /d "%PLMIQ_ROOT%"
 
 if /i "%ACTION%"=="build" (
     echo %Y%Building %PROFILE% image ...%N%
-    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_SETUP%docker-compose.%PROFILE%.yml" build
+    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" build
     if errorlevel 1 ( echo %R%[FAIL] %PROFILE% build failed%N% & exit /b 1 )
     echo %G%[OK] %PROFILE% build complete%N%
     exit /b 0
 )
 if /i "%ACTION%"=="run" (
     echo %Y%Starting %PROFILE% containers ...%N%
-    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_SETUP%docker-compose.%PROFILE%.yml" up -d
+    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" up -d
     if errorlevel 1 ( echo %R%[FAIL] %PROFILE% containers failed to start%N% & exit /b 1 )
     echo %G%[OK] %PROFILE% containers running%N%
     exit /b 0
 )
 if /i "%ACTION%"=="term" (
     echo %Y%Opening terminal in %PROFILE% api container ...%N%
-    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_SETUP%docker-compose.%PROFILE%.yml" exec -it api bash
+    docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" exec -it api bash
     if errorlevel 1 ( echo %R%[FAIL] could not open %PROFILE% container terminal%N% & exit /b 1 )
     exit /b 0
 )

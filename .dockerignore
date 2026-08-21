@@ -1,0 +1,17 @@
+# Build context for the prod api image is the repo root (see
+# setup/docker/docker-compose.prod.yml). Exclude local state and
+# dev-only/secret files so they are never sent to the docker daemon.
+.git
+.gitignore
+data
+db
+.env
+.env.*
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.DS_Store
