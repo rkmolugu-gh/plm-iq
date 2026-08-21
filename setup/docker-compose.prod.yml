@@ -1,11 +1,11 @@
 # PLM-IQ production stack (Caddy TLS + api + infra). SQLite (no Postgres).
-# Run via: bin/buildrun.bat prod build / prod run
+# Run via: setup/buildrun.bat prod build / prod run
 # Requires operationally: ACME_EMAIL and CLOUDFLARE_API_TOKEN in .env.
 services:
   caddy:
     build:
-      context: ${PLMIQ_ROOT}
-      dockerfile: bin/Caddy.Dockerfile
+      context: ${PLMIQ_SETUP}
+      dockerfile: Caddy.Dockerfile
     restart: unless-stopped
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
@@ -14,7 +14,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ${PLMIQ_ROOT}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${PLMIQ_SETUP}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -26,12 +26,12 @@ services:
 
   api:
     build:
-      context: ${PLMIQ_ROOT}
-      dockerfile: bin/Dockerfile
+      context: ${PLMIQ_SETUP}
+      dockerfile: Dockerfile
     image: ${PLM_IQ_IMAGE:-plm-iq:prod}
     restart: unless-stopped
     init: true
-    env_file: ${PLMIQ_ROOT}/.env
+    env_file: ${PLMIQ_SETUP}/.env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       BASE_DOMAIN: ${BASE_DOMAIN}
@@ -42,6 +42,8 @@ services:
       - ${PLMIQ_ROOT}/db:/app/db
       - plm_data:/app/data
     depends_on:
+      db:
+        condition: service_healthy
       elasticsearch:
         condition: service_healthy
       gitea:
@@ -54,6 +56,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-plmiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plmiq}
+      POSTGRES_DB: ${POSTGRES_DB:-plmiq}
+    expose:
+      - "5432"
+    volumes:
+      - "${POSTGRES_DATA_DIR:-${PLMIQ_ROOT}/data/postgres}:/var/lib/postgresql/data"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTICSEARCH_VERSION:-8.15.0}

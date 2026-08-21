@@ -1,12 +1,12 @@
 # PLM-IQ development stack (api + infra). Runs on SQLite (no Postgres).
-# Run via: bin/buildrun.bat dev build / dev run
+# Run via: setup/buildrun.bat dev build / dev run
 services:
   api:
     build:
-      context: ${PLMIQ_ROOT}
-      dockerfile: bin/Dockerfile.dev
+      context: ${PLMIQ_SETUP}
+      dockerfile: Dockerfile.dev
     restart: unless-stopped
-    env_file: ${PLMIQ_ROOT}/.env
+    env_file: ${PLMIQ_SETUP}/.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:///db/plm-iq.db}
       BASE_DOMAIN: ${BASE_DOMAIN:-localhost}
@@ -14,14 +14,36 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ${PLMIQ_ROOT}:/app
+      # local env files -> /plm-iq/setup in the container
+      - ${PLMIQ_SETUP}/.env:/plm-iq/setup/.env:ro
+      - ${PLMIQ_SETUP}/.env.dev.example:/plm-iq/setup/.env.dev.example:ro
     depends_on:
+      db:
+        condition: service_healthy
       elasticsearch:
         condition: service_healthy
       gitea:
         condition: service_healthy
       smtp:
         condition: service_healthy
+
+  db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-plmiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plmiq}
+      POSTGRES_DB: ${POSTGRES_DB:-plmiq}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - "${POSTGRES_DATA_DIR:-${PLMIQ_ROOT}/data/postgres}:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   gitea:
     image: gitea/gitea:${GITEA_VERSION:-1.22}

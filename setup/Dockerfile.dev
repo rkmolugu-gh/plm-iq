@@ -2,20 +2,21 @@ FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/plm-iq
 
-WORKDIR /app
+WORKDIR /plm-iq
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
 
-COPY pyproject.toml uv.lock* ./
-RUN uv sync
+# Clone the app source into the container
+RUN git clone https://github.com/rkmolugu-gh/plm-iq.git /plm-iq \
+    && touch /plm-iq/README.md
 
-COPY . .
+RUN uv sync
 
 EXPOSE 8000
 
