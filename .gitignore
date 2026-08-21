@@ -60,6 +60,7 @@ logs/
 .env
 .env.prod.example
 .env.dev.example
+env/.env*
 
 
 # SQLite temporary files

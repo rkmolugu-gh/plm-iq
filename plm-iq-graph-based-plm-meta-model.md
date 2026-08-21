@@ -2242,3 +2242,1429 @@ All five are configurable through the active PLM profile.
 ```
 
 This gives PLM-IQ a single declarative foundation for multiple industries while allowing each profile to define its own domain objects, relationships, queries, workflows, UI, and AI behavior.
+
+
+---
+
+# 59. Implementation Roadmap
+
+The PLM-IQ implementation should use ten major phases, with three iterations per phase.
+
+Every iteration follows:
+
+```text
+ITERATION 1
+Foundation
+Can we define it?
+
+        ↓
+
+ITERATION 2
+Implementation
+Can we build it?
+
+        ↓
+
+ITERATION 3
+Validation
+Does it actually work?
+```
+
+The implementation should also include an early **Vertical Slice PoC** so that the central YAML-to-running-PLM concept is proven before building the full platform.
+
+---
+
+# 60. Phase 0 - Vertical Slice PoC
+
+The PoC is intentionally small and should be completed before full-scale implementation.
+
+## Objective
+
+Prove:
+
+```text
+YAML Profile
+    ↓
+Meta-Model Compiler
+    ↓
+Concrete Database Schema
+    ↓
+Python Backend
+    ↓
+Jinja UI
+    ↓
+Graph Relationship
+    ↓
+Working PLM
+```
+
+The PoC should implement only:
+
+```text
+PART
+DOCUMENT
+HAS_COMPONENT
+DOCUMENTED_BY
+DRAFT
+RELEASED
+```
+
+## PoC Iteration 1 - Define
+
+Tasks:
+
+- Create minimal `poc-profile.yaml`.
+- Define PART object.
+- Define DOCUMENT object.
+- Define HAS_COMPONENT edge.
+- Define DOCUMENTED_BY edge.
+- Define DRAFT and RELEASED lifecycle.
+- Define basic Part list/detail UI.
+- Define basic BOM UI.
+- Define SQLite development schema.
+- Define generated API endpoints.
+- Define acceptance criteria.
+
+Expected result:
+
+```text
+poc-profile.yaml
+```
+
+## PoC Iteration 2 - Generate
+
+Tasks:
+
+- Build YAML validator.
+- Build profile intermediate representation.
+- Generate database tables.
+- Generate object models.
+- Generate repositories.
+- Generate services.
+- Generate REST endpoints.
+- Generate Jinja templates.
+- Generate navigation.
+- Generate relationship views.
+- Generate seed data.
+- Run generated application.
+
+Expected result:
+
+```text
+YAML
+ ↓
+Generated PLM
+ ↓
+Running application
+```
+
+## PoC Iteration 3 - Validate
+
+Tasks:
+
+- Create P-100.
+- Create P-200.
+- Create A-100 assembly.
+- Add P-100 and P-200 to A-100.
+- Upload/link a document.
+- Move part through lifecycle.
+- Display BOM.
+- Display Documents.
+- Verify generated API.
+- Verify graph traversal.
+- Verify database schema.
+- Regenerate after changing YAML.
+- Confirm application still works.
+
+### PoC Exit Criteria
+
+The PoC passes when:
+
+```text
+Add object to YAML
+        ↓
+Regenerate
+        ↓
+Database changes
+        ↓
+API changes
+        ↓
+Jinja UI changes
+        ↓
+Working PLM feature
+```
+
+This is the most important early architectural proof.
+
+---
+
+# 61. Phase 1 - Requirements & Scope
+
+## Objective
+
+Define what PLM-IQ must do and establish the boundary between Core PLM and Industry Profiles.
+
+### Iteration 1 - Core Requirements
+
+Tasks:
+
+- Define PLM personas.
+- Define core business capabilities.
+- Define core business objects.
+- Define lifecycle requirements.
+- Define revision requirements.
+- Define document requirements.
+- Define relationship requirements.
+- Define workflow requirements.
+- Define search requirements.
+- Define AI requirements.
+- Define multi-tenancy requirements.
+- Define authorization requirements.
+- Define audit requirements.
+- Define non-functional requirements.
+
+Deliverables:
+
+```text
+PRD.md
+CORE_REQUIREMENTS.md
+DOMAIN_GLOSSARY.md
+ACCEPTANCE_CRITERIA.md
+```
+
+### Iteration 2 - Industry Requirements
+
+Tasks:
+
+- Define Discrete PLM profile.
+- Define Pharma PLM profile.
+- Identify common objects.
+- Identify profile-specific objects.
+- Identify profile-specific relationships.
+- Identify profile-specific workflows.
+- Identify profile-specific AI semantics.
+- Identify regulatory requirements where applicable.
+
+### Iteration 3 - Scope Freeze
+
+Tasks:
+
+- Define MVP.
+- Define post-MVP.
+- Define future roadmap.
+- Resolve requirement conflicts.
+- Finalize acceptance criteria.
+- Approve PRD.
+
+Exit:
+
+```text
+Approved Requirements Baseline
+```
+
+---
+
+# 62. Phase 2 - Technology Stack & Platform
+
+## Objective
+
+Select and validate the technical foundation.
+
+### Iteration 1 - Technology Selection
+
+Tasks:
+
+- Confirm Python backend.
+- Confirm FastAPI.
+- Confirm Jinja server-side rendering.
+- Confirm Bootstrap/minimal JavaScript.
+- Confirm PostgreSQL.
+- Confirm SQLite development mode.
+- Select vector technology: pgvector or Qdrant.
+- Select object storage.
+- Select authentication.
+- Select background worker.
+- Select monitoring/logging.
+- Select JT/3D viewer integration approach.
+- Document technology decisions.
+
+Deliverable:
+
+```text
+TECH_STACK.md
+```
+
+### Iteration 2 - Container Platform
+
+Tasks:
+
+- Create Dockerfile.
+- Create development Compose file.
+- Create test Compose file.
+- Create production Compose file.
+- Configure PostgreSQL.
+- Configure object storage.
+- Configure worker.
+- Configure reverse proxy.
+- Configure environment variables.
+- Configure health checks.
+- Configure persistent volumes.
+
+### Iteration 3 - CI/CD
+
+Tasks:
+
+- Configure GitHub repository workflow.
+- Build Docker image.
+- Run automated tests.
+- Run database migrations.
+- Build production image.
+- Deploy test environment.
+- Add smoke tests.
+- Add rollback procedure.
+
+Exit:
+
+```text
+Repeatable build → test → deploy pipeline
+```
+
+---
+
+# 63. Phase 3 - Architecture & Design
+
+## Objective
+
+Define the complete platform architecture.
+
+### Iteration 1 - System Architecture
+
+Tasks:
+
+- Define application boundaries.
+- Define service boundaries.
+- Define API architecture.
+- Define database architecture.
+- Define object storage architecture.
+- Define graph service.
+- Define query engine.
+- Define workflow engine.
+- Define UI architecture.
+- Define authentication.
+- Define authorization.
+- Define tenancy.
+- Define audit.
+
+Deliverable:
+
+```text
+ARCHITECTURE.md
+```
+
+### Iteration 2 - Graph Architecture
+
+Tasks:
+
+- Define node model.
+- Define edge model.
+- Define edge annotations.
+- Define attributes.
+- Define revisions.
+- Define lifecycle.
+- Define graph traversal.
+- Define profile inheritance.
+- Define tenant extensions.
+- Define query abstraction.
+- Define graph-to-SQL mapping.
+
+### Iteration 3 - AI/RAG/Workflow Architecture
+
+Tasks:
+
+- Define Agent Harness.
+- Define AI Assistant.
+- Define AI Search.
+- Define GraphRAG.
+- Define vector indexing.
+- Define document chunking.
+- Define Impact Analysis Agent.
+- Define workflow engine.
+- Define workflow conditions.
+- Define AI/workflow boundary.
+- Define AI permissions.
+
+Exit:
+
+```text
+Architecture Baseline
+```
+
+---
+
+# 64. Phase 4 - User Stories & Mockups
+
+## Objective
+
+Turn requirements into usable product behavior.
+
+### Iteration 1 - User Stories
+
+Tasks:
+
+- Define personas.
+- Define Part stories.
+- Define BOM stories.
+- Define Document stories.
+- Define Requirement stories.
+- Define Change stories.
+- Define Workflow stories.
+- Define Search stories.
+- Define AI Assistant stories.
+- Define Impact Analysis stories.
+- Define Administration stories.
+
+Each story should contain:
+
+```text
+Actor
+Goal
+Preconditions
+Steps
+Acceptance Criteria
+Permissions
+Expected Result
+```
+
+### Iteration 2 - Mockups
+
+Create mockups for:
+
+```text
+Dashboard
+Part List
+Part Workspace
+BOM
+Document Workspace
+Requirements
+Engineering Change
+Workflow
+Search
+AI Assistant
+Impact Analysis
+Administration
+```
+
+### Iteration 3 - UX Validation
+
+Tasks:
+
+- Review navigation.
+- Review object workspace.
+- Review BOM usability.
+- Review document navigation.
+- Review graph visualization.
+- Review AI interaction.
+- Review workflow interaction.
+- Review accessibility.
+- Resolve usability defects.
+- Freeze UI specifications.
+
+---
+
+# 65. Phase 5 - YAML PLM Definition
+
+## Objective
+
+Create the declarative PLM Profile Definition Language.
+
+### Iteration 1 - Core YAML
+
+Tasks:
+
+- Define profile metadata.
+- Define object types.
+- Define attributes.
+- Define edge types.
+- Define edge annotations.
+- Define lifecycles.
+- Define revisions.
+- Define queries.
+- Define workflows.
+- Define UI.
+- Define API.
+- Define search.
+- Define AI.
+
+Example:
+
+```yaml
+profile:
+object_types:
+edge_types:
+lifecycles:
+queries:
+workflows:
+ui:
+api:
+search:
+ai:
+```
+
+### Iteration 2 - Discrete Profile
+
+Tasks:
+
+- Define PART.
+- Define DOCUMENT.
+- Define REQUIREMENT.
+- Define CHANGE.
+- Define SUPPLIER.
+- Define MANUFACTURING_ROUTE.
+- Define BOM relationships.
+- Define document relationships.
+- Define requirement relationships.
+- Define change relationships.
+- Define release workflow.
+- Define AI impact rules.
+
+### Iteration 3 - YAML Compiler
+
+Tasks:
+
+- Build YAML parser.
+- Build schema validator.
+- Validate references.
+- Validate inheritance.
+- Validate edge endpoints.
+- Validate lifecycle references.
+- Validate workflow queries.
+- Validate UI references.
+- Validate AI rules.
+- Generate intermediate representation.
+
+Deliverable:
+
+```text
+profile-ir.json
+```
+
+---
+
+# 66. Phase 6 - Database Definition & Scripts
+
+## Objective
+
+Compile profiles into concrete, optimized storage.
+
+### Iteration 1 - Core Database
+
+Tasks:
+
+- Create tenant tables.
+- Create user tables.
+- Create organization tables.
+- Create object tables.
+- Create revision tables.
+- Create document metadata tables.
+- Create edge tables.
+- Create lifecycle tables.
+- Create workflow tables.
+- Create audit tables.
+- Create permissions tables.
+- Create indexes.
+- Create foreign keys.
+
+### Iteration 2 - Profile Database
+
+Tasks:
+
+- Generate PART table.
+- Generate DOCUMENT table.
+- Generate REQUIREMENT table.
+- Generate CHANGE table.
+- Generate BOM edge table.
+- Generate document edge table.
+- Generate requirement edge table.
+- Generate change edge table.
+- Generate profile-specific attributes.
+- Generate profile-specific indexes.
+
+### Iteration 3 - Database Tooling
+
+Create:
+
+```text
+create_db.py
+drop_db.py
+migrate.py
+seed.py
+reset.py
+validate_schema.py
+```
+
+Tasks:
+
+- Migration versioning.
+- Migration rollback.
+- Index validation.
+- Foreign-key validation.
+- Tenant isolation validation.
+- Seed/reset support.
+- Development SQLite support.
+- Production PostgreSQL support.
+
+---
+
+# 67. Phase 7 - Code Generation & Runtime
+
+## Objective
+
+Generate a functioning PLM application from the compiled profile.
+
+### Iteration 1 - Generator Framework
+
+Tasks:
+
+- Build generator architecture.
+- Create template system.
+- Generate models.
+- Generate repositories.
+- Generate services.
+- Generate validators.
+- Generate API schemas.
+- Generate routers.
+- Generate permissions.
+- Generate Jinja templates.
+- Generate navigation.
+- Generate forms.
+- Generate list views.
+- Generate relationship views.
+
+### Iteration 2 - Backend Generation
+
+Generate:
+
+```text
+models/
+repositories/
+services/
+routers/
+schemas/
+validators/
+permissions/
+```
+
+Tasks:
+
+- CRUD.
+- Relationships.
+- Search.
+- Revision.
+- Lifecycle.
+- Workflow integration.
+- Audit.
+- File metadata.
+
+### Iteration 3 - UI Generation
+
+Generate:
+
+```text
+list.html
+detail.html
+create.html
+edit.html
+workspace.html
+```
+
+Tasks:
+
+- Navigation generation.
+- Object pages.
+- Relationship tables.
+- BOM views.
+- Document views.
+- Forms.
+- Search.
+- Workflow actions.
+- Dashboard widgets.
+
+Exit:
+
+```text
+YAML → generated backend + database + Jinja UI
+```
+
+---
+
+# 68. Phase 8 - Seed Data & Testing
+
+## Objective
+
+Create realistic data and establish automated quality gates.
+
+### Iteration 1 - Seed Data
+
+Create:
+
+```text
+10 products
+50 assemblies
+500 parts
+200 documents
+100 requirements
+50 changes
+100 suppliers
+1000+ relationships
+```
+
+Tasks:
+
+- Create revision history.
+- Create lifecycle states.
+- Create BOM depth.
+- Create document relationships.
+- Create requirement traceability.
+- Create change relationships.
+- Create realistic timestamps.
+- Create user assignments.
+
+### Iteration 2 - Automated Testing
+
+Test:
+
+```text
+Unit
+Integration
+API
+Database
+Graph traversal
+Workflow
+Authorization
+Tenant isolation
+UI
+```
+
+Tasks:
+
+- Create test fixtures.
+- Create API tests.
+- Create database tests.
+- Create graph tests.
+- Create workflow tests.
+- Create UI smoke tests.
+- Add regression suite.
+
+### Iteration 3 - AI/RAG Testing
+
+Tasks:
+
+- Create RAG test corpus.
+- Create embedding tests.
+- Test metadata filtering.
+- Test revision filtering.
+- Test tenant isolation.
+- Test graph retrieval.
+- Test hybrid retrieval.
+- Test reranking.
+- Test Impact Analysis.
+- Create golden question/answer dataset.
+- Measure groundedness and citation accuracy.
+
+---
+
+# 69. Phase 9 - Production Validation & UAT
+
+## Objective
+
+Validate the complete application in a production-like environment.
+
+### Iteration 1 - Production-Like Environment
+
+Tasks:
+
+- Deploy production PostgreSQL.
+- Deploy application containers.
+- Deploy object storage.
+- Deploy worker.
+- Configure reverse proxy.
+- Configure TLS.
+- Configure backups.
+- Configure monitoring.
+- Configure logging.
+- Test database restore.
+- Test object-storage restore.
+- Test migrations.
+- Test rollback.
+
+### Iteration 2 - UAT
+
+Execute business scenarios:
+
+```text
+Create Part
+Create BOM
+Upload Drawing
+Create Revision
+Create Requirement
+Create Change
+Submit Change
+Approve Change
+Release Part
+Search
+AI Search
+Impact Analysis
+Document retrieval
+Workflow approval
+```
+
+Tasks:
+
+- Capture UAT evidence.
+- Record defects.
+- Prioritize defects.
+- Retest fixes.
+- Obtain business sign-off.
+
+### Iteration 3 - Production Readiness
+
+Validate:
+
+```text
+0 critical defects
+0 release-blocking major defects
+UAT sign-off
+Security sign-off
+Backup validation
+Rollback validation
+Monitoring validation
+Performance acceptance
+```
+
+Deliverable:
+
+```text
+PRODUCTION_READINESS.md
+```
+
+---
+
+# 70. Phase 10 - Go-Live & Production Load Testing
+
+## Objective
+
+Deploy safely and prove production scalability.
+
+### Iteration 1 - Go-Live Rehearsal
+
+Tasks:
+
+- Backup production database.
+- Run migrations.
+- Deploy application.
+- Run health checks.
+- Run smoke tests.
+- Validate object storage.
+- Validate authentication.
+- Validate workflows.
+- Validate AI services.
+- Validate rollback.
+- Measure deployment duration.
+
+### Iteration 2 - Production Go-Live
+
+Sequence:
+
+```text
+Backup
+   ↓
+Migration
+   ↓
+Application deployment
+   ↓
+Health checks
+   ↓
+Smoke tests
+   ↓
+Enable users
+   ↓
+Monitor
+```
+
+Tasks:
+
+- Deploy production version.
+- Enable tenant.
+- Create users.
+- Verify permissions.
+- Verify data.
+- Verify workflows.
+- Verify search.
+- Verify documents.
+- Monitor errors.
+
+### Iteration 3 - Production Load Validation
+
+Test:
+
+```text
+Concurrent users
+API throughput
+BOM traversal
+Graph queries
+AI Search
+GraphRAG
+Document downloads
+3D viewer
+Workflow execution
+Database load
+Vector search
+```
+
+Suggested initial test targets:
+
+```text
+100 concurrent users
+1,000 concurrent users
+10,000+ objects
+1M+ relationships
+100K documents
+```
+
+Measure:
+
+```text
+API latency
+Database CPU
+Database connections
+Query latency
+Graph traversal latency
+Search latency
+Vector search latency
+RAG latency
+LLM latency
+Memory
+CPU
+Object storage throughput
+```
+
+Then optimize:
+
+```text
+SQL indexes
+Graph traversal
+Caching
+Search indexes
+Vector retrieval
+Connection pools
+Background workers
+Object storage
+```
+
+---
+
+# 71. Phase Exit-Gate Model
+
+Every phase should have an explicit exit gate.
+
+```text
+Phase
+  |
+  +-- Iteration 1
+  |
+  +-- Iteration 2
+  |
+  +-- Iteration 3
+  |
+  v
+Exit Gate
+  |
+  +-- Deliverables complete
+  +-- Acceptance criteria passed
+  +-- Defects acceptable
+  +-- Architecture decisions recorded
+  +-- Artifacts versioned
+```
+
+No phase should be considered complete merely because development work has stopped.
+
+---
+
+# 72. Overall Implementation Flow
+
+```text
+                    PHASE 0
+                 Vertical PoC
+                      |
+                      v
+                 PHASE 1
+               Requirements
+                      |
+                      v
+                 PHASE 2
+             Technology/Containers
+                      |
+                      v
+                 PHASE 3
+             Architecture/Design
+                      |
+                      v
+                 PHASE 4
+             Stories/Mockups
+                      |
+                      v
+                 PHASE 5
+              YAML Definition
+                      |
+                      v
+                 PHASE 6
+           Database + Scripts
+                      |
+                      v
+                 PHASE 7
+              Code Generation
+                      |
+                      v
+                 PHASE 8
+             Seed + Testing
+                      |
+                      v
+                 PHASE 9
+              UAT + Validation
+                      |
+                      v
+                 PHASE 10
+            Go-Live + Load Test
+```
+
+The **Vertical Slice PoC should be deliberately early**. It is the architectural litmus test for PLM-IQ: if `profile.yaml → schema → Python backend → Jinja UI → graph relationship → lifecycle` works cleanly, the rest of the platform can be built incrementally around that foundation.
+
+---
+
+# 59A. Part, Assembly, Component and Product Modeling
+
+PLM-IQ should avoid treating `PRODUCT`, `ASSEMBLY`, `PART`, and `COMPONENT` as four unrelated physical object concepts when they represent overlapping engineering concepts.
+
+The recommended model is:
+
+```text
+                         PART
+                          |
+              +-----------+-----------+
+              |                       |
+          COMPONENT                ASSEMBLY
+              |                       |
+       physical/reusable        structured part
+          element                  hierarchy
+```
+
+A Product is a business/market-level concept that may reference one or more engineering assemblies or parts:
+
+```text
+PRODUCT
+   |
+   +-- REPRESENTED_BY --> ASSEMBLY
+                              |
+                              +-- HAS_COMPONENT --> COMPONENT/PART
+```
+
+## Recommended Core Object Model
+
+Use one fundamental engineering object:
+
+```text
+PART
+```
+
+and distinguish its structural role with a controlled attribute:
+
+```yaml
+object_types:
+
+  - id: part
+    name: Part
+
+    attributes:
+
+      - id: structure_type
+        type: enum
+        required: true
+
+        values:
+          - COMPONENT
+          - ASSEMBLY
+```
+
+Thus both of these are `PART` nodes:
+
+```text
+P-1001
+structure_type = COMPONENT
+```
+
+and:
+
+```text
+A-100
+structure_type = ASSEMBLY
+```
+
+Both share number, name, description, revision, lifecycle, documents, requirements, changes, suppliers, and manufacturing information. An assembly additionally participates as the source of BOM relationships.
+
+```text
+A-100
+  |
+  +-- HAS_COMPONENT --> P-101
+  +-- HAS_COMPONENT --> P-102
+  +-- HAS_COMPONENT --> A-200
+```
+
+This avoids duplicating the engineering data model into separate `PART` and `ASSEMBLY` tables unless a profile has a strong reason to do so.
+
+## Component Semantics
+
+`COMPONENT` should normally be treated as a **structural role**, not necessarily a separate database object.
+
+```text
+PART P-1024
+structure_type = COMPONENT
+```
+
+When it is used inside an assembly:
+
+```text
+A-100
+  |
+  +-- HAS_COMPONENT --> P-1024
+```
+
+The relationship annotation carries occurrence-specific information:
+
+```yaml
+edge_types:
+
+  - id: has_component
+    source: part
+    target: part
+
+    annotations:
+
+      - id: quantity
+        type: decimal
+        required: true
+
+      - id: find_number
+        type: string
+
+      - id: unit
+        type: enum
+        values:
+          - EA
+          - KG
+          - M
+
+      - id: note
+        type: text
+```
+
+This allows the same Part to occur in many assemblies with different quantity, find number, unit, occurrence information, notes, and effectivity.
+
+## Product Semantics
+
+`PRODUCT` should generally be a separate business object when the organization needs to distinguish the market/customer offering from its engineering realization.
+
+```text
+PRODUCT
+  |
+  +-- REPRESENTED_BY --> A-100
+  |
+  +-- DOCUMENTED_BY --> Product Specification
+  |
+  +-- SATISFIES --> Market Requirement
+```
+
+Therefore:
+
+```text
+PART
+ ├── COMPONENT
+ └── ASSEMBLY
+
+PRODUCT
+ └── references engineering realization
+```
+
+This keeps engineering structure separate from commercial/product structure.
+
+## Profile Extensions
+
+A profile may introduce additional structural classifications without changing the Core model:
+
+```yaml
+structure_type:
+  values:
+    - COMPONENT
+    - ASSEMBLY
+    - PHANTOM
+    - REFERENCE
+```
+
+A Pharma profile can add domain-specific classifications such as:
+
+```yaml
+part_class:
+  values:
+    - ACTIVE_INGREDIENT
+    - EXCIPIENT
+    - PACKAGING_COMPONENT
+    - FORMULATION_COMPONENT
+```
+
+The underlying graph remains:
+
+```text
+Node
+  +
+Attributes
+  +
+Edges
+```
+
+while the profile supplies domain-specific classification.
+
+---
+
+# 59B. Recommended PLM-IQ Repository Structure
+
+The repository should separate the PLM platform engine, profiles, generated artifacts, runtime application, database tooling, tests, and environment setup.
+
+```text
+plm-iq/
+│
+├── README.md
+├── pyproject.toml
+├── .env.example
+├── .gitignore
+│
+├── docs/
+│   ├── requirements/
+│   │   ├── PRD.md
+│   │   ├── core-requirements.md
+│   │   ├── discrete-plm-requirements.md
+│   │   └── pharma-plm-requirements.md
+│   ├── architecture/
+│   │   ├── architecture.md
+│   │   ├── graph-meta-model.md
+│   │   ├── query-engine.md
+│   │   ├── workflow-engine.md
+│   │   ├── agent-harness.md
+│   │   ├── rag-architecture.md
+│   │   └── indexing.md
+│   ├── ux/
+│   │   ├── user-stories.md
+│   │   ├── navigation.md
+│   │   └── mockups/
+│   └── implementation/
+│       └── roadmap.md
+│
+├── profiles/
+│   ├── core/
+│   │   ├── profile.yaml
+│   │   ├── objects.yaml
+│   │   ├── edges.yaml
+│   │   ├── lifecycles.yaml
+│   │   ├── queries.yaml
+│   │   ├── workflows.yaml
+│   │   ├── ui.yaml
+│   │   └── ai.yaml
+│   ├── discrete/
+│   │   ├── profile.yaml
+│   │   ├── objects.yaml
+│   │   ├── edges.yaml
+│   │   ├── lifecycles.yaml
+│   │   ├── queries.yaml
+│   │   ├── workflows.yaml
+│   │   ├── ui.yaml
+│   │   └── ai.yaml
+│   └── pharma/
+│       ├── profile.yaml
+│       ├── objects.yaml
+│       ├── edges.yaml
+│       ├── lifecycles.yaml
+│       ├── queries.yaml
+│       ├── workflows.yaml
+│       ├── ui.yaml
+│       └── ai.yaml
+│
+├── engine/
+│   ├── meta_model/
+│   ├── compiler/
+│   ├── graph/
+│   ├── query/
+│   ├── workflow/
+│   ├── search/
+│   ├── rag/
+│   └── agents/
+│
+├── generators/
+│   ├── database/
+│   ├── backend/
+│   └── ui/
+│
+├── templates/
+│   ├── backend/
+│   ├── api/
+│   ├── jinja/
+│   │   ├── layouts/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── workspaces/
+│   └── migrations/
+│
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── dependencies.py
+│   ├── api/
+│   ├── services/
+│   ├── repositories/
+│   ├── models/
+│   ├── workflows/
+│   └── web/
+│
+├── generated/
+│   ├── discrete/
+│   │   ├── db/
+│   │   ├── backend/
+│   │   └── ui/
+│   └── pharma/
+│       ├── db/
+│       ├── backend/
+│       └── ui/
+│
+├── database/
+│   ├── migrations/
+│   ├── scripts/
+│   │   ├── create_db.py
+│   │   ├── reset_db.py
+│   │   ├── seed_db.py
+│   │   └── validate_schema.py
+│   └── seeds/
+│       ├── core/
+│       ├── discrete/
+│       └── pharma/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── api/
+│   ├── graph/
+│   ├── workflow/
+│   ├── generators/
+│   ├── ui/
+│   ├── search/
+│   ├── rag/
+│   └── agents/
+│
+├── test-data/
+│   ├── discrete/
+│   ├── pharma/
+│   ├── documents/
+│   └── golden-rag/
+│
+├── scripts/
+│   ├── generate.py
+│   ├── validate-profile.py
+│   ├── build-profile.py
+│   ├── run-dev.py
+│   └── test-all.py
+│
+└── setup/
+    ├── docker/
+    │   ├── Dockerfile
+    │   ├── docker-compose.dev.yml
+    │   ├── docker-compose.test.yml
+    │   └── docker-compose.prod.yml
+    ├── postgres/
+    │   ├── init/
+    │   └── config/
+    ├── nginx/
+    │   ├── dev/
+    │   └── prod/
+    ├── caddy/
+    │   └── Caddyfile
+    ├── monitoring/
+    │   ├── prometheus/
+    │   └── grafana/
+    ├── scripts/
+    │   ├── install.sh
+    │   ├── setup-dev.sh
+    │   ├── setup-test.sh
+    │   └── setup-prod.sh
+    └── README.md
+```
+
+## Repository Responsibilities
+
+```text
+profiles/       What PLM are we building?
+engine/         How does PLM-IQ work?
+generators/     How do we generate it?
+templates/      What does generated code look like?
+app/            What runs?
+generated/      What was generated?
+database/       How is data initialized and migrated?
+tests/          Does it work?
+test-data/      What data do we test with?
+scripts/        Developer automation
+setup/          How do we run and operate the platform?
+docs/           Why and how was it designed?
+```
+
+## Generated Code Rule
+
+Nothing under `generated/` should be manually edited.
+
+Generated files should carry:
+
+```text
+# AUTO-GENERATED BY PLM-IQ
+# DO NOT EDIT
+# Source: profiles/discrete/
+```
+
+Customer-specific behavior should be represented through profile extensions:
+
+```text
+profiles/
+    discrete/
+    pharma/
+    customers/
+        acme/
+```
+
+rather than modifying generated Python or Jinja files.
+
+## Repository Generation Flow
+
+```text
+profiles/discrete/
+        |
+        v
+   Profile Compiler
+        |
+        v
+   profile-ir.json
+        |
+   +----+----+
+   |    |    |
+   v    v    v
+  DB   API   UI
+   |    |    |
+   +----+----+
+        |
+        v
+   PLM-IQ Runtime
+```
+
+The repository structure intentionally keeps the **declarative PLM definition**, **runtime engine**, **code generator**, and **generated application** as separate concerns.
