@@ -7,16 +7,16 @@ PLM-IQ models Product Lifecycle Management as a configurable graph.
 ```text
 GRAPH = (N, E, A)
 
-N = Nodes / Business Objects
-E = Edges / Relationships
-A = Edge Annotations / Relationship-specific data
+N = Nodes / Vertices (business entities)
+E = Edges / Directed connections
+A = Edge Annotations / Edge-specific data
 ```
 
-- Nodes represent PLM business objects.
-- Edges represent meaningful relationships.
-- Edge annotations represent facts specific to a relationship.
-- Node attributes represent facts about an object.
-- Metadata definitions make object types, attributes, edge types, and annotations configurable.
+- Nodes represent PLM business vertices.
+- Edges represent meaningful connections.
+- Edge annotations represent facts specific to an edge.
+- Node attributes represent facts about a vertex.
+- Metadata definitions make vertex types, attributes, edge types, and annotations configurable.
 
 The objective is to make BOM, Documents, Requirements, Change Management, Manufacturing, Quality, Suppliers, and AI Impact Analysis graph views and traversals rather than isolated subsystems.
 
@@ -30,7 +30,7 @@ Every node has a common envelope:
 Node
 ├── id
 ├── tenant_id
-├── object_type_id
+├── vertex_type_id
 ├── number
 ├── name
 ├── description
@@ -58,7 +58,7 @@ Node
 | REQUIREMENT | Product/system requirement |
 | SPECIFICATION | Technical specification |
 | CHANGE | Engineering change |
-| REVISION | Version of a business object |
+| REVISION | Version of a business vertex |
 | SUPPLIER | Supplier/vendor |
 | MATERIAL | Material definition |
 | MANUFACTURING_ROUTE | Manufacturing process |
@@ -111,7 +111,7 @@ P-1024 ──USED_IN──> A-100
 
 ---
 
-## 4. Core Relationship Vocabulary
+## 4. Core Edge Vocabulary
 
 ### Product and BOM
 
@@ -141,7 +141,7 @@ DOCUMENT ──HAS_FILE────────> FILE
 DOCUMENT ──HAS_REVISION────> REVISION
 ```
 
-Specialized relationships can serve as virtual folders:
+Specialized edges can serve as virtual folders:
 
 ```text
 PART ──HAS_DRAWING─────────> DOCUMENT
@@ -164,7 +164,7 @@ REQUIREMENT ──ALLOCATED_TO─> PART
 
 ### Engineering Change
 
-Use a generic `CHANGE` object rather than separate ECR/ECO/ECN schemas.
+Use a generic `CHANGE` vertex rather than separate ECR/ECO/ECN schemas.
 
 ```text
 CHANGE ──AFFECTS───────────> PART
@@ -235,7 +235,7 @@ PRODUCT ──DELIVERED_TO─────> CUSTOMER
 
 ## 5. Edge Annotations
 
-An annotation describes the relationship itself, not either endpoint.
+An annotation describes the edge itself, not either endpoint.
 
 ```text
 EdgeAnnotation
@@ -276,7 +276,7 @@ minimum_order_qty = 100
 preferred = true
 ```
 
-### Relationship note
+### Edge note
 
 Standardize a human-readable annotation:
 
@@ -298,7 +298,7 @@ Do not overload `note`; structured business properties should remain separate an
 
 ## 6. Effectivity
 
-Important relationships should optionally support temporal effectivity:
+Important edges should optionally support temporal effectivity:
 
 ```text
 effective_from
@@ -335,7 +335,7 @@ effective_to = null
 
 ## 7. Provenance and Confidence
 
-Important relationships should be traceable:
+Important edges should be traceable:
 
 ```text
 source
@@ -358,12 +358,12 @@ confidence = 0.97
 
 This allows PLM-IQ to distinguish:
 
-- verified relationships
-- imported relationships
-- manually authored relationships
-- AI-inferred relationships
+- verified edges
+- imported edges
+- manually authored edges
+- AI-inferred edges
 
-AI-generated relationships must carry provenance and confidence and must not silently become authoritative.
+AI-generated edges must carry provenance and confidence and must not silently become authoritative.
 
 ---
 
@@ -380,12 +380,12 @@ AI-generated relationships must carry provenance and confidence and must not sil
 
 ---
 
-## 9. Configurable Object Types
+## 9. Configurable Vertex Types
 
-Object types are metadata rather than hard-coded schemas.
+Vertex types are metadata rather than hard-coded schemas.
 
 ```text
-object_type
+vertex_type
 ------------
 id
 tenant_id
@@ -410,7 +410,7 @@ PART
  +-- ELECTRICAL_PART
 ```
 
-Object types can inherit attributes.
+Vertex types can inherit attributes.
 
 ---
 
@@ -421,7 +421,7 @@ attribute_definition
 --------------------
 id
 tenant_id
-object_type_id
+vertex_type_id
 name
 label
 description
@@ -479,7 +479,7 @@ node
 ----
 id
 tenant_id
-object_type_id
+vertex_type_id
 number
 name
 lifecycle_state
@@ -524,8 +524,8 @@ tenant_id
 name
 label
 description
-source_object_type_id
-target_object_type_id
+source_vertex_type_id
+target_vertex_type_id
 inverse_name
 edge_family
 cardinality
@@ -632,7 +632,7 @@ Every graph node has a canonical workspace.
 Example:
 
 ```text
-/objects/PART/P-1024
+/vertices/PART/P-1024
 ```
 
 The workspace can dynamically expose sections based on configured edge types:
@@ -640,7 +640,7 @@ The workspace can dynamically expose sections based on configured edge types:
 ```text
 P-1024 Mounting Bracket
 
-Connected Objects
+Connected Vertices
 -----------------
 Drawings          4
 Specifications    3
@@ -683,13 +683,13 @@ AI agents should operate through controlled graph tools rather than unrestricted
 Examples:
 
 ```text
-find_related_objects(object_id, edge_type, depth)
-find_downstream_impact(object_id)
-find_upstream_dependencies(object_id)
+find_related_objects(vertex_id, edge_type, depth)
+find_downstream_impact(vertex_id)
+find_upstream_dependencies(vertex_id)
 find_where_used(part_id)
-find_documents(object_id)
-find_requirements(object_id)
-find_changes(object_id)
+find_documents(vertex_id)
+find_requirements(vertex_id)
+find_changes(vertex_id)
 trace_requirement(requirement_id)
 ```
 
@@ -728,7 +728,7 @@ P-1024 -> SATISFIES -> REQ-182
 The following metadata must be versioned:
 
 ```text
-OBJECT_TYPE
+VERTEX_TYPE
 ATTRIBUTE_DEFINITION
 EDGE_TYPE
 EDGE_ATTRIBUTE_DEFINITION
@@ -784,7 +784,7 @@ Tenant-specific extensions must not require application-code changes.
 ```text
 Meta-Model Service
     |
-    +-- Object Types
+    +-- Vertex Types
     +-- Attribute Definitions
     +-- Edge Types
     +-- Edge Attribute Definitions
@@ -798,7 +798,7 @@ Graph Service
     +-- Effectivity
     +-- Provenance
 
-Object Service
+Vertex Service
     |
     +-- CRUD
     +-- Lifecycle
@@ -886,20 +886,20 @@ note = "Mounting hole diameter changed"
 
 ## 22. Design Rules
 
-1. Business objects are nodes.
-2. Business relationships are edges.
-3. Relationship-specific data belongs to edge annotations.
-4. Object-specific data belongs to node attributes.
+1. Business vertices are nodes.
+2. Business connections are edges.
+3. Edge-specific data belongs to edge annotations.
+4. Vertex-specific data belongs to node attributes.
 5. Stable system fields remain structured.
 6. Domain-specific attributes are configurable.
 7. Edge types are configurable.
 8. Edge annotation definitions are configurable.
 9. Virtual folders are views, never physical containment.
-10. Documents can participate in multiple relationships.
+10. Documents can participate in multiple edges.
 11. Every node has one canonical identity.
-12. Effectivity is supported for lifecycle-sensitive relationships.
-13. Important relationships carry provenance.
-14. AI-inferred relationships carry confidence and provenance.
+12. Effectivity is supported for lifecycle-sensitive edges.
+13. Important edges carry provenance.
+14. AI-inferred edges carry confidence and provenance.
 15. Meta-model configuration is versioned.
 16. Tenant extensions require no application-code changes.
 17. Graph traversal respects tenant and authorization boundaries.
@@ -916,7 +916,7 @@ note = "Mounting hole diameter changed"
                            |
           +----------------+----------------+
           |                                 |
-    OBJECT TYPES                       EDGE TYPES
+    VERTEX TYPES                       EDGE TYPES
           |                                 |
     ATTRIBUTES                        ANNOTATIONS
           |                                 |
@@ -926,7 +926,7 @@ note = "Mounting hole diameter changed"
                            |
         +------------------+------------------+
         |                  |                  |
-      OBJECTS           RELATIONSHIPS      DOCUMENTS
+      VERTICES           EDGES      DOCUMENTS
         |                  |                  |
         +------------------+------------------+
                            |
@@ -947,14 +947,14 @@ note = "Mounting hole diameter changed"
 
 The graph meta-model is the canonical semantic layer of PLM-IQ.
 
-Modules should be implemented as **views, workflows, queries, and traversals over the graph**, not as independent relationship systems.
+Modules should be implemented as **views, workflows, queries, and traversals over the graph**, not as independent edge systems.
 
 The next implementation artifact should translate this meta-model into a concrete PostgreSQL/SQLite schema for:
 
 ```text
 node
 edge
-object_type
+vertex_type
 attribute_definition
 node_attribute
 edge_type
@@ -982,7 +982,7 @@ TENANT EXTENSION
 CUSTOM PLM SOLUTION
 ```
 
-Profiles can define object types, attributes, edge types, edge annotations, lifecycle definitions, workflows, document views, validation rules, UI views, and AI agent behavior.
+Profiles can define vertex types, attributes, edge types, edge annotations, lifecycle definitions, workflows, document views, validation rules, UI views, and AI agent behavior.
 
 ```text
                     PLM-IQ PLATFORM
@@ -1110,7 +1110,7 @@ Example:
 profile: pharma
 agent: IMPACT_ANALYSIS
 
-important_relationships:
+important_edges:
 
   - edge: MANUFACTURED_FROM
     priority: critical
@@ -1150,7 +1150,7 @@ impact_rules:
 
 risk_rules:
 
-  - object_type: REGULATORY_SUBMISSION
+  - vertex_type: REGULATORY_SUBMISSION
     risk: HIGH
 ```
 
@@ -1165,8 +1165,8 @@ The Impact Analysis Agent provides generic capabilities:
 ```text
 Impact Analysis Agent
     |
-    +-- identify affected objects
-    +-- traverse relationships
+    +-- identify affected vertices
+    +-- traverse edges
     +-- evaluate lifecycle
     +-- collect evidence
     +-- rank impact
@@ -1177,10 +1177,10 @@ Impact Analysis Agent
 The agent asks the active profile:
 
 ```text
-Which relationships matter?
+Which edges matter?
 How far should I traverse?
-Which object types are high risk?
-Which relationships are critical?
+Which vertex types are high risk?
+Which edges are critical?
 How should findings be ranked?
 What evidence is required?
 ```
@@ -1212,7 +1212,7 @@ FORM-44
                               +--HAS_REGULATORY_SUBMISSION--> SUB-55
 ```
 
-The Pharma profile tells the generic agent that the following relationships are important:
+The Pharma profile tells the generic agent that the following edges are important:
 
 ```text
 CONTAINS
@@ -1291,7 +1291,7 @@ The agent uses the same reasoning engine but follows the Discrete profile's sema
 
 ---
 
-# 34. Relationship Priority
+# 34. Edge Priority
 
 Not every graph edge has equal impact significance.
 
@@ -1319,7 +1319,7 @@ edge_priorities:
     priority: 10
 ```
 
-This prevents an agent from presenting hundreds of weakly related objects as equally important.
+This prevents an agent from presenting hundreds of weakly related vertices as equally important.
 
 ---
 
@@ -1356,13 +1356,13 @@ Example:
 ```yaml
 risk_rules:
 
-  - object_type: REGULATORY_SUBMISSION
+  - vertex_type: REGULATORY_SUBMISSION
     risk: CRITICAL
 
-  - object_type: STABILITY_STUDY
+  - vertex_type: STABILITY_STUDY
     risk: HIGH
 
-  - object_type: DOCUMENT
+  - vertex_type: DOCUMENT
     risk: MEDIUM
 ```
 
@@ -1371,13 +1371,13 @@ Discrete PLM could instead define:
 ```yaml
 risk_rules:
 
-  - object_type: SAFETY_CRITICAL_PART
+  - vertex_type: SAFETY_CRITICAL_PART
     risk: CRITICAL
 
-  - object_type: PRODUCT
+  - vertex_type: PRODUCT
     risk: HIGH
 
-  - object_type: DRAWING
+  - vertex_type: DRAWING
     risk: MEDIUM
 ```
 
@@ -1490,8 +1490,8 @@ agent_rule
 profile
 agent
 edge_type
-source_object_type
-target_object_type
+source_vertex_type
+target_vertex_type
 priority
 max_depth
 risk_level
@@ -1562,16 +1562,16 @@ PROFILE-AWARE AI
 Agents should interact with the graph through controlled tools.
 
 ```text
-find_related_objects(object_id, edge_type, depth)
-find_downstream_impact(object_id)
-find_upstream_dependencies(object_id)
-find_where_used(object_id)
-find_documents(object_id)
-find_requirements(object_id)
-find_changes(object_id)
+find_related_objects(vertex_id, edge_type, depth)
+find_downstream_impact(vertex_id)
+find_upstream_dependencies(vertex_id)
+find_where_used(vertex_id)
+find_documents(vertex_id)
+find_requirements(vertex_id)
+find_changes(vertex_id)
 trace_requirement(requirement_id)
-find_effectivity(object_id)
-get_relationship_evidence(edge_id)
+find_effectivity(vertex_id)
+get_edge_evidence(edge_id)
 ```
 
 The profile determines which tools and traversals are relevant.
@@ -1668,7 +1668,7 @@ This allows PLM-IQ to support Discrete PLM, Pharma PLM, Medical Device PLM, Aero
 
 # 45. Workflow Meta-Model
 
-Workflows sit one layer above the graph and operate on graph nodes, relationships, lifecycle state, and graph-based conditions.
+Workflows sit one layer above the graph and operate on graph nodes, edges, lifecycle state, and graph-based conditions.
 
 A workflow is a declarative lifecycle process, not a database operation.
 
@@ -1677,7 +1677,7 @@ A workflow is a declarative lifecycle process, not a database operation.
                       |
         +-------------+-------------+
         |             |             |
-      Objects       Edges       Workflows
+      Vertices       Edges       Workflows
         |             |             |
         +-------------+-------------+
                       |
@@ -1702,7 +1702,7 @@ A workflow should define:
 Workflow
 ├── id
 ├── name
-├── object_type
+├── vertex_type
 ├── trigger
 ├── states
 ├── stages
@@ -1720,7 +1720,7 @@ workflows:
 
   - id: part_release
     name: Release Part
-    object_type: part
+    vertex_type: part
 
     trigger:
       action: submit_for_release
@@ -1783,7 +1783,7 @@ queries:
 
       - lifecycle_state: DRAFT
 
-    required_relationships:
+    required_edges:
 
       - edge: HAS_DRAWING
         min_count: 1
@@ -1872,7 +1872,7 @@ Example:
 
   query:
     from: PART
-    id: "$object.id"
+    id: "$vertex.id"
 
     traverse:
       edge: HAS_COMPONENT
@@ -1907,7 +1907,7 @@ actions:
 
   - type: create_edge
     edge: APPROVED_BY
-    source: "$object.id"
+    source: "$vertex.id"
     target: "$approval.user_id"
 
   - type: create_edge
@@ -1916,11 +1916,11 @@ actions:
     target: "$revision.id"
 
   - type: transition_lifecycle
-    object: "$object.id"
+    vertex: "$vertex.id"
     state: RELEASED
 
   - type: create_revision
-    object: "$object.id"
+    vertex: "$vertex.id"
 
   - type: notify
     role: ENGINEERING_REVIEWER
@@ -1949,7 +1949,7 @@ Workflow execution should retain:
 ```text
 workflow_id
 workflow_instance_id
-object_id
+vertex_id
 stage_id
 action
 actor
@@ -2117,7 +2117,7 @@ The profile YAML now defines the major semantic layers:
 ```text
 PLM PROFILE
     |
-    +-- OBJECT TYPES
+    +-- VERTEX TYPES
     |      |
     |      +-- ATTRIBUTES
     |
@@ -2190,7 +2190,7 @@ AI sits alongside these engines and uses controlled tools:
 
 The central principle is:
 
-> **Graph defines what exists and how it is connected. Workflow defines how objects move through controlled business processes. Queries define reusable graph conditions. AI analyzes and assists. The profile defines the domain semantics.**
+> **Graph defines what exists and how it is connected. Workflow defines how vertices move through controlled business processes. Queries define reusable graph conditions. AI analyzes and assists. The profile defines the domain semantics.**
 
 ---
 
@@ -2199,7 +2199,7 @@ The central principle is:
 PLM-IQ can therefore be viewed as five semantic layers:
 
 ```text
-1. OBJECT MODEL
+1. VERTEX MODEL
    What things exist?
 
 2. GRAPH MODEL
@@ -2222,7 +2222,7 @@ All five are configurable through the active PLM profile.
                       |
        +--------------+--------------+
        |              |              |
-     OBJECT         GRAPH         WORKFLOW
+     VERTEX         GRAPH         WORKFLOW
        |              |              |
    Attributes      Edges         States
                                   |
@@ -2241,7 +2241,7 @@ All five are configurable through the active PLM profile.
                   AI Assistant
 ```
 
-This gives PLM-IQ a single declarative foundation for multiple industries while allowing each profile to define its own domain objects, relationships, queries, workflows, UI, and AI behavior.
+This gives PLM-IQ a single declarative foundation for multiple industries while allowing each profile to define its own domain vertices, edges, queries, workflows, UI, and AI behavior.
 
 
 ---
@@ -2293,7 +2293,7 @@ Python Backend
     ↓
 Jinja UI
     ↓
-Graph Relationship
+Graph Edge
     ↓
 Working PLM
 ```
@@ -2314,8 +2314,8 @@ RELEASED
 Tasks:
 
 - Create minimal `poc-profile.yaml`.
-- Define PART object.
-- Define DOCUMENT object.
+- Define PART vertex.
+- Define DOCUMENT vertex.
 - Define HAS_COMPONENT edge.
 - Define DOCUMENTED_BY edge.
 - Define DRAFT and RELEASED lifecycle.
@@ -2338,13 +2338,13 @@ Tasks:
 - Build YAML validator.
 - Build profile intermediate representation.
 - Generate database tables.
-- Generate object models.
+- Generate vertex models.
 - Generate repositories.
 - Generate services.
 - Generate REST endpoints.
 - Generate Jinja templates.
 - Generate navigation.
-- Generate relationship views.
+- Generate edge views.
 - Generate seed data.
 - Run generated application.
 
@@ -2381,7 +2381,7 @@ Tasks:
 The PoC passes when:
 
 ```text
-Add object to YAML
+Add vertex to YAML
         ↓
 Regenerate
         ↓
@@ -2410,11 +2410,11 @@ Tasks:
 
 - Define PLM personas.
 - Define core business capabilities.
-- Define core business objects.
+- Define core business vertices.
 - Define lifecycle requirements.
 - Define revision requirements.
 - Define document requirements.
-- Define relationship requirements.
+- Define edge requirements.
 - Define workflow requirements.
 - Define search requirements.
 - Define AI requirements.
@@ -2438,9 +2438,9 @@ Tasks:
 
 - Define Discrete PLM profile.
 - Define Pharma PLM profile.
-- Identify common objects.
-- Identify profile-specific objects.
-- Identify profile-specific relationships.
+- Identify common vertices.
+- Identify profile-specific vertices.
+- Identify profile-specific edges.
 - Identify profile-specific workflows.
 - Identify profile-specific AI semantics.
 - Identify regulatory requirements where applicable.
@@ -2659,7 +2659,7 @@ Administration
 Tasks:
 
 - Review navigation.
-- Review object workspace.
+- Review vertex workspace.
 - Review BOM usability.
 - Review document navigation.
 - Review graph visualization.
@@ -2682,7 +2682,7 @@ Create the declarative PLM Profile Definition Language.
 Tasks:
 
 - Define profile metadata.
-- Define object types.
+- Define vertex types.
 - Define attributes.
 - Define edge types.
 - Define edge annotations.
@@ -2699,7 +2699,7 @@ Example:
 
 ```yaml
 profile:
-object_types:
+vertex_types:
 edge_types:
 lifecycles:
 queries:
@@ -2720,10 +2720,10 @@ Tasks:
 - Define CHANGE.
 - Define SUPPLIER.
 - Define MANUFACTURING_ROUTE.
-- Define BOM relationships.
-- Define document relationships.
-- Define requirement relationships.
-- Define change relationships.
+- Define BOM edges.
+- Define document edges.
+- Define requirement edges.
+- Define change edges.
 - Define release workflow.
 - Define AI impact rules.
 
@@ -2763,7 +2763,7 @@ Tasks:
 - Create tenant tables.
 - Create user tables.
 - Create organization tables.
-- Create object tables.
+- Create vertex tables.
 - Create revision tables.
 - Create document metadata tables.
 - Create edge tables.
@@ -2838,7 +2838,7 @@ Tasks:
 - Generate navigation.
 - Generate forms.
 - Generate list views.
-- Generate relationship views.
+- Generate edge views.
 
 ### Iteration 2 - Backend Generation
 
@@ -2857,7 +2857,7 @@ permissions/
 Tasks:
 
 - CRUD.
-- Relationships.
+- Edges.
 - Search.
 - Revision.
 - Lifecycle.
@@ -2880,8 +2880,8 @@ workspace.html
 Tasks:
 
 - Navigation generation.
-- Object pages.
-- Relationship tables.
+- Vertex pages.
+- Edge tables.
 - BOM views.
 - Document views.
 - Forms.
@@ -2915,7 +2915,7 @@ Create:
 100 requirements
 50 changes
 100 suppliers
-1000+ relationships
+1000+ edges
 ```
 
 Tasks:
@@ -2923,9 +2923,9 @@ Tasks:
 - Create revision history.
 - Create lifecycle states.
 - Create BOM depth.
-- Create document relationships.
+- Create document edges.
 - Create requirement traceability.
-- Create change relationships.
+- Create change edges.
 - Create realistic timestamps.
 - Create user assignments.
 
@@ -2993,7 +2993,7 @@ Tasks:
 - Configure monitoring.
 - Configure logging.
 - Test database restore.
-- Test object-storage restore.
+- Test vertex-storage restore.
 - Test migrations.
 - Test rollback.
 
@@ -3126,8 +3126,8 @@ Suggested initial test targets:
 ```text
 100 concurrent users
 1,000 concurrent users
-10,000+ objects
-1M+ relationships
+10,000+ vertices
+1M+ edges
 100K documents
 ```
 
@@ -3237,13 +3237,13 @@ No phase should be considered complete merely because development work has stopp
             Go-Live + Load Test
 ```
 
-The **Vertical Slice PoC should be deliberately early**. It is the architectural litmus test for PLM-IQ: if `profile.yaml → schema → Python backend → Jinja UI → graph relationship → lifecycle` works cleanly, the rest of the platform can be built incrementally around that foundation.
+The **Vertical Slice PoC should be deliberately early**. It is the architectural litmus test for PLM-IQ: if `profile.yaml → schema → Python backend → Jinja UI → graph edge → lifecycle` works cleanly, the rest of the platform can be built incrementally around that foundation.
 
 ---
 
 # 59A. Part, Assembly, Component and Product Modeling
 
-PLM-IQ should avoid treating `PRODUCT`, `ASSEMBLY`, `PART`, and `COMPONENT` as four unrelated physical object concepts when they represent overlapping engineering concepts.
+PLM-IQ should avoid treating `PRODUCT`, `ASSEMBLY`, `PART`, and `COMPONENT` as four unrelated physical vertex concepts when they represent overlapping engineering concepts.
 
 The recommended model is:
 
@@ -3268,9 +3268,9 @@ PRODUCT
                               +-- HAS_COMPONENT --> COMPONENT/PART
 ```
 
-## Recommended Core Object Model
+## Recommended Core Vertex Model
 
-Use one fundamental engineering object:
+Use one fundamental engineering vertex:
 
 ```text
 PART
@@ -3279,7 +3279,7 @@ PART
 and distinguish its structural role with a controlled attribute:
 
 ```yaml
-object_types:
+vertex_types:
 
   - id: part
     name: Part
@@ -3309,7 +3309,7 @@ A-100
 structure_type = ASSEMBLY
 ```
 
-Both share number, name, description, revision, lifecycle, documents, requirements, changes, suppliers, and manufacturing information. An assembly additionally participates as the source of BOM relationships.
+Both share number, name, description, revision, lifecycle, documents, requirements, changes, suppliers, and manufacturing information. An assembly additionally participates as the source of BOM edges.
 
 ```text
 A-100
@@ -3323,7 +3323,7 @@ This avoids duplicating the engineering data model into separate `PART` and `ASS
 
 ## Component Semantics
 
-`COMPONENT` should normally be treated as a **structural role**, not necessarily a separate database object.
+`COMPONENT` should normally be treated as a **structural role**, not necessarily a separate database vertex.
 
 ```text
 PART P-1024
@@ -3338,7 +3338,7 @@ A-100
   +-- HAS_COMPONENT --> P-1024
 ```
 
-The relationship annotation carries occurrence-specific information:
+The edge annotation carries occurrence-specific information:
 
 ```yaml
 edge_types:
@@ -3371,7 +3371,7 @@ This allows the same Part to occur in many assemblies with different quantity, f
 
 ## Product Semantics
 
-`PRODUCT` should generally be a separate business object when the organization needs to distinguish the market/customer offering from its engineering realization.
+`PRODUCT` should generally be a separate business vertex when the organization needs to distinguish the market/customer offering from its engineering realization.
 
 ```text
 PRODUCT
@@ -3470,7 +3470,7 @@ plm-iq/
 ├── profiles/
 │   ├── core/
 │   │   ├── profile.yaml
-│   │   ├── objects.yaml
+│   │   ├── vertices.yaml
 │   │   ├── edges.yaml
 │   │   ├── lifecycles.yaml
 │   │   ├── queries.yaml
@@ -3479,7 +3479,7 @@ plm-iq/
 │   │   └── ai.yaml
 │   ├── discrete/
 │   │   ├── profile.yaml
-│   │   ├── objects.yaml
+│   │   ├── vertices.yaml
 │   │   ├── edges.yaml
 │   │   ├── lifecycles.yaml
 │   │   ├── queries.yaml
@@ -3488,7 +3488,7 @@ plm-iq/
 │   │   └── ai.yaml
 │   └── pharma/
 │       ├── profile.yaml
-│       ├── objects.yaml
+│       ├── vertices.yaml
 │       ├── edges.yaml
 │       ├── lifecycles.yaml
 │       ├── queries.yaml

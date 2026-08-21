@@ -69,7 +69,7 @@ This lets PLM-IQ serve Discrete Manufacturing, Life Sciences, and future domains
 
 1. **Siloed subsystems.** BOM, documents, requirements, and change are separate databases, breaking traceability.
 2. **Industry forks.** Adapting a PLM system to a new domain requires code changes or a separate product.
-3. **Slow customization.** Adding a single attribute or relationship often needs engineering change in the vendor's codebase.
+3. **Slow customization.** Adding a single attribute or edge often needs engineering change in the vendor's codebase.
 4. **Opaque AI.** Generic LLM/chat integrations access data without provenance, authorization, or explainability.
 5. **High TCO.** Per-seat licensing, long implementation, and rigid data models.
 
@@ -252,7 +252,7 @@ profiles/discrete/
 
 ### 8.2 Graph & Nodes (FR-GRAPH)
 
-- FR-GRAPH-1: Nodes (vertices) model business entities; edges model the relationships between them.
+- FR-GRAPH-1: Nodes (vertices) model business entities; edges model the edges between them.
 - FR-GRAPH-2: Every node has a stable system envelope (id, tenant_id, node_type_id, number, name, lifecycle_state, revision_id, timestamps) plus configurable attributes.
 - FR-GRAPH-3: Edge annotations store edge-specific facts (quantity, find number, unit, effectivity, note, cost) in typed columns.
 - FR-GRAPH-4: Edge types and edge annotation definitions MUST be configurable and versioned.
@@ -265,7 +265,7 @@ profiles/discrete/
 - FR-BOM-1: `HAS_COMPONENT` is the fundamental BOM edge; assemblies and components are `PART` nodes distinguished by `structure_type`.
 - FR-BOM-2: The same part MAY appear in multiple assemblies with different occurrence annotations.
 - FR-BOM-3: Where-Used MUST return all upstream parents with path evidence.
-- FR-BOM-4: Effectivity (date/serial/lot/configuration/model-year) MUST optionally constrain BOM relationships.
+- FR-BOM-4: Effectivity (date/serial/lot/configuration/model-year) MUST optionally constrain BOM edges.
 
 ### 8.4 Documents (FR-DOC)
 
@@ -306,9 +306,9 @@ profiles/discrete/
 
 ### 8.10 AI Agents (FR-AI)
 
-- FR-AI-1: AI agents access the graph ONLY through controlled tools (e.g., `find_downstream_impact`, `find_where_used`, `trace_requirement`, `get_relationship_evidence`).
+- FR-AI-1: AI agents access the graph ONLY through controlled tools (e.g., `find_downstream_impact`, `find_where_used`, `trace_requirement`, `get_edge_evidence`).
 - FR-AI-2: Agent behavior MUST be specialized by the active profile (traversal rules, priorities, risk) — no hard-coded industry logic.
-- FR-AI-3: AI-inferred relationships MUST carry `source_type`, `source_id`, `confidence`, and MUST NOT silently become authoritative.
+- FR-AI-3: AI-inferred edges MUST carry `source_type`, `source_id`, `confidence`, and MUST NOT silently become authoritative.
 - FR-AI-4: The Agent Harness MUST enforce tenant isolation, authorization, max traversal depth, permitted tools, and action recording.
 - FR-AI-5: Impact Analysis MUST return ranked results with graph evidence and risk level.
 - FR-AI-6: AI MUST NOT bypass workflow authorization; it provides analysis/recommendations only.
@@ -484,7 +484,7 @@ PLM-IQ is built in 11 phases, each with define/implement/validate iterations and
 - Release workflow blocks transition when graph conditions fail (e.g., missing drawing, unreleased child).
 - AI Impact Analysis returns ranked, evidence-backed results bounded by profile rules.
 - Cross-tenant access is prevented by automated isolation tests.
-- All AI-inferred relationships carry provenance and confidence and are not authoritative by default.
+- All AI-inferred edges carry provenance and confidence and are not authoritative by default.
 
 ---
 

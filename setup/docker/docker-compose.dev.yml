@@ -1,4 +1,4 @@
-# PLM-IQ development stack (api + infra). Runs on SQLite (no Postgres).
+# PLM-IQ development stack (api + infra). Runs on PostgreSQL (db service).
 # Run via: setup/docker/build-run-term.bat dev build / dev run
 services:
   api:
@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     env_file: ${PLMIQ_SETUP}/.env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite:///db/plm-iq.db}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://plmiq:plmiq@db:5432/plmiq}
       BASE_DOMAIN: ${BASE_DOMAIN:-localhost}
       TENANT_REQUIRE_SUBDOMAIN: ${TENANT_REQUIRE_SUBDOMAIN:-false}
     ports:
