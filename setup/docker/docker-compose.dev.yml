@@ -40,6 +40,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - "${POSTGRES_DATA_DIR:-${PLMIQ_ROOT}/data/postgres}:/var/lib/postgresql/data"
+      - "${PLMIQ_SETUP}/postgres-init:/docker-entrypoint-initdb.d"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s

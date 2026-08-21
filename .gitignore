@@ -63,8 +63,3 @@ logs/
 .env.prod.example
 .env.dev.example
 env/.env*
-
-
-# SQLite temporary files
-*.db-shm
-*.db-wal
