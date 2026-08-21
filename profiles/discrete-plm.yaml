@@ -1,0 +1,174 @@
+profile:
+  id: discrete-plm
+  name: Discrete Manufacturing PLM
+  version: "1.0"
+  inherits: [plm-core]
+
+graph:
+  vertex_types:
+    - id: part
+      label: PART
+      extends: vertex
+      properties:
+        - {id: part_number, type: string, required: true, indexed: true, searchable: true}
+        - id: structure_type
+          type: enum
+          required: true
+          values: [COMPONENT, ASSEMBLY]
+        - {id: material, type: string, searchable: true, filterable: true}
+        - {id: weight, type: decimal, unit: kg}
+        - {id: unit_of_measure, type: string, default: EA}
+
+    - id: product
+      label: PRODUCT
+      properties:
+        - {id: product_number, type: string, required: true, indexed: true}
+        - {id: market_name, type: string, searchable: true}
+        - {id: product_family, type: string, searchable: true}
+
+    - id: manufacturing_route
+      label: MANUFACTURING_ROUTE
+      properties:
+        - {id: route_number, type: string, required: true}
+        - {id: description, type: text}
+
+    - id: supplier
+      label: SUPPLIER
+      properties:
+        - {id: supplier_number, type: string, required: true}
+        - {id: supplier_name, type: string, required: true, searchable: true}
+
+  edge_types:
+    - id: has_component
+      label: HAS_COMPONENT
+      source: part
+      target: part
+      directed: true
+      constraints:
+        source: {structure_type: [ASSEMBLY]}
+      properties:
+        - {id: quantity, type: decimal, required: true, default: 1}
+        - {id: find_number, type: string}
+        - {id: unit, type: string}
+        - {id: note, type: text}
+        - {id: effectivity, type: string}
+
+    - id: represented_by
+      label: REPRESENTED_BY
+      source: product
+      target: part
+      directed: true
+      constraints:
+        target: {structure_type: [ASSEMBLY]}
+
+    - {id: manufactured_by, label: MANUFACTURED_BY, source: part, target: manufacturing_route, directed: true}
+
+    - id: supplied_by
+      label: SUPPLIED_BY
+      source: part
+      target: supplier
+      directed: true
+      properties:
+        - {id: supplier_part_number, type: string}
+        - {id: lead_time_days, type: integer}
+        - {id: preferred, type: boolean}
+
+    - id: has_drawing
+      label: HAS_DRAWING
+      source: part
+      target: document
+      directed: true
+      constraints:
+        target: {document_class: [DRAWING]}
+
+    - id: has_cad
+      label: HAS_CAD
+      source: part
+      target: document
+      directed: true
+      constraints:
+        target: {document_class: [CAD]}
+
+lifecycle:
+  part:
+    states: [DRAFT, IN_REVIEW, RELEASED, OBSOLETE]
+    transitions:
+      - {from: DRAFT, to: IN_REVIEW, action: submit}
+      - {from: IN_REVIEW, to: RELEASED, action: approve}
+      - {from: RELEASED, to: OBSOLETE, action: obsolete}
+
+revision:
+  applies_to: [part, product, document]
+  revision_on: [release, engineering_change]
+  allow_unreleased_change: true
+
+graph_queries:
+  - id: bom
+    start_vertex: part
+    traversals: [{edge: HAS_COMPONENT, direction: outgoing}]
+  - id: where_used
+    start_vertex: part
+    traversals: [{edge: HAS_COMPONENT, direction: incoming}]
+  - id: complete_bom
+    start_vertex: part
+    traversals: [{edge: HAS_COMPONENT, direction: outgoing, recursive: true}]
+  - id: supplier_impact
+    start_vertex: part
+    traversals: [{edge: SUPPLIED_BY, direction: outgoing}]
+  - id: manufacturing_impact
+    start_vertex: part
+    traversals: [{edge: MANUFACTURED_BY, direction: outgoing}]
+
+  - id: release_readiness
+    start_vertex: part
+    predicates:
+      - {property: lifecycle_state, equals: DRAFT}
+    required_edges:
+      - {edge: HAS_DRAWING, min_count: 1}
+      - {edge: DOCUMENTED_BY, min_count: 1}
+
+workflows:
+  - id: part_release
+    name: Release Part
+    applies_to: part
+    trigger: SUBMIT_FOR_RELEASE
+    stages:
+      - id: engineering_review
+        type: approval
+        assignee: {type: role, value: ENGINEERING_REVIEWER}
+        approvals_required: 1
+        entry_graph_query: release_readiness
+        on_approve: RELEASED
+        on_reject: DRAFT
+
+ui:
+  navigation:
+    - {id: dashboard, label: Dashboard, route: /dashboard}
+    - {id: parts, label: Parts, route: /parts, vertex_type: part}
+    - {id: products, label: Products, route: /products, vertex_type: product}
+    - {id: documents, label: Documents, route: /documents}
+    - {id: changes, label: Changes, route: /changes}
+
+  workspaces:
+    - id: part_workspace
+      vertex_type: part
+      sections:
+        - {id: overview, type: properties}
+        - {id: bom, type: edge_table, edge: HAS_COMPONENT}
+        - {id: documents, type: edge_table, edge: DOCUMENTED_BY}
+        - {id: drawings, type: edge_table, edge: HAS_DRAWING}
+        - {id: suppliers, type: edge_table, edge: SUPPLIED_BY}
+        - {id: changes, type: edge_table, edge: AFFECTED_BY}
+
+ai:
+  agents:
+    - id: impact_analysis
+      important_edges:
+        HAS_COMPONENT: 100
+        AFFECTED_BY: 100
+        SUPPLIED_BY: 80
+        MANUFACTURED_BY: 80
+        DOCUMENTED_BY: 40
+      traversal: {max_depth: 5}
+    - {id: bom_assistant, enabled: true}
+    - {id: change_analysis, enabled: true}

@@ -1,0 +1,217 @@
+profile:
+  id: discrete-extended
+  name: Discrete Manufacturing PLM Extended
+  version: "1.0"
+  inherits: [discrete-plm]
+
+graph:
+  vertex_types:
+    - id: cad_model
+      label: CAD_MODEL
+      extends: document
+      properties:
+        - {id: cad_system, type: string}
+        - {id: model_type, type: enum, values: [PART, ASSEMBLY, DRAWING]}
+        - {id: file_format, type: string}
+
+    - id: manufacturing_process
+      label: MANUFACTURING_PROCESS
+      properties:
+        - {id: process_number, type: string, required: true}
+        - {id: process_name, type: string}
+        - {id: process_type, type: string}
+
+    - id: operation
+      label: OPERATION
+      properties:
+        - {id: operation_number, type: string}
+        - {id: operation_name, type: string}
+        - {id: sequence, type: integer}
+
+    - id: quality_specification
+      label: QUALITY_SPECIFICATION
+      properties:
+        - {id: specification_number, type: string, required: true}
+        - {id: specification, type: text}
+
+    - {id: inspection_plan, label: INSPECTION_PLAN}
+    - {id: manufacturing_bom, label: MANUFACTURING_BOM}
+
+    - id: plant
+      label: PLANT
+      properties:
+        - {id: plant_code, type: string, required: true}
+        - {id: name, type: string}
+
+    - {id: supplier_part, label: SUPPLIER_PART}
+    - {id: change_request, label: CHANGE_REQUEST}
+    - {id: change_order, label: CHANGE_ORDER}
+
+  edge_types:
+    - {id: represented_by_cad, label: REPRESENTED_BY_CAD, source: part, target: cad_model, directed: true}
+    - {id: uses_process, label: USES_PROCESS, source: part, target: manufacturing_process, directed: true}
+
+    - id: has_operation
+      label: HAS_OPERATION
+      source: manufacturing_process
+      target: operation
+      directed: true
+      properties:
+        - {id: sequence, type: integer}
+        - {id: setup_time, type: decimal, unit: min}
+        - {id: run_time, type: decimal, unit: min}
+
+    - {id: has_quality_specification, label: HAS_QUALITY_SPECIFICATION, source: part, target: quality_specification, directed: true}
+    - {id: inspected_by, label: INSPECTED_BY, source: part, target: inspection_plan, directed: true}
+    - {id: manufactured_at, label: MANUFACTURED_AT, source: part, target: plant, directed: true}
+    - {id: has_supplier_part, label: HAS_SUPPLIER_PART, source: part, target: supplier_part, directed: true}
+    - {id: affects, label: AFFECTS, source: change_order, target: vertex, directed: true}
+    - {id: derived_from, label: DERIVED_FROM, source: change_order, target: change_request, directed: true}
+
+    - id: effective_at
+      label: EFFECTIVE_AT
+      source: vertex
+      target: plant
+      directed: true
+      properties:
+        - {id: effectivity_start, type: date}
+        - {id: effectivity_end, type: date}
+
+configuration:
+  enabled: true
+  dimensions:
+    - {id: product_variant, type: string}
+    - {id: plant, type: reference, vertex_type: plant}
+    - {id: customer, type: string}
+  effectivity:
+    enabled: true
+    types: [DATE, SERIAL, LOT, PLANT]
+
+graph_queries:
+  - id: cad_impact
+    start_vertex: part
+    traversals: [{edge: REPRESENTED_BY_CAD, direction: outgoing}]
+
+  - id: manufacturing_impact
+    start_vertex: part
+    traversals:
+      - {edge: USES_PROCESS, direction: outgoing}
+      - {edge: HAS_OPERATION, direction: outgoing, recursive: true}
+
+  - id: quality_impact
+    start_vertex: part
+    traversals:
+      - {edge: HAS_QUALITY_SPECIFICATION, direction: outgoing}
+      - {edge: INSPECTED_BY, direction: outgoing}
+
+  - id: plant_impact
+    start_vertex: part
+    traversals: [{edge: MANUFACTURED_AT, direction: outgoing}]
+
+  - id: complete_engineering_impact
+    start_vertex: part
+    traversals:
+      - {edge: HAS_COMPONENT, direction: outgoing, recursive: true}
+      - {edge: REPRESENTED_BY_CAD, direction: outgoing}
+      - {edge: DOCUMENTED_BY, direction: outgoing}
+      - {edge: SUPPLIED_BY, direction: outgoing}
+      - {edge: MANUFACTURED_BY, direction: outgoing}
+      - {edge: USES_PROCESS, direction: outgoing}
+      - {edge: HAS_QUALITY_SPECIFICATION, direction: outgoing}
+      - {edge: MANUFACTURED_AT, direction: outgoing}
+      - {edge: AFFECTED_BY, direction: outgoing}
+    options:
+      max_depth: 8
+      include_edge_annotations: true
+
+workflows:
+  - id: engineering_change_order
+    name: Engineering Change Order
+    applies_to: change_order
+    stages:
+      - {id: impact_analysis, type: agent_analysis, agent: impact_analysis}
+      - {id: engineering_review, type: approval, assignee: {type: role, value: ENGINEERING_REVIEWER}}
+      - {id: manufacturing_review, type: approval, assignee: {type: role, value: MANUFACTURING_ENGINEER}}
+      - {id: quality_review, type: approval, assignee: {type: role, value: QUALITY_ENGINEER}}
+      - {id: release, type: approval, assignee: {type: role, value: CHANGE_AUTHORITY}}
+
+search:
+  indexed_vertex_types:
+    - part
+    - product
+    - document
+    - cad_model
+    - requirement
+    - change
+    - change_request
+    - change_order
+    - supplier
+    - supplier_part
+    - manufacturing_process
+    - quality_specification
+  vector:
+    enabled: true
+    edge_context:
+      - HAS_COMPONENT
+      - REPRESENTED_BY_CAD
+      - DOCUMENTED_BY
+      - SATISFIES
+      - SUPPLIED_BY
+      - MANUFACTURED_BY
+      - USES_PROCESS
+      - HAS_QUALITY_SPECIFICATION
+      - MANUFACTURED_AT
+      - AFFECTED_BY
+
+ai:
+  agents:
+    - id: impact_analysis
+      traversal:
+        max_depth: 8
+        allowed_edges:
+          - HAS_COMPONENT
+          - REPRESENTED_BY_CAD
+          - DOCUMENTED_BY
+          - SATISFIES
+          - SUPPLIED_BY
+          - MANUFACTURED_BY
+          - USES_PROCESS
+          - HAS_QUALITY_SPECIFICATION
+          - MANUFACTURED_AT
+          - AFFECTED_BY
+      edge_priority:
+        AFFECTED_BY: 100
+        HAS_COMPONENT: 100
+        REPRESENTED_BY_CAD: 90
+        SUPPLIED_BY: 80
+        MANUFACTURED_BY: 80
+        USES_PROCESS: 80
+        HAS_QUALITY_SPECIFICATION: 80
+        SATISFIES: 70
+        DOCUMENTED_BY: 40
+      output:
+        include:
+          - impacted_vertices
+          - impacted_edges
+          - impacted_documents
+          - impacted_requirements
+          - impacted_suppliers
+          - impacted_plants
+          - impacted_processes
+        evidence_required: true
+
+    - {id: engineering_assistant, enabled: true}
+    - {id: manufacturing_assistant, enabled: true}
+    - {id: supplier_impact, enabled: true}
+    - {id: quality_impact, enabled: true}
+
+  rag:
+    enabled: true
+    include_graph_context: true
+    include_revision_context: true
+    include_effectivity: true
+    filters:
+      tenant_isolation: true
+      permission_filter: true
+      lifecycle_filter: true
+      revision_filter: true
