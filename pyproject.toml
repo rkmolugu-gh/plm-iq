@@ -40,6 +40,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "itsdangerous",
     "bcrypt",
+    "pyyaml>=6.0.1",
 ]
 
 [project.optional-dependencies]

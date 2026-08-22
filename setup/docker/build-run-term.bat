@@ -45,6 +45,7 @@ if /i "%ACTION%"=="run" (
     docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" up -d
     if errorlevel 1 ( echo %R%[FAIL] %PROFILE% containers failed to start%N% & exit /b 1 )
     echo %G%[OK] %PROFILE% containers running%N%
+    if /i "%PROFILE%"=="dev" call :dev_urls
     exit /b 0
 )
 if /i "%ACTION%"=="term" (
@@ -53,6 +54,15 @@ if /i "%ACTION%"=="term" (
     if errorlevel 1 ( echo %R%[FAIL] could not open %PROFILE% container terminal%N% & exit /b 1 )
     exit /b 0
 )
+
+:dev_urls
+echo %G%  Dev service URLs (ports are defaults; override in setup\.env):%N%
+echo %G%    api           : http://localhost:8000  (docs: /docs)%N%
+echo %G%    pgAdmin       : http://localhost:5050  (admin@localhost / plmiq; server 'plm-iq' pre-registered)%N%
+echo %G%    Gitea         : http://localhost:3000%N%
+echo %G%    Mailpit UI    : http://localhost:8025  (SMTP on localhost:1025)%N%
+echo %G%    Elasticsearch : http://localhost:9200  (elastic / elastic)%N%
+goto :eof
 
 :usage
 echo %Y%Usage: build-run-term.bat ^<dev^|prod^> ^<build^|run^|term^>%N%

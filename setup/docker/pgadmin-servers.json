@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "plm-iq",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "plmiq",
+      "Username": "plmiq",
+      "Password": "plmiq",
+      "SSLMode": "prefer",
+      "Comment": "PLM-IQ dev Postgres (compose service 'db')"
+    }
+  }
+}
