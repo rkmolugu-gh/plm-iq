@@ -8,6 +8,7 @@ invalid context and renders the branded "page not found" page.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 
@@ -24,8 +25,12 @@ EDITION_LABELS = {
 
 _TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}$")
 
-# dev suffixes a tenant workspace may live under
-_SUFFIXES = ("localhost.com", "localhost")
+# Dev suffixes always accepted; production adds the deployed base domain
+# (BASE_DOMAIN, comma-separated for co-hosted domains).
+_PROD_SUFFIXES = tuple(
+    s.strip().lower().lstrip(".") for s in os.getenv("BASE_DOMAIN", "").split(",") if s.strip()
+)
+_SUFFIXES = ("localhost.com", "localhost") + _PROD_SUFFIXES
 
 
 @dataclass(frozen=True)
