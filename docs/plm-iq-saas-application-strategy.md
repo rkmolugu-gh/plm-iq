@@ -1,0 +1,925 @@
+# PLM-IQ SaaS Application Strategy Document
+
+## 1. Executive Summary
+
+**PLM-IQ** is a cloud-native, AI-first, multi-tenant Product Lifecycle Management (PLM) SaaS platform. It is designed to provide a configurable, extensible digital thread across product definition, engineering, manufacturing, quality, documentation, specifications, compliance, and change processes.
+
+The platform uses a graph-based domain model as its core architectural foundation. Business objects are represented as vertices, while relationships between those objects are represented as governed edges. This approach enables PLM-IQ to model complex product structures, traceability, dependencies, configurations, and lifecycle relationships more naturally than a rigid relational-only model.
+
+PLM-IQ is delivered through multiple industry editions:
+
+- **PLM-IQ Foundation** — A horizontal PLM foundation applicable to organizations in any industry.
+- **PLM-IQ Discrete** — An edition for discrete manufacturing organizations, including industrial equipment, automotive, aerospace, electronics, machinery, and heavy manufacturing.
+- **PLM-IQ Process** — An edition for process-driven industries such as chemicals, pharmaceuticals, cosmetics, and consumer packaged goods.
+- **PLM-IQ Food** — A specialized edition for food and beverage companies, with emphasis on recipes, formulations, ingredients, allergens, nutrition, labeling, shelf life, and regulatory traceability.
+
+Each customer operates as an isolated tenant and can extend the platform at the tenant level through configurable attributes, relationship rules, object types, workflows, views, integrations, and AI-assisted capabilities.
+
+---
+
+## 2. Product Vision
+
+PLM-IQ aims to become an intelligent product lifecycle system that helps organizations manage product information and relationships from early concept through engineering, manufacturing, release, quality, regulatory compliance, and end-of-life.
+
+The platform is built around five principles:
+
+- **Graph-native product intelligence** — Product data is inherently connected: parts reference documents, documents describe specifications, specifications constrain materials, materials are used in formulations, and changes affect many downstream objects. PLM-IQ models these connections directly.
+- **AI-first user experience** — AI is embedded into the application for search, data extraction, classification, rule validation, impact analysis, document intelligence, content generation, and workflow assistance.
+- **Multi-edition product strategy** — A common platform supports industry-specific editions without duplicating the core product architecture.
+- **Tenant-level extensibility** — Customers can extend data models and relationship rules without requiring source-code customization or compromising upgradeability.
+- **Cloud-native SaaS delivery** — PLM-IQ is designed for scalable, secure, observable, API-driven deployment across many customers and editions.
+
+---
+
+## 3. Product Scope
+
+PLM-IQ provides a common PLM platform with edition-specific capabilities layered on top.
+
+| Area | PLM-IQ Capability |
+|---|---|
+| Product data management | Parts, documents, specifications, materials, products, variants, classifications, attachments, and metadata |
+| Product structures | Multi-level BOMs, product configurations, reference structures, substitute parts, alternates, and approved components |
+| Document management | Controlled documents, revisioning, document-to-part links, document extraction, approval workflows, and document intelligence |
+| Change management | Change requests, change notices, change orders, impact analysis, affected-object tracking, and approval workflows |
+| Specification management | Technical specifications, product specifications, material specifications, compliance specifications, and quality requirements |
+| Configuration management | Options, features, rules, variants, effectivity, revision applicability, and configurable BOMs |
+| Quality and compliance | Requirements, test plans, inspections, non-conformance records, CAPA, compliance evidence, and regulatory traceability |
+| Collaboration | Comments, tasks, notifications, assignments, subscriptions, review workflows, and activity history |
+| Search and analytics | Full-text search, graph navigation, semantic search, impact analysis, dashboards, reports, and traceability views |
+| Integration | REST APIs, webhooks, import/export, ERP integration, MES integration, CAD integration, document repositories, and identity providers |
+| AI capabilities | Conversational search, document extraction, classification, data quality checks, relationship suggestions, change impact analysis, and copilots |
+
+---
+
+## 4. SaaS and Tenant Model
+
+PLM-IQ is a multi-tenant SaaS application. Every customer organization is represented as a tenant, with logical and security isolation for its users, data, configuration, workflows, and integrations.
+
+### Tenant Characteristics
+
+Each tenant has its own:
+
+- Users, groups, roles, and permissions
+- Business objects and product data
+- Tenant-specific attributes and schemas
+- Edge types and edge rule extensions
+- Lifecycle states and workflow definitions
+- Numbering schemes, prefixes, and naming rules
+- Classifications and taxonomies
+- Search indexes and saved searches
+- Integrations, API credentials, webhooks, and external mappings
+- AI configuration, including approved knowledge sources and model policies
+- Branding, language, date/time, units, and regional configuration
+
+Tenant-level customization must be metadata-driven rather than source-code-driven. This preserves a shared SaaS platform while enabling enterprise-specific flexibility.
+
+### Tenant Isolation
+
+PLM-IQ should enforce tenant isolation at several layers:
+
+- Tenant identity is resolved from the incoming domain, authenticated user, and access token.
+- Every business object, relationship, workflow item, file, event, and audit record is associated with a `tenantId`.
+- Data access policies enforce tenant ownership before application-level authorization is evaluated.
+- Search, graph traversal, AI retrieval, caching, and analytics must remain tenant-scoped.
+- Files and attachments must be stored with tenant-aware object paths and access control.
+- Tenant administrators can manage only their own tenant configuration and users.
+
+---
+
+## 5. Multi-Edition Strategy
+
+PLM-IQ editions package common platform capabilities with domain-specific object types, relationship types, workflows, templates, validations, dashboards, and AI assistants.
+
+### Edition Model
+
+| Edition | Primary Use | Typical Industries | Key Capabilities |
+|---|---|---|---|
+| Foundation | General-purpose PLM | Any industry | Documents, items, parts, projects, change management, workflows, classification, search, audit trail |
+| Discrete | Engineering and manufacturing PLM | Automotive, machinery, aerospace, industrial equipment, electronics | EBOM, MBOM, configurable BOM, part revisions, CAD/document links, alternates, substitutes, effectivity, manufacturing handoff |
+| Process | Formula and process PLM | Chemicals, cosmetics, pharmaceuticals, CPG | Formulations, ingredients, raw materials, specifications, regulatory attributes, batch-related product definitions, process routes |
+| Food | Food and beverage PLM | Food manufacturers, beverage companies, restaurants, private-label brands | Recipes, ingredients, allergens, nutrition, shelf life, labels, packaging, supplier specifications, food safety traceability |
+
+### Common Platform vs Edition Features
+
+The following remain common across all editions:
+
+- Identity and access management
+- Tenant administration
+- Graph engine
+- Lifecycle and revision management
+- Workflow and approvals
+- Notifications and collaboration
+- Audit logging
+- Search and reporting
+- Integration framework
+- File and document storage
+- AI platform services
+- Rules engine
+- Extensibility framework
+
+Each edition contributes a versioned metadata package containing:
+
+- Vertex kinds
+- Edge kinds
+- Attribute definitions
+- Validation rules
+- Lifecycle templates
+- Workflow templates
+- Reports and dashboards
+- UI workspaces
+- AI prompts and agents
+- Import/export templates
+- Industry-specific integrations
+
+---
+
+## 6. Edition Domain Naming
+
+Each customer tenant is accessed through an edition-aware subdomain.
+
+### Domain Format
+
+```text
+{tenant}.{edition}.plm-iq.com
+```
+
+### Examples
+
+```text
+tesla.discrete.plm-iq.com
+gucci.foundation.plm-iq.com
+acme.process.plm-iq.com
+freshfoods.food.plm-iq.com
+```
+
+### Naming Rules
+
+- Tenant names must be globally unique within an edition namespace.
+- Tenant names should use lowercase letters, numbers, and hyphens only.
+- Edition identifiers should be controlled platform values.
+- The domain identifies tenant and edition context before sign-in.
+- Authentication tokens should include both `tenantId` and `editionId`.
+- API requests must validate that the request tenant matches the authenticated tenant context.
+
+| Edition | DNS Code |
+|---|---|
+| PLM-IQ Foundation | `foundation` |
+| PLM-IQ Discrete | `discrete` |
+| PLM-IQ Process | `process` |
+| PLM-IQ Food | `food` |
+
+---
+
+## 7. Graph-Based Core Model
+
+PLM-IQ uses graph theory as the core business-modeling approach.
+
+A graph consists of:
+
+- **Vertices** — Business objects or entities
+- **Edges** — Relationships between business objects
+- **Edge annotations** — Metadata describing the relationship
+- **Edge rules** — Constraints governing valid relationships
+- **Graph traversal** — Navigation across connected product data
+- **Graph queries** — Queries that identify dependencies, impacts, traceability, and relationship patterns
+
+This model is particularly appropriate for PLM because product information is highly connected and changes can affect multiple downstream objects.
+
+```text
+Part → Document → Specification → Material → Supplier
+Part → BOM Component → Subassembly → Product
+Change Order → Affected Part → Affected Document → Affected Process Plan
+Recipe → Ingredient → Allergen → Label Statement
+```
+
+A graph model allows PLM-IQ to answer business questions such as:
+
+- Which documents define this part?
+- Which products use this component?
+- What is the impact of changing this material?
+- Which released products contain a non-compliant supplier material?
+- Which specifications are linked to a recipe?
+- Which downstream manufacturing BOMs are impacted by an engineering BOM revision?
+- Which objects are affected by a change order?
+- Which products contain an allergen or restricted substance?
+
+---
+
+## 8. Vertex Model
+
+A vertex represents a business object within the PLM-IQ graph.
+
+Examples include:
+
+- Part
+- Document
+- Specification
+- Product
+- Material
+- Ingredient
+- Recipe
+- Formula
+- Supplier
+- Manufacturer
+- Plant
+- Change Request
+- Change Order
+- Project
+- Requirement
+- Test Case
+- Quality Record
+- CAD Model
+- Packaging
+- Label
+- Regulation
+- Classification
+
+### Vertex Categories
+
+Each vertex contains three categories of attributes:
+
+| Attribute Category | Description |
+|---|---|
+| System attributes | Attributes managed by PLM-IQ, such as ID, tenant, creation date, revision, lifecycle state, and audit details |
+| Solution attributes | Attributes defined by the relevant PLM-IQ edition, such as part number, material grade, recipe yield, or allergen status |
+| Tenant extension attributes | Customer-specific attributes created through tenant configuration without platform code changes |
+
+### Standard Vertex Schema
+
+```yaml
+Vertex:
+  id: "uuid"
+  tenantId: "tenant-uuid"
+  editionId: "discrete"
+  kind: "Part"
+  lifecycleState: "Released"
+  revision: "A"
+  releaseOn: "2026-01-01"
+  number: "1234"
+  prefix: "E"
+  name: "Electric Motor Housing"
+  description: "Machined aluminum housing for motor assembly"
+  createdBy: "Dane"
+  createdOn: "2025-01-01T12:12:22Z"
+  modifiedBy: "Nick"
+  modifiedOn: "2025-01-02T12:12:22Z"
+  markedForDeletion: false
+  solutionAttributes:
+    material: "Aluminum 6061"
+    makeBuyType: "Make"
+    unitOfMeasure: "EA"
+  tenantAttributes:
+    customerPartCode: "TES-MTR-HSG-001"
+    internalProgram: "EV Platform X"
+```
+
+### Required System Attributes
+
+| Attribute | Description |
+|---|---|
+| `id` | Globally unique identifier for the vertex |
+| `tenantId` | Identifier of the owning tenant |
+| `editionId` | Edition in which the object type is active |
+| `kind` | Business object type, such as Part, Document, Recipe, or Material |
+| `number` | Human-readable business identifier |
+| `name` | Primary display name |
+| `description` | Detailed description |
+| `revision` | Revision identifier, such as A, B, C, 01, or 02 |
+| `lifecycleState` | Current lifecycle state, such as Draft, In Review, Released, Obsolete, or Superseded |
+| `releaseOn` | Effective release date |
+| `createdBy` | User who created the object |
+| `createdOn` | Object creation timestamp |
+| `modifiedBy` | User who last updated the object |
+| `modifiedOn` | Most recent modification timestamp |
+| `markedForDeletion` | Soft-delete indicator |
+| `version` | Optimistic-locking version for concurrent updates |
+| `classificationId` | Optional classification or taxonomy reference |
+
+### Vertex Lifecycle Example
+
+A standard lifecycle model can be:
+
+```text
+Draft → In Review → Approved → Released → Superseded → Obsolete
+```
+
+The exact lifecycle is configurable by edition and tenant.
+
+```text
+Food: Concept → Formulation → Sensory Review → Regulatory Review → Pilot → Approved → Commercialized → Retired
+Discrete: Preliminary → Prototype → Engineering Review → Released → Production → Superseded → Obsolete
+```
+
+---
+
+## 9. Edge Model
+
+An edge represents a relationship between two vertices.
+
+Edges are first-class entities because relationships in PLM carry important business meaning, governance, lifecycle context, and metadata. A part linked to a document may identify a specification, drawing, inspection report, operating instruction, or regulatory certificate.
+
+### Standard Edge Schema
+
+```yaml
+Edge:
+  id: "uuid"
+  tenantId: "tenant-uuid"
+  editionId: "discrete"
+  kind: "REFDOCS"
+  name: "HAS_SPEC"
+  sourceVertexId: "part-uuid"
+  sourceVertexKind: "Part"
+  targetVertexId: "document-uuid"
+  targetVertexKind: "Document"
+  lifecycleState: "Active"
+  effectiveFrom: "2026-01-01"
+  effectiveTo: "2027-01-01"
+  annotation: "Specification valid until 1 January 2027"
+  graphRuleId: "part-document-refdocs-rule"
+  createdBy: "Dane"
+  createdOn: "2025-01-01T12:12:22Z"
+  modifiedBy: "Nick"
+  modifiedOn: "2025-01-02T12:12:22Z"
+  tenantAttributes:
+    referenceCategory: "Engineering Specification"
+    mandatoryForRelease: true
+```
+
+### Edge Attributes
+
+| Attribute | Description |
+|---|---|
+| `id` | Globally unique edge identifier |
+| `tenantId` | Tenant ownership and isolation identifier |
+| `editionId` | Relevant product edition |
+| `kind` | Relationship category, such as BOM, REFDOCS, HAS_SPEC, CONTAINS, or AFFECTS |
+| `name` | Human-readable relationship name |
+| `sourceVertexId` | ID of the source business object |
+| `sourceVertexKind` | Type of the source business object |
+| `targetVertexId` | ID of the target business object |
+| `targetVertexKind` | Type of the target business object |
+| `annotation` | Descriptive information about the relationship |
+| `effectiveFrom` | Date when the relationship becomes valid |
+| `effectiveTo` | Date when the relationship expires or is no longer valid |
+| `lifecycleState` | Current state of the relationship |
+| `graphRuleId` | Rule definition governing this relationship |
+| `tenantAttributes` | Configurable customer-specific relationship metadata |
+
+---
+
+## 10. Edge Types
+
+PLM-IQ should provide standard edge types while allowing each edition and tenant to define additional relationship types.
+
+| Edge Kind | Source | Target | Purpose |
+|---|---|---|---|
+| `BOM` | Part or Product | Part or Material | Defines a product structure or bill of materials |
+| `REFDOCS` | Part, Product, Material, Recipe | Document | Links a business object to supporting documentation |
+| `HAS_SPEC` | Part, Material, Product, Ingredient | Specification | Links an object to one or more specifications |
+| `USES` | Product, Recipe, Formula | Material, Ingredient, Part | Identifies consumption or usage relationships |
+| `MANUFACTURED_BY` | Part or Product | Manufacturer or Plant | Identifies manufacturing responsibility |
+| `SUPPLIED_BY` | Material or Part | Supplier | Identifies approved or potential suppliers |
+| `AFFECTS` | Change Order | Any business object | Identifies objects affected by a change |
+| `SUPERSEDES` | Vertex | Vertex | Defines replacement or revision succession |
+| `ALTERNATE_FOR` | Part | Part | Defines approved alternatives |
+| `SUBSTITUTE_FOR` | Part or Material | Part or Material | Defines conditional replacement relationships |
+| `COMPLIES_WITH` | Product, Material, Part | Regulation or Requirement | Establishes compliance traceability |
+| `CONTAINS` | Recipe, Product, Assembly | Ingredient, Material, Part | Defines contained components |
+| `VALIDATED_BY` | Requirement or Specification | Test Case or Quality Record | Links requirements to validation evidence |
+| `PACKAGED_IN` | Product | Packaging | Links product definition to packaging components |
+| `HAS_LABEL` | Product | Label | Links product to labeling content |
+
+---
+
+## 11. Edge Annotations
+
+Edge annotations capture business meaning beyond simply connecting two vertices.
+
+A BOM relationship can include quantity, unit of measure, find number, reference designator, usage type, scrap factor, effectivity period, variant applicability, substitute conditions, assembly notes, and manufacturing sequence.
+
+A relationship between a food product and an ingredient can include ingredient quantity, percentage contribution, supplier qualification status, country of origin, allergen contribution, nutritional impact, organic certification status, and regulatory restrictions.
+
+### Example BOM Edge Annotation
+
+```yaml
+Edge:
+  kind: "BOM"
+  sourceVertexKind: "Assembly"
+  targetVertexKind: "Part"
+  annotation:
+    quantity: 4
+    unitOfMeasure: "EA"
+    findNumber: "020"
+    usageType: "Required"
+    effectivityFrom: "2026-01-01"
+    effectivityTo: null
+    variantCondition: "BatteryType = LongRange"
+    referenceDesignator: "M1,M2,M3,M4"
+```
+
+### Example Food Ingredient Edge Annotation
+
+```yaml
+Edge:
+  kind: "CONTAINS"
+  sourceVertexKind: "Recipe"
+  targetVertexKind: "Ingredient"
+  annotation:
+    quantity: 12.5
+    unitOfMeasure: "KG"
+    percentage: 8.25
+    allergenContribution: "Contains milk"
+    countryOfOrigin: "India"
+    supplierApproved: true
+    organicStatus: "Certified Organic"
+```
+
+---
+
+## 12. Graph Rules
+
+Graph rules govern which relationships are allowed between business objects and how those relationships behave. They enforce semantic consistency, data quality, and lifecycle integrity across the product graph.
+
+A graph rule defines:
+
+- Permitted source vertex type
+- Permitted target vertex type
+- Edge kind
+- Direction of the relationship
+- Cardinality
+- Participation requirements
+- Lifecycle compatibility
+- Revision compatibility
+- Effectivity rules
+- Duplicate relationship policy
+- Attribute validation requirements
+- Approval requirements
+- Tenant-level extension behavior
+
+### Core Graph Rule Structure
+
+```yaml
+GraphRule:
+  id: "part-document-refdocs-rule"
+  tenantId: "system"
+  editionId: "foundation"
+  edgeKind: "REFDOCS"
+  sourceVertexKind: "Part"
+  targetVertexKind: "Document"
+  sourceCardinality: "0..N"
+  targetCardinality: "0..N"
+  sourceParticipation: "Optional"
+  targetParticipation: "Optional"
+  duplicateEdgesAllowed: false
+  sourceLifecycleStates:
+    - Draft
+    - In Review
+    - Released
+  targetLifecycleStates:
+    - Approved
+    - Released
+  requiredEdgeAttributes:
+    - referenceCategory
+  allowTenantExtension: true
+```
+
+### Cardinality Notation
+
+| Cardinality | Meaning |
+|---|---|
+| `0..1` | Zero or one relationship is allowed |
+| `1..1` | Exactly one relationship is required |
+| `0..N` | Zero, one, or many relationships are allowed |
+| `1..N` | At least one relationship is required; many are allowed |
+
+### Example: Part to Document Rule
+
+```text
+Part : N — REFDOCS — Document : N
+```
+
+Interpretation:
+
+- One part can reference many documents.
+- One document can be referenced by many parts.
+- The relationship is many-to-many.
+- A part may have zero or more linked documents.
+- A document may have zero or more linked parts.
+
+```text
+Part A → Drawing 1001
+Part A → Specification 2010
+Part A → Inspection Plan 3007
+
+Part B → Drawing 1001
+Part C → Drawing 1001
+```
+
+### Example: Assembly to Component Rule
+
+```text
+Assembly : 1 — BOM — Component : N
+```
+
+An assembly can contain one or more components. A component may be used by multiple assemblies. The BOM edge includes quantity, unit of measure, effectivity, and variant applicability.
+
+### Example: Product to Primary Specification Rule
+
+```text
+Product : 1 — HAS_PRIMARY_SPEC — Specification : 1
+```
+
+Every released product must have exactly one primary specification. A product cannot enter the Released state without a valid linked specification.
+
+---
+
+## 13. Tenant-Level Graph Rule Extensions
+
+PLM-IQ must allow tenants to extend graph rules without changing the platform core. Tenant extensions must be controlled, versioned, validated, and auditable.
+
+### Permitted Tenant Extensions
+
+A tenant administrator may be allowed to:
+
+- Add tenant-specific attributes to an existing vertex kind.
+- Add tenant-specific attributes to an existing edge kind.
+- Add new custom vertex kinds where permitted by the edition.
+- Add new custom edge kinds where permitted by the edition.
+- Create tenant-specific naming and numbering rules.
+- Add validation rules for custom attributes.
+- Define required edge annotations.
+- Restrict cardinality beyond the default platform rule.
+- Add lifecycle state restrictions.
+- Add workflow approval requirements.
+- Configure which fields are mandatory for release.
+- Create custom classifications and taxonomies.
+- Add custom relationship labels for the tenant UI.
+
+### Controlled Extension Principles
+
+Tenant extensions must not:
+
+- Bypass tenant-isolation controls.
+- Remove platform-level audit requirements.
+- Weaken mandatory compliance validations defined by the edition.
+- Break system-owned graph relationships.
+- Introduce incompatible data types into core attributes.
+- Create unrestricted cross-tenant relationships.
+- Modify system-level object IDs, audit fields, or immutable historical records.
+- Remove required relationship constraints from released data.
+
+### Extension Precedence
+
+```text
+Platform Core Rule
+→ Edition Rule
+→ Tenant Rule Extension
+→ Object-Specific Validation
+```
+
+Example:
+
+```text
+Platform: A Part may reference Documents.
+Discrete Edition: A Part can reference Drawings, Specifications, and Inspection Plans.
+Tenant Extension: A released Part must reference at least one approved Drawing.
+Object-Specific Validation: A safety-critical Part must reference a Safety Certification document.
+```
+
+---
+
+## 14. AI-First Strategy
+
+AI capabilities should be embedded into PLM-IQ workflows rather than positioned as a separate chatbot feature. The AI layer must use tenant-scoped retrieval, permissions-aware graph traversal, metadata, documents, and approved enterprise knowledge sources.
+
+| Capability | Description |
+|---|---|
+| Conversational PLM search | Users ask questions in natural language, such as “Show all released assemblies affected by Supplier X.” |
+| Graph impact analysis | AI identifies direct and indirect downstream effects of a change to a part, material, specification, or supplier |
+| Document intelligence | AI extracts metadata, classifications, specifications, measurements, and requirements from uploaded documents |
+| Relationship suggestions | AI suggests probable links between parts, documents, materials, specifications, and suppliers |
+| Data quality validation | AI identifies incomplete, inconsistent, duplicate, or suspicious product records |
+| Change assistant | AI summarizes changes, identifies affected objects, drafts impact assessments, and proposes change tasks |
+| Classification assistance | AI suggests part classes, document categories, material types, ingredient categories, and regulatory tags |
+| Specification comparison | AI identifies differences between document revisions, specifications, formulations, or product configurations |
+| Regulatory traceability | AI helps identify products potentially affected by regulatory, supplier, material, or formulation changes |
+| Content generation | AI drafts descriptions, release notes, change summaries, supplier communications, and documentation templates |
+
+### AI Guardrails
+
+- AI retrieval must be tenant-scoped and permission-aware.
+- AI must not expose data from one tenant to another.
+- AI-generated content must be clearly identified as generated or suggested.
+- High-impact actions, such as releasing parts, approving changes, or modifying BOMs, require user approval.
+- AI recommendations should include traceable source objects wherever possible.
+- AI must not silently alter released product data.
+- Prompts, outputs, and user approvals should be auditable based on tenant policy.
+- Sensitive-data handling must align with customer contractual and regulatory requirements.
+
+---
+
+## 15. Core Functional Modules
+
+### Product Definition
+
+- Parts and product records
+- Materials and ingredients
+- Documents and attachments
+- Specifications and requirements
+- Product classifications
+- Revisions and lifecycle states
+- Numbering and naming rules
+- Attribute management
+- Tenant-specific extensions
+- Product templates
+
+### Product Structure Management
+
+- Engineering BOMs
+- Manufacturing BOMs
+- Service BOMs
+- Configurable BOMs
+- Multi-level BOM traversal
+- Alternates and substitutes
+- Reference documents
+- Usage relationships
+- Effectivity management
+- Variant conditions
+- Where-used analysis
+- Structure comparison across revisions
+
+### Change Management
+
+- Change requests
+- Problem reports
+- Change notices
+- Change orders
+- Impacted-object relationships
+- Approval workflows
+- Release packages
+- Change implementation tasks
+- Revision creation
+- Effectivity management
+- Audit history
+
+### Document Management
+
+- Document creation and upload
+- Version and revision control
+- Document classification
+- Document approval workflows
+- Document-to-object relationships
+- Full-text search
+- OCR and AI-assisted extraction
+- Document version comparison
+- Controlled access and download policies
+- Document release and obsolescence
+
+### Workflow and Lifecycle Management
+
+- Lifecycle templates
+- State-transition rules
+- Approval routing
+- Task assignment
+- Escalations
+- Notifications
+- Electronic signatures where required
+- Conditional workflow steps
+- Role-based approvals
+- Workflow audit trails
+
+### Search, Reporting, and Analytics
+
+- Full-text search
+- Structured search
+- Faceted search
+- Semantic AI search
+- Saved searches
+- Graph traversal views
+- Where-used reports
+- Impact-analysis reports
+- Change dashboards
+- Data-quality dashboards
+- Compliance dashboards
+- Tenant-specific reports
+
+---
+
+## 16. Logical Architecture
+
+PLM-IQ should use a modular cloud-native architecture that supports tenant isolation, edition packaging, scalable graph operations, AI workflows, and enterprise integrations.
+
+```text
+Web Application
+    ↓
+API Gateway / Edge Layer
+    ↓
+Identity and Tenant Resolution
+    ↓
+PLM-IQ Application Services
+    ├── Vertex Service
+    ├── Edge Service
+    ├── Graph Rule Engine
+    ├── Lifecycle Service
+    ├── Workflow Service
+    ├── Document Service
+    ├── Search Service
+    ├── Change Management Service
+    ├── Configuration Service
+    ├── Tenant Administration Service
+    ├── Integration Service
+    ├── Notification Service
+    └── AI Orchestration Service
+    ↓
+Data and Platform Layer
+    ├── Graph Database
+    ├── Relational Transaction Database
+    ├── Object Storage
+    ├── Search Index
+    ├── Cache
+    ├── Event Bus
+    ├── Audit Store
+    └── Analytics Store
+```
+
+### Data Storage Strategy
+
+A polyglot persistence approach is recommended.
+
+| Data Type | Recommended Storage Pattern |
+|---|---|
+| Product graph, vertices, edges, traversals | Graph database |
+| Transactional tenant configuration, users, workflows, permissions | Relational database |
+| Files, drawings, documents, images, CAD files | Object storage |
+| Full-text and faceted search | Search engine |
+| Embeddings and semantic retrieval | Vector store or vector-enabled database |
+| Events and asynchronous processing | Event bus or message queue |
+| Audit trail and immutable compliance history | Append-only audit store |
+| Dashboards and reporting | Analytics warehouse or reporting datastore |
+
+The application should maintain strong transaction boundaries for critical lifecycle and release actions. Graph updates, audit records, events, search indexing, and AI indexing should be coordinated using transactional-outbox and event-driven patterns.
+
+---
+
+## 17. Security and Governance
+
+PLM-IQ manages sensitive product, engineering, supplier, formula, quality, and compliance information. Security and governance must therefore be core platform capabilities.
+
+### Security Requirements
+
+- Tenant-level logical data isolation
+- Role-based access control
+- Attribute-level and relationship-level access control where required
+- Permission-aware graph traversal
+- Single sign-on using SAML 2.0 or OpenID Connect
+- Multi-factor authentication support
+- Encryption in transit and at rest
+- Secure file access with time-bound signed URLs
+- Immutable audit history for critical actions
+- Configurable retention policies
+- IP allowlists and session controls for enterprise tenants
+- Secrets management for integrations
+- API rate limiting and abuse protection
+- Tenant-scoped encryption keys where required by enterprise customers
+
+### Governance Requirements
+
+- Full audit history for vertex, edge, attribute, lifecycle, and workflow changes
+- Revision and release traceability
+- Configurable approval and electronic-signature controls
+- Controlled deletion using soft-delete and retention policies
+- Data-export capabilities for tenant offboarding
+- Data residency support where commercially required
+- Edition and tenant configuration versioning
+- Rule versioning for graph rules and validation logic
+
+---
+
+## 18. Key Design Principles
+
+1. **Relationships are first-class data.** Edges must carry metadata, governance, lifecycle state, audit history, and business meaning.
+2. **Configuration over customization.** Customers should extend the solution through metadata, attributes, rules, workflows, and templates rather than custom code.
+3. **Released data is governed.** Released vertices and edges must be immutable or controlled through revision, supersession, and approved change processes.
+4. **Every action is tenant-aware.** Tenant context must be mandatory in all APIs, events, storage paths, search indexes, AI retrieval, and audit records.
+5. **Every important change is traceable.** The platform must track who changed what, when, why, and through which workflow.
+6. **AI is assistive, not uncontrolled.** AI can recommend, summarize, classify, and detect risks, but critical business actions require human authorization.
+7. **Edition packages remain upgradeable.** Industry-specific editions should be delivered as versioned metadata and service capabilities without separate codebases.
+8. **Graph rules protect semantic consistency.** Object types and relationships must be validated against platform, edition, and tenant-level rules.
+
+---
+
+## 19. Illustrative Example
+
+Consider a discrete manufacturing tenant named Tesla using PLM-IQ Discrete.
+
+```text
+URL: tesla.discrete.plm-iq.com
+```
+
+The tenant creates a released assembly:
+
+```text
+Kind: Assembly
+Number: ASM-1000
+Name: Electric Drive Unit
+Revision: B
+Lifecycle State: Released
+```
+
+The assembly has a BOM relationship to an electric motor:
+
+```text
+Kind: BOM
+Source: ASM-1000 Electric Drive Unit
+Target: PRT-2001 Electric Motor
+Quantity: 1
+Unit of Measure: EA
+Effectivity From: 1 January 2026
+```
+
+The electric motor has a relationship to a technical specification:
+
+```text
+Kind: REFDOCS
+Name: HAS_SPEC
+Source: PRT-2001 Electric Motor
+Target: DOC-3010 Motor Technical Specification
+Annotation: Approved specification valid until 1 January 2027
+```
+
+A supplier-material change may affect the motor, the drive-unit assembly, and vehicle configurations using that assembly. PLM-IQ traverses graph relationships to identify the full impact chain.
+
+```text
+Supplier Material Change
+→ Motor Part
+→ Drive Unit Assembly
+→ Vehicle Product Configuration
+→ Released Manufacturing BOM
+→ Service Documentation
+```
+
+This illustrates the central value of the graph-based PLM-IQ model: direct, explainable traceability from a change or issue to all related product records.
+
+---
+
+## 20. Initial Product Roadmap
+
+### Phase 1: Platform Foundation
+
+- Multi-tenant architecture
+- Tenant- and edition-aware domain routing
+- Identity, roles, groups, and access control
+- Foundation edition
+- Vertex and edge management
+- Basic graph rules
+- Document management
+- Lifecycle and revision management
+- Search and basic graph navigation
+- Audit logging
+- REST APIs
+- Tenant-level attribute extension
+
+### Phase 2: Discrete Manufacturing
+
+- Part and assembly management
+- EBOM and multi-level BOM
+- Reference documents and specifications
+- Change request and change-order workflows
+- Where-used analysis
+- Effectivity management
+- Alternates and substitutes
+- Configurable BOM foundation
+- AI document classification and extraction
+
+### Phase 3: Advanced Intelligence
+
+- AI-powered semantic search
+- AI-assisted graph relationship suggestions
+- AI impact analysis
+- AI change-summary generation
+- Data quality and duplicate detection
+- Document comparison
+- Rule recommendation engine
+- Tenant knowledge-base retrieval
+
+### Phase 4: Process and Food Editions
+
+- Materials, formulas, recipes, and ingredients
+- Formula and recipe revision management
+- Supplier and raw-material qualification
+- Allergen and nutrition management
+- Packaging and label management
+- Regulatory and compliance traceability
+- Shelf-life and product-specification management
+- Food safety and quality workflows
+
+### Phase 5: Enterprise Scale
+
+- Advanced analytics and dashboards
+- Data warehouse integration
+- ERP, MES, CAD, and QMS connectors
+- Advanced workflow orchestration
+- Data residency options
+- Dedicated tenant deployment options
+- Customer-managed encryption-key support
+- Advanced API marketplace and partner ecosystem

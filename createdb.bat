@@ -106,6 +106,10 @@ if not defined DATABASE_URL if exist "%PLMIQ_SETUP%\.env" (
 )
 if not defined DATABASE_URL set "DATABASE_URL=postgresql://plmiq:plmiq@localhost:5432/plmiq"
 
+rem this script runs on the host, where docker-network names like "db"
+rem do not resolve - retarget them to the published localhost port
+set "DATABASE_URL=!DATABASE_URL:@db:=@localhost:!"
+
 echo %Y%Target database:%N%
 echo   %DATABASE_URL%
 echo Deploying these reviewed files as-is ^(no regeneration^):!SCHEMA_FILES:.sql=.sql!
@@ -161,4 +165,6 @@ echo Database target ($DATABASE_URL):
 echo   1. DATABASE_URL environment variable
 echo   2. DATABASE_URL in setup\.env
 echo   3. postgresql://plmiq:plmiq@localhost:5432/plmiq
+echo   (a docker-network host like @db: is rewritten to @localhost:; the
+echo    dev Postgres must be running: setup\docker\build-run-term.bat dev run)
 exit /b 0

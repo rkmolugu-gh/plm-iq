@@ -67,7 +67,7 @@ services:
     expose:
       - "5432"
     volumes:
-      - "${POSTGRES_DATA_DIR:-${PLMIQ_ROOT}/data/postgres}:/var/lib/postgresql/data"
+      - "${POSTGRES_DATA_DIR:-${PLMIQ_ROOT}/container-shared-volume/postgres}:/var/lib/postgresql/data"
       - "${PLMIQ_SETUP}/postgres-init:/docker-entrypoint-initdb.d"
     networks:
       - backend
@@ -88,7 +88,7 @@ services:
       ELASTIC_PASSWORD: ${ES_PASSWORD}
       ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
     volumes:
-      - "${ELASTICSEARCH_DATA_DIR:-${PLMIQ_ROOT}/data/elasticsearch}:/usr/share/elasticsearch/data"
+      - "${ELASTICSEARCH_DATA_DIR:-${PLMIQ_ROOT}/container-shared-volume/elasticsearch}:/usr/share/elasticsearch/data"
     networks:
       - backend
     healthcheck:
@@ -115,7 +115,7 @@ services:
     expose:
       - "3000"
     volumes:
-      - "${GITEA_DATA_DIR:-${PLMIQ_ROOT}/data/gitea}:/data"
+      - "${GITEA_DATA_DIR:-${PLMIQ_ROOT}/container-shared-volume/gitea}:/data"
     networks:
       - backend
     healthcheck:

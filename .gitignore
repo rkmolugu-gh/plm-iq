@@ -44,11 +44,8 @@ htmlcov/
 
 # Project specific
 archive
-data/uploads/
-data/gitea/
-data/elasticsearch/
-data/postgres/
-db/
+
+container-shared-volume/
 
 # Logs
 *.log
