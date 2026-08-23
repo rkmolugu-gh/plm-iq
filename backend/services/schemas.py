@@ -1,0 +1,198 @@
+"""Pydantic v2 DTOs shared by services and (later) the API layer.
+
+camelCase aliases match the strategy-doc field names; construction accepts
+snake_case too (populate_by_name). ``*Out`` models mirror full rows.
+"""
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any, Generic, TypeVar
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic.alias_generators import to_camel
+
+from . import enums
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+
+
+def from_row(model_cls: type[CamelModel], row) -> Any:
+    return model_cls.model_validate(dict(row._mapping))
+
+
+# ── Vertex ──────────────────────────────────────────────────────────────────
+
+
+class VertexCreate(CamelModel):
+    edition_id: enums.EditionId
+    kind: enums.VertexKind
+    number: str
+    name: str
+    prefix: str = "V"
+    revision: str = "A"
+    description: str = ""
+    classification_id: UUID | None = None
+    release_on: date | None = None
+    solution_attributes: dict[str, Any] = {}
+    tenant_attributes: dict[str, Any] = {}
+
+
+class VertexUpdate(CamelModel):
+    version: int
+    name: str | None = None
+    description: str | None = None
+    classification_id: UUID | None = None
+    revision: str | None = None
+    lifecycle_state: enums.LifecycleState | None = None
+    release_on: date | None = None
+    solution_attributes: dict[str, Any] | None = None
+    tenant_attributes: dict[str, Any] | None = None
+
+
+class VertexOut(CamelModel):
+    id: UUID
+    tenant_id: UUID
+    edition_id: enums.EditionId
+    kind: enums.VertexKind
+    classification_id: UUID | None
+    prefix: str
+    number: str
+    name: str
+    description: str
+    revision: str
+    lifecycle_state: enums.LifecycleState
+    release_on: date | None
+    marked_for_deletion: bool
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+    solution_attributes: dict[str, Any]
+    tenant_attributes: dict[str, Any]
+
+
+# ── Edge ────────────────────────────────────────────────────────────────────
+
+
+class EdgeCreate(CamelModel):
+    edition_id: enums.EditionId
+    kind: enums.EdgeKind
+    name: str
+    source_vertex_id: UUID
+    source_vertex_kind: enums.VertexKind
+    target_vertex_id: UUID
+    target_vertex_kind: enums.VertexKind
+    prefix: str = "E"
+    lifecycle_state: enums.EdgeState = enums.EdgeState.PENDING_APPROVAL
+    effective_from: date | None = None
+    effective_to: date | None = None
+    graph_rule_id: UUID | None = None
+    annotation: dict[str, Any] = {}
+    tenant_attributes: dict[str, Any] = {}
+
+
+class EdgeUpdate(CamelModel):
+    version: int
+    name: str | None = None
+    lifecycle_state: enums.EdgeState | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
+    graph_rule_id: UUID | None = None
+    annotation: dict[str, Any] | None = None
+    tenant_attributes: dict[str, Any] | None = None
+
+
+class EdgeOut(CamelModel):
+    id: UUID
+    tenant_id: UUID
+    edition_id: enums.EditionId
+    kind: enums.EdgeKind
+    name: str
+    source_vertex_id: UUID
+    source_vertex_kind: enums.VertexKind
+    target_vertex_id: UUID
+    target_vertex_kind: enums.VertexKind
+    lifecycle_state: enums.EdgeState
+    effective_from: date | None
+    effective_to: date | None
+    graph_rule_id: UUID | None
+    prefix: str
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+    tenant_attributes: dict[str, Any]
+    annotation: dict[str, Any]
+
+
+# ── Graph rule ──────────────────────────────────────────────────────────────
+
+
+class GraphRuleBase(CamelModel):
+    scope: enums.RuleScope = enums.RuleScope.PLATFORM
+    tenant_id: UUID | None = None
+    edition_id: enums.EditionId | None = None
+    edge_kind: enums.EdgeKind
+    source_vertex_kind: enums.VertexKind
+    target_vertex_kind: enums.VertexKind
+    direction: enums.RuleDirection = enums.RuleDirection.SOURCE_TO_TARGET
+    source_cardinality: enums.Cardinality = enums.Cardinality.ZERO_OR_MANY
+    target_cardinality: enums.Cardinality = enums.Cardinality.ZERO_OR_MANY
+    source_participation: enums.Participation = enums.Participation.OPTIONAL
+    target_participation: enums.Participation = enums.Participation.OPTIONAL
+    duplicate_edges_allowed: bool = False
+    source_lifecycle_states: list[enums.LifecycleState] = []
+    target_lifecycle_states: list[enums.LifecycleState] = []
+    required_edge_attributes: list[str] = []
+    allow_tenant_extension: bool = True
+
+    @model_validator(mode="after")
+    def _scope_fields_match(self) -> GraphRuleBase:
+        if (self.scope == enums.RuleScope.TENANT) != (self.tenant_id is not None):
+            raise ValueError("scope 'tenant' requires tenantId; every other scope forbids it")
+        if (self.scope == enums.RuleScope.EDITION) != (self.edition_id is not None):
+            raise ValueError("scope 'edition' requires editionId; every other scope forbids it")
+        return self
+
+
+class GraphRuleCreate(GraphRuleBase):
+    pass
+
+
+class GraphRuleUpdate(CamelModel):
+    version: int
+    source_cardinality: enums.Cardinality | None = None
+    target_cardinality: enums.Cardinality | None = None
+    source_participation: enums.Participation | None = None
+    target_participation: enums.Participation | None = None
+    duplicate_edges_allowed: bool | None = None
+    source_lifecycle_states: list[enums.LifecycleState] | None = None
+    target_lifecycle_states: list[enums.LifecycleState] | None = None
+    required_edge_attributes: list[str] | None = None
+    allow_tenant_extension: bool | None = None
+
+
+class GraphRuleOut(GraphRuleBase):
+    id: UUID
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+
+
+# ── Pagination ──────────────────────────────────────────────────────────────
+
+ItemT = TypeVar("ItemT")
+
+
+class Page(CamelModel, Generic[ItemT]):
+    items: list[ItemT]
+    total: int
+    limit: int
+    offset: int
