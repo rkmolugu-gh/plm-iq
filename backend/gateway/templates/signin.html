@@ -1,14 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Sign in · {{ ctx.tenant }}{% endblock %}
+{% block title %}Sign in{% if ctx.tenant %} · {{ ctx.tenant }}{% endif %}{% endblock %}
 {% block content %}
 <section class="auth-wrap">
   <form class="auth-card">
+    {% if ctx.edition_label %}
     <p class="hero-eyebrow">PLM-IQ {{ ctx.edition_label }} Edition</p>
-    <h1 class="auth-title">Sign in to {{ ctx.tenant }}</h1>
+    {% else %}
+    <p class="hero-eyebrow">PLM-IQ</p>
+    {% endif %}
+    <h1 class="auth-title">Sign in{% if ctx.tenant %} to {{ ctx.tenant }}{% endif %}</h1>
 
     <label class="auth-label">
       Tenant
-      <input class="auth-input" type="text" name="tenant" value="{{ ctx.tenant }}" autocomplete="organization">
+      <input class="auth-input" type="text" name="tenant" value="{{ ctx.tenant }}"
+             placeholder="your-organization" autocomplete="organization">
     </label>
 
     <label class="auth-label">

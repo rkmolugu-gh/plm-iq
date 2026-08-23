@@ -1,15 +1,18 @@
+{% set l_brand = links.brand if links and links.brand else '/' %}
+{% set l_signin = links.signin if links and links.signin else '/signin' %}
+{% set l_css = links.css if links and links.css else '/static/style.css' %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}PLM-IQ{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ l_css }}">
 </head>
 <body class="edition-{{ ctx.edition if ctx.valid else 'none' }}">
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="/">
+      <a class="brand" href="{{ l_brand }}">
         <span class="brand-mark">PLM-IQ</span>
         {% if ctx.valid %}
         <span class="edition-badge">{{ ctx.edition_label }}</span>

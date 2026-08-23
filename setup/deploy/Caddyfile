@@ -4,8 +4,8 @@
 # ACME_EMAIL, CLOUDFLARE_API_TOKEN and BASE_DOMAIN come from setup/.env.
 
 {
-	email {$ACME_EMAIL}
-	acme_dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	email {"rkmolugu@yahoo.com"}
+	acme_dns cloudflare {"cfut_RejPdIR0yawoId6GZyM0RAON92P5npMoucEW3fol260aeaf7"}
 }
 
 *.{$BASE_DOMAIN} {

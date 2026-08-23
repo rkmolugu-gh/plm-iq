@@ -33,17 +33,27 @@
 
   <article class="module-card">
     <h2>Four editions, one platform</h2>
+    {% set nav = editions_nav if editions_nav is defined else [] %}
     <div class="edition-list">
-      <span class="edition-pill edition-pill-foundation">Foundation</span>
-      <span class="edition-pill edition-pill-discrete">Discrete</span>
-      <span class="edition-pill edition-pill-process">Process</span>
-      <span class="edition-pill edition-pill-food">Food</span>
+      {% if nav %}
+        {% for ed in nav %}
+        <a class="edition-pill edition-pill-{{ ed.name }}" href="{{ ed.url }}">{{ ed.label }}</a>
+        {% endfor %}
+      {% else %}
+        <span class="edition-pill edition-pill-foundation">Foundation</span>
+        <span class="edition-pill edition-pill-discrete">Discrete</span>
+        <span class="edition-pill edition-pill-process">Process</span>
+        <span class="edition-pill edition-pill-food">Food</span>
+      {% endif %}
     </div>
     <p>
       Every edition shares the same graph core: items and their revisions,
       controlled documents, change management with impact analysis, workflows,
       and end-to-end traceability.
     </p>
+    {% if nav %}
+    <p class="default-hint">Follow a pill to preview that edition's workspace pages.</p>
+    {% endif %}
   </article>
 
   <article class="module-card">
