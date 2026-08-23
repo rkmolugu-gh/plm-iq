@@ -1,17 +1,17 @@
 -- ============================================================================
--- PLM-IQ Graph Core Seed — Stage 1 sample data
--- File:   database/seed/001_graph_seed.sql
--- Target: PostgreSQL 16+, after database/schema/001_graph_core.sql
+-- PLM-IQ Graph Foundation Seed — Stage 1 sample data
+-- File:   database/seed/001_graph_foundation_seed.sql
+-- Target: PostgreSQL 16+, after database/schema/001_graph_foundation_schema.sql
 --
 -- Contents
---   * core_vertex     : 5 rows  (2 Part, 2 Document, 1 EC — one demo tenant)
---   * core_graph_rule : 5 rows  (one per scope/kind pairing worth demoing)
---   * core_edge       : 5 rows  (REFDOCS x2, BOM, AFFECTS, SUPERSEDES)
+--   * foundation_vertex     : 5 rows  (2 Node, 2 Document, 1 EC — one demo tenant)
+--   * foundation_graph_rule : 5 rows  (one per scope/kind pairing worth demoing)
+--   * foundation_edge       : 5 rows  (REFDOCS x2, BOM, AFFECTS, SUPERSEDES)
 --
 -- Integrity
---   * Every core_edge endpoint satisfies the composite FK
---     (id, tenant_id) -> core_vertex: all rows share the demo tenant.
---   * Every core_edge.graph_rule_id points at a seeded rule whose
+--   * Every foundation_edge endpoint satisfies the composite FK
+--     (id, tenant_id) -> foundation_vertex: all rows share the demo tenant.
+--   * Every foundation_edge.graph_rule_id points at a seeded rule whose
 --     scope/kind/endpoint kinds match the edge.
 --   * `version` is identity-generated and intentionally omitted.
 --   * Executed as the container superuser, which bypasses RLS; no
@@ -25,11 +25,11 @@
 
 BEGIN;
 
-SET LOCAL search_path = "plm-iq";
+SET LOCAL search_path = plmiqdb;
 
--- ── core_vertex ─────────────────────────────────────────────────────────────
+-- ── foundation_vertex ─────────────────────────────────────────────────────────────
 
-INSERT INTO core_vertex (
+INSERT INTO foundation_vertex (
     id, tenant_id, edition_id, kind, classification_id,
     prefix, number, name, description, revision,
     lifecycle_state, release_on, marked_for_deletion,
@@ -37,7 +37,7 @@ INSERT INTO core_vertex (
     solution_attributes, tenant_attributes
 ) VALUES
 ('00000000-0000-4000-8000-000000000001',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'Part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Node',
  '00000000-0000-4000-8000-000000000999',
  'V', '1001', 'Motor Housing',
  'Machined aluminum housing for the electric drive unit motor', 'A',
@@ -47,7 +47,7 @@ INSERT INTO core_vertex (
  '{"customerPartCode": "TES-MTR-HSG-001", "internalProgram": "EV Platform X"}'),
 
 ('00000000-0000-4000-8000-000000000002',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'Part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Node',
  '00000000-0000-4000-8000-000000000999',
  'V', '1000', 'Electric Drive Unit',
  'Complete drive unit assembly integrating motor, housing and inverter interface', 'B',
@@ -57,7 +57,7 @@ INSERT INTO core_vertex (
  '{"customerPartCode": "TES-EDU-ASM-1000", "internalProgram": "EV Platform X"}'),
 
 ('00000000-0000-4000-8000-000000000003',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
  '00000000-0000-4000-8000-000000000998',
  'V', '3010', 'Aluminum 6061 Material Specification',
  'Current material specification covering composition, temper and finish for Aluminum 6061', 'B',
@@ -67,7 +67,7 @@ INSERT INTO core_vertex (
  '{"documentOwner": "materials-eng", "reviewCycleMonths": 12}'),
 
 ('00000000-0000-4000-8000-000000000004',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
  '00000000-0000-4000-8000-000000000998',
  'V', '3009', 'Aluminum 6061 Material Specification (Rev A)',
  'Withdrawn predecessor of DOC-3010; retained for traceability only', 'A',
@@ -77,7 +77,7 @@ INSERT INTO core_vertex (
  '{"documentOwner": "materials-eng", "reviewCycleMonths": 12, "withdrawnReason": "Superseded by DOC-3010"}'),
 
 ('00000000-0000-4000-8000-000000000005',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'EC',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
  '00000000-0000-4000-8000-000000000997',
  'EC', '0042', 'Aluminum Supplier Swap',
  'Change aluminum bar stock supplier for motor housing due to cost and lead time', 'A',
@@ -86,9 +86,9 @@ INSERT INTO core_vertex (
  '{"changeType": "Material", "requestedBy": "procurement", "targetRelease": "2026-04-01"}',
  '{"ecoBoard": "MEB-1", "costImpactUsd": -18250, "riskLevel": "Medium"}');
 
--- ── core_graph_rule ─────────────────────────────────────────────────────────
+-- ── foundation_graph_rule ─────────────────────────────────────────────────────────
 
-INSERT INTO core_graph_rule (
+INSERT INTO foundation_graph_rule (
     id, scope, tenant_id, edition_id,
     edge_kind, source_vertex_kind, target_vertex_kind, direction,
     source_cardinality, target_cardinality,
@@ -100,7 +100,7 @@ INSERT INTO core_graph_rule (
 ) VALUES
 ('00000000-0000-4000-8000-000000000101',
  'platform', NULL, NULL,
- 'REFDOCS', 'Part', 'Document', 'source_to_target',
+ 'REFDOCS', 'Node', 'Document', 'source_to_target',
  '0..N', '0..N', 'optional', 'optional',
  false,
  ARRAY['draft', 'in_review', 'released']::lifecycle_state[],
@@ -111,7 +111,7 @@ INSERT INTO core_graph_rule (
 
 ('00000000-0000-4000-8000-000000000102',
  'platform', NULL, NULL,
- 'BOM', 'Part', 'Part', 'source_to_target',
+ 'BOM', 'Node', 'Node', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['in_review', 'approved', 'released']::lifecycle_state[],
@@ -121,8 +121,8 @@ INSERT INTO core_graph_rule (
  'seed', '2025-01-15 08:00:00+00', 'seed', '2025-01-15 08:00:00+00'),
 
 ('00000000-0000-4000-8000-000000000103',
- 'edition', NULL, 'discrete',
- 'AFFECTS', 'EC', 'Part', 'source_to_target',
+ 'edition', NULL, 'foundation',
+ 'AFFECTS', 'EC', 'Node', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['draft', 'in_review']::lifecycle_state[],
@@ -133,7 +133,7 @@ INSERT INTO core_graph_rule (
 
 ('00000000-0000-4000-8000-000000000104',
  'tenant', '11111111-1111-1111-1111-111111111111', NULL,
- 'REFDOCS', 'Part', 'Document', 'source_to_target',
+ 'REFDOCS', 'Node', 'Document', 'source_to_target',
  '0..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['approved', 'released']::lifecycle_state[],
@@ -153,9 +153,9 @@ INSERT INTO core_graph_rule (
  true,
  'seed', '2025-01-15 08:00:00+00', 'seed', '2025-01-15 08:00:00+00');
 
--- ── core_edge ───────────────────────────────────────────────────────────────
+-- ── foundation_edge ───────────────────────────────────────────────────────────────
 
-INSERT INTO core_edge (
+INSERT INTO foundation_edge (
     id, tenant_id, edition_id, kind, name,
     source_vertex_id, source_vertex_kind,
     target_vertex_id, target_vertex_kind,
@@ -165,8 +165,8 @@ INSERT INTO core_edge (
     tenant_attributes, annotation
 ) VALUES
 ('00000000-0000-4000-9000-000000000001',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000001', 'Part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
+ '00000000-0000-4000-8000-000000000001', 'Node',
  '00000000-0000-4000-8000-000000000003', 'Document',
  'active', '2026-01-01', '2027-01-01',
  '00000000-0000-4000-8000-000000000104', 'E',
@@ -175,8 +175,8 @@ INSERT INTO core_edge (
  '{"note": "Approved specification valid until 1 January 2027", "referenceCategory": "Engineering Specification"}'),
 
 ('00000000-0000-4000-9000-000000000002',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000002', 'Part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
+ '00000000-0000-4000-8000-000000000002', 'Node',
  '00000000-0000-4000-8000-000000000003', 'Document',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000101', 'E',
@@ -185,9 +185,9 @@ INSERT INTO core_edge (
  '{"note": "Primary governing specification for the drive unit", "referenceCategory": "Engineering Specification"}'),
 
 ('00000000-0000-4000-9000-000000000003',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'BOM', 'Includes component',
- '00000000-0000-4000-8000-000000000002', 'Part',
- '00000000-0000-4000-8000-000000000001', 'Part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'BOM', 'Includes component',
+ '00000000-0000-4000-8000-000000000002', 'Node',
+ '00000000-0000-4000-8000-000000000001', 'Node',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000102', 'E',
  'seed', '2025-12-18 10:20:00+00', 'seed', '2025-12-18 10:20:00+00',
@@ -195,9 +195,9 @@ INSERT INTO core_edge (
  '{"quantity": 1, "unitOfMeasure": "EA", "findNumber": "010", "usageType": "Required", "referenceDesignator": "M1", "variantCondition": null}'),
 
 ('00000000-0000-4000-9000-000000000004',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'AFFECTS', 'Affects part',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Affects Node',
  '00000000-0000-4000-8000-000000000005', 'EC',
- '00000000-0000-4000-8000-000000000001', 'Part',
+ '00000000-0000-4000-8000-000000000001', 'Node',
  'active', '2026-03-01', NULL,
  '00000000-0000-4000-8000-000000000103', 'E',
  'seed', '2026-02-25 17:45:00+00', 'seed', '2026-02-25 17:45:00+00',
@@ -205,7 +205,7 @@ INSERT INTO core_edge (
  '{"note": "Supplier swap changes incoming inspection requirements for the housing", "impactLevel": "Major"}'),
 
 ('00000000-0000-4000-9000-000000000005',
- '11111111-1111-1111-1111-111111111111', 'discrete', 'SUPERSEDES', 'Supersedes document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Supersedes document',
  '00000000-0000-4000-8000-000000000003', 'Document',
  '00000000-0000-4000-8000-000000000004', 'Document',
  'active', '2026-01-01', NULL,

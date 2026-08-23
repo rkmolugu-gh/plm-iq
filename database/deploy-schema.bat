@@ -2,26 +2,15 @@
 setlocal EnableExtensions
 
 rem ── PLM-IQ schema/seed deploy ─────────────────────────────────────────
-rem   deploy-schema.bat                  -> schema only, dev stack (default)
-rem   deploy-schema.bat -schema          -> apply pending database\schema\*.sql
-rem   deploy-schema.bat -seed            -> apply pending database\seed\*.sql
-rem   deploy-schema.bat -schema -seed    -> schema first, then seed data
-rem   deploy-schema.bat [-schema] [-seed] [dev|prod]
+rem   Deploys database\schema\*.sql and database\seed\*.sql into the
+rem   running stack's db container. Files run in name order, exactly once
+rem   each; applied filenames are tracked in plmiqdb.foundation_schema_migrations.
+rem   psql runs inside the container, so no local PostgreSQL client needed.
 rem
-rem Examples:
-rem   deploy-schema.bat                       (dev, schema)
-rem   deploy-schema.bat -seed                 (dev, seed only)
-rem   deploy-schema.bat -schema -seed prod    (prod, both)
+rem   Schema deploys ask whether to DROP schema plmiqdb first (destructive).
+rem   Set PLMIQ_DROP_SCHEMA=1 (drop) or =0 (keep) to skip the prompt.
 rem
-rem Files run in name order, exactly once each; applied filenames are
-rem tracked in "plm-iq".core_schema_migrations inside the target database.
-rem psql runs inside the db container, so no local PostgreSQL client needed.
-rem Seed and schema files set their own LOCAL search_path to "plm-iq".
-rem
-rem When deploying schema, the script asks whether to DROP the existing
-rem "plm-iq" schema (destructive: wipes all graph data and migration
-rem history, then replays every file). Set PLMIQ_DROP_SCHEMA=1 / =0 to
-rem skip the prompt in unattended runs.
+rem   Structure: one function per concern, called from the main flow below.
 rem ────────────────────────────────────────────────────────────────────
 
 rem This script lives in database\. Repo root is one level up.
@@ -30,103 +19,166 @@ set "PLMIQ_SETUP=%PLMIQ_ROOT%\setup"
 set "PLMIQ_DOCKER=%PLMIQ_SETUP%\docker\"
 set "SCHEMA_DIR=%~dp0schema"
 set "SEED_DIR=%~dp0seed"
+set "SCHEMA_NAME=plmiqdb"
 
-rem ── Argument parsing: flags + optional profile ────────────────────────
-set "DO_SCHEMA="
-set "DO_SEED="
-set "PROFILE=dev"
-:parse
-if "%~1"=="" goto parsed
-if /i "%~1"=="-schema" set "DO_SCHEMA=1"
-if /i "%~1"=="--schema" set "DO_SCHEMA=1"
-if /i "%~1"=="-seed" set "DO_SEED=1"
-if /i "%~1"=="--seed" set "DO_SEED=1"
-if /i "%~1"=="dev" set "PROFILE=dev"
-if /i "%~1"=="prod" set "PROFILE=prod"
-shift
-goto :parse
-:parsed
-if not defined DO_SCHEMA if not defined DO_SEED set "DO_SCHEMA=1"
+rem ── Main flow ──────────────────────────────────────────────────────────
+call :init_colors
+call :parse_args %*
+if errorlevel 2 exit /b 0
+if errorlevel 1 exit /b 1
 
-rem DB connection defaults mirror docker-compose.*.yml; override via env.
-if "%PLMIQ_DB_NAME%"==""     set "PLMIQ_DB_NAME=plmiq"
-if "%PLMIQ_DB_USER%"==""     set "PLMIQ_DB_USER=plmiq"
-if "%PLMIQ_DB_PASSWORD%"=="" set "PLMIQ_DB_PASSWORD=plmiq"
-
-rem ANSI colours (derive ESC, no hardcoded escape bytes)
-for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
-set "G=%ESC%[92m"
-set "R=%ESC%[91m"
-set "Y=%ESC%[93m"
-set "N=%ESC%[0m"
-
-cd /d "%PLMIQ_ROOT%"
-
-rem Resolve the running db container for the chosen profile.
-set "DB_CID="
-for /f %%i in ('docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%\.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" ps -q db 2^>nul') do set "DB_CID=%%i"
-if "%DB_CID%"=="" (
-    echo %R%[FAIL] no running db container for profile "%PROFILE%" ^(run build-run-term.bat %PROFILE% run first^)%N%
-    exit /b 1
-)
-
-set "PSQL=docker exec -i %DB_CID% env PGPASSWORD=%PLMIQ_DB_PASSWORD% psql -U %PLMIQ_DB_USER% -d %PLMIQ_DB_NAME% -v ON_ERROR_STOP=1"
-
-rem ── Drop-existing prompt (schema deploys only) ────────────────────────
-if not defined DO_SCHEMA goto bookkeeping
-
-rem Non-interactive override: PLMIQ_DROP_SCHEMA=1 forces drop, =0 keeps.
-set "DROP_SCHEMA="
-if "%PLMIQ_DROP_SCHEMA%"=="1" set "DROP_SCHEMA=y"
-if "%PLMIQ_DROP_SCHEMA%"=="0" set "DROP_SCHEMA=n"
-if defined DROP_SCHEMA goto drop_decided
-
-echo %Y%Destructive option: dropping schema "plm-iq" erases ALL graph data,%N%
-echo %Y%including vertices, edges, rules and the migration history.%N%
-set /p DROP_SCHEMA="Drop schema 'plm-iq' in database '%PLMIQ_DB_NAME%' before deploying? [y/N] "
-
-:drop_decided
-if /i "%DROP_SCHEMA%"=="y" goto do_drop
-echo %G%  keeping existing schema; only pending files will be applied%N%
-goto bookkeeping
-
-:do_drop
-echo %Y%  dropping schema "plm-iq" CASCADE ...%N%
-%PSQL% -c "DROP SCHEMA IF EXISTS \"plm-iq\" CASCADE;"
-if errorlevel 1 ( echo %R%[FAIL] could not drop schema "plm-iq"%N% & exit /b 1 )
-echo %G%  schema "plm-iq" dropped%N%
-
-:bookkeeping
-rem Migration bookkeeping (fresh after a drop, so every file replays).
-%PSQL% -c "CREATE SCHEMA IF NOT EXISTS \"plm-iq\"; CREATE TABLE IF NOT EXISTS \"plm-iq\".core_schema_migrations (filename text PRIMARY KEY, applied_on timestamptz NOT NULL DEFAULT now());"
-if errorlevel 1 ( echo %R%[FAIL] could not prepare "plm-iq".core_schema_migrations%N% & exit /b 1 )
+call :resolve_db         || goto :failed
+call :build_psql         || goto :failed
+if defined DO_SCHEMA     call :maybe_drop_schema  || goto :failed
+call :ensure_bookkeeping || goto :failed
 
 set "APPLIED=0"
 set "SKIPPED=0"
-
 if defined DO_SCHEMA call :apply_dir "%SCHEMA_DIR%" || goto :failed
 if defined DO_SEED   call :apply_dir "%SEED_DIR%"   || goto :failed
 
 echo %G%[OK] deploy complete (%PROFILE%): %APPLIED% applied, %SKIPPED% skipped%N%
 exit /b 0
 
+rem ── Functions ──────────────────────────────────────────────────────────
+
+:init_colors
+rem ANSI colours (derive ESC, no hardcoded escape bytes)
+for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+set "G=%ESC%[92m"
+set "R=%ESC%[91m"
+set "Y=%ESC%[93m"
+set "N=%ESC%[0m"
+exit /b 0
+
+:parse_args
+rem Sets DO_SCHEMA, DO_SEED, PROFILE.
+rem Exit codes: 0 = parsed ok, 1 = bad argument (help shown),
+rem             2 = help shown for bare invocation / explicit -h.
+set "DO_SCHEMA="
+set "DO_SEED="
+set "PROFILE=dev"
+if "%~1"=="" goto help_stop
+:parse_loop
+if "%~1"=="" goto parse_done
+set "ARG_OK="
+if /i "%~1"=="-schema"  ( set "DO_SCHEMA=1" & set "ARG_OK=1" )
+if /i "%~1"=="--schema" ( set "DO_SCHEMA=1" & set "ARG_OK=1" )
+if /i "%~1"=="-seed"    ( set "DO_SEED=1"   & set "ARG_OK=1" )
+if /i "%~1"=="--seed"   ( set "DO_SEED=1"   & set "ARG_OK=1" )
+if /i "%~1"=="dev"      ( set "PROFILE=dev"  & set "ARG_OK=1" )
+if /i "%~1"=="prod"     ( set "PROFILE=prod" & set "ARG_OK=1" )
+if /i "%~1"=="-h"       goto help_stop
+if /i "%~1"=="--help"   goto help_stop
+if not defined ARG_OK (
+    echo %R%[FAIL] unknown argument: %~1%N%
+    call :print_help
+    exit /b 1
+)
+shift
+goto parse_loop
+:parse_done
+if not defined DO_SCHEMA if not defined DO_SEED set "DO_SCHEMA=1"
+echo %Y%plan: profile=%PROFILE% ^| schema=%DO_SCHEMA% seed=%DO_SEED%%N%
+exit /b 0
+
+:help_stop
+call :print_help
+exit /b 2
+
+:print_help
+echo %G%PLM-IQ schema/seed deploy%N%
+echo.
+echo Usage:
+echo   deploy-schema.bat ^[-schema^] ^[-seed^] ^[dev^|prod^]
+echo   deploy-schema.bat -h
+echo.
+echo Actions:
+echo   -schema          apply pending database\schema\*.sql
+echo                    ^(default action when no -schema/-seed is given^)
+echo   -seed            apply pending database\seed\*.sql
+echo Target:
+echo   dev              dev stack ^(default^)
+echo   prod             prod stack
+echo Other:
+echo   -h               show this help
+echo.
+echo The schema deploy asks before dropping schema %SCHEMA_NAME%.
+echo Set PLMIQ_DROP_SCHEMA=1 to drop without asking, =0 to keep.
+echo.
+echo Sample runs:
+echo   deploy-schema.bat -schema              deploy schema to dev
+echo   deploy-schema.bat -seed                seed only, dev stack
+echo   deploy-schema.bat -schema -seed        schema then seed, dev stack
+echo   deploy-schema.bat -schema -seed prod   schema then seed, prod stack
+echo   set PLMIQ_DROP_SCHEMA=1                unattended drop-and-redeploy:
+echo   deploy-schema.bat -schema              run this afterwards
+exit /b 0
+
+:resolve_db
+rem Finds the db container id for the chosen profile.
+set "DB_CID="
+for /f %%i in ('docker compose --project-directory "%PLMIQ_ROOT%" --env-file "%PLMIQ_SETUP%\.env" -f "%PLMIQ_DOCKER%docker-compose.%PROFILE%.yml" ps -q db 2^>nul') do set "DB_CID=%%i"
+if "%DB_CID%"=="" (
+    echo %R%[FAIL] no running db container for profile "%PROFILE%" ^(run build-run-term.bat %PROFILE% run first^)%N%
+    exit /b 1
+)
+exit /b 0
+
+:build_psql
+rem DB connection defaults mirror docker-compose.*.yml; override via env.
+if "%PLMIQ_DB_NAME%"==""     set "PLMIQ_DB_NAME=plmiq"
+if "%PLMIQ_DB_USER%"==""     set "PLMIQ_DB_USER=plmiq"
+if "%PLMIQ_DB_PASSWORD%"=="" set "PLMIQ_DB_PASSWORD=plmiq"
+set "PSQL=docker exec -i %DB_CID% env PGPASSWORD=%PLMIQ_DB_PASSWORD% psql -U %PLMIQ_DB_USER% -d %PLMIQ_DB_NAME% -v ON_ERROR_STOP=1"
+exit /b 0
+
+:maybe_drop_schema
+rem Asks whether to DROP schema plmiqdb before applying.
+rem Non-interactive override: PLMIQ_DROP_SCHEMA=1 forces drop, =0 keeps.
+set "DROP_SCHEMA="
+if "%PLMIQ_DROP_SCHEMA%"=="1" set "DROP_SCHEMA=y"
+if "%PLMIQ_DROP_SCHEMA%"=="0" set "DROP_SCHEMA=n"
+if defined DROP_SCHEMA goto drop_decided
+echo %Y%Destructive option: dropping schema %SCHEMA_NAME% erases ALL graph data,%N%
+echo %Y%including vertices, edges, rules and the migration history.%N%
+set /p DROP_SCHEMA="Drop schema '%SCHEMA_NAME%' in database '%PLMIQ_DB_NAME%' before deploying? [y/N] "
+:drop_decided
+if /i "%DROP_SCHEMA%"=="y" goto do_drop
+echo %G%  keeping existing schema; only pending files will be applied%N%
+exit /b 0
+:do_drop
+echo %Y%  dropping schema %SCHEMA_NAME% CASCADE ...%N%
+%PSQL% -c "DROP SCHEMA IF EXISTS %SCHEMA_NAME% CASCADE;"
+if errorlevel 1 ( echo %R%[FAIL] could not drop schema %SCHEMA_NAME%%N% & exit /b 1 )
+echo %G%  schema %SCHEMA_NAME% dropped%N%
+exit /b 0
+
+:ensure_bookkeeping
+rem Migration bookkeeping (fresh after a drop, so every file replays).
+%PSQL% -c "CREATE SCHEMA IF NOT EXISTS %SCHEMA_NAME%; CREATE TABLE IF NOT EXISTS %SCHEMA_NAME%.foundation_schema_migrations (filename text PRIMARY KEY, applied_on timestamptz NOT NULL DEFAULT now());"
+if errorlevel 1 ( echo %R%[FAIL] could not prepare %SCHEMA_NAME%.foundation_schema_migrations%N% & exit /b 1 )
+exit /b 0
+
 :apply_dir
+rem Usage: call :apply_dir <dir>  - applies every .sql file in name order.
 set "TARGET_DIR=%~1"
 echo %Y%Applying SQL files from %TARGET_DIR% ...%N%
 if not exist "%TARGET_DIR%\*.sql" (
     echo %Y%  no .sql files found - nothing to do%N%
     exit /b 0
 )
-for %%f in ("%TARGET_DIR%\*.sql") do call :apply "%%~nxf" "%%~ff" || exit /b 1
+for %%f in ("%TARGET_DIR%\*.sql") do call :apply_file "%%~nxf" "%%~ff" || exit /b 1
 exit /b 0
 
-:apply
+:apply_file
+rem Usage: call :apply_file <name> <fullpath>  - applies once, then records.
 set "FNAME=%~1"
 set "FFULL=%~2"
 set "DONE=0"
 rem Capture the count via a temp file: a for /f command string would be
 rem truncated at the single quotes inside the SQL text.
-%PSQL% -t -A -c "SELECT count(*) FROM \"plm-iq\".core_schema_migrations WHERE filename='%FNAME%'" > "%TEMP%\plmiq_deploy_check.txt" 2>nul
+%PSQL% -t -A -c "SELECT count(*) FROM %SCHEMA_NAME%.foundation_schema_migrations WHERE filename='%FNAME%'" > "%TEMP%\plmiq_deploy_check.txt" 2>nul
 set /p DONE=<"%TEMP%\plmiq_deploy_check.txt"
 if "%DONE%"=="1" (
     echo %Y%  skip %FNAME% ^(already applied^)%N%
@@ -136,15 +188,11 @@ if "%DONE%"=="1" (
 echo %Y%  applying %FNAME% ...%N%
 type "%FFULL%" | %PSQL% -f -
 if errorlevel 1 exit /b 1
-%PSQL% -c "INSERT INTO \"plm-iq\".core_schema_migrations (filename) VALUES ('%FNAME%')"
+%PSQL% -c "INSERT INTO %SCHEMA_NAME%.foundation_schema_migrations (filename) VALUES ('%FNAME%')"
 if errorlevel 1 exit /b 1
 set /a APPLIED+=1
 exit /b 0
 
 :failed
 echo %R%[FAIL] deploy aborted on an error above%N%
-exit /b 1
-
-:usage
-echo %Y%Usage: deploy-schema.bat ^[-schema^] ^[-seed^] ^[dev^|prod^]%N%
 exit /b 1

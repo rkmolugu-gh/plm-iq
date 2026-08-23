@@ -1,18 +1,17 @@
 -- ============================================================================
--- PLM-IQ Graph Core Schema — Stage 1
--- File:   database/schema/001_graph_core.sql
+-- PLM-IQ Graph Foundation Schema — Stage 1
+-- File:   database/schema/001_graph_foundation_schema.sql
 -- Target: PostgreSQL 16+
 --
--- Elements: core_vertex, core_edge, core_graph_rule
+-- Elements: foundation_vertex, foundation_edge, foundation_graph_rule
 --           (+ enums, helper functions, RLS, version triggers)
 --
 -- Physical naming
---   * Everything lives in the dedicated schema "plm-iq". The name contains
---     a hyphen, so it MUST be double-quoted in every SQL statement:
---         SELECT * FROM "plm-iq".core_vertex;
---   * Tables carry the core_ prefix: core_vertex, core_edge, core_graph_rule.
---   * This migration sets LOCAL search_path = "plm-iq", so its own DDL can
---     use short names; external callers must qualify.
+--   * Everything lives in the dedicated schema plmiqdb.
+--   * Tables carry the foundation_ prefix: foundation_vertex, foundation_edge, foundation_graph_rule.
+--     (Migration bookkeeping lives in plmiqdb.foundation_schema_migrations.)
+--   * This migration sets LOCAL search_path = plmiqdb, so its own DDL can
+--     use short names; external callers should qualify or do the same.
 --
 -- Conventions
 --   * snake_case columns map 1:1 to camelCase fields in the API layer.
@@ -27,13 +26,13 @@
 
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS "plm-iq";
+CREATE SCHEMA IF NOT EXISTS plmiqdb;
 
-SET LOCAL search_path = "plm-iq";
+SET LOCAL search_path = plmiqdb;
 
 -- ── Enums ───────────────────────────────────────────────────────────────────
 
-CREATE TYPE vertex_kind AS ENUM ('Part', 'Document', 'EC');
+CREATE TYPE vertex_kind AS ENUM ('Node', 'Document', 'EC');
 
 CREATE TYPE edition_id AS ENUM ('foundation', 'discrete', 'process', 'food');
 
@@ -82,7 +81,7 @@ $$;
 
 -- ── VERTEX ──────────────────────────────────────────────────────────────────
 
-CREATE TABLE core_vertex (
+CREATE TABLE foundation_vertex (
     id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id            uuid NOT NULL,
     edition_id           edition_id       NOT NULL,
@@ -110,14 +109,14 @@ CREATE TABLE core_vertex (
     CONSTRAINT uq_vertex_id_tenant UNIQUE (id, tenant_id)
 );
 
-COMMENT ON TABLE  core_vertex        IS 'Business objects (graph nodes)';
-COMMENT ON COLUMN core_vertex.prefix  IS 'Numbering prefix; platform default V, tenant-overridable';
-COMMENT ON COLUMN core_vertex.version IS 'DB-autoincremented optimistic-lock token';
+COMMENT ON TABLE  foundation_vertex        IS 'Business objects (graph nodes)';
+COMMENT ON COLUMN foundation_vertex.prefix  IS 'Numbering prefix; platform default V, tenant-overridable';
+COMMENT ON COLUMN foundation_vertex.version IS 'DB-autoincremented optimistic-lock token';
 
 -- ── GRAPH RULE ──────────────────────────────────────────────────────────────
 -- Created before edge so edges can FK their governing rule.
 
-CREATE TABLE core_graph_rule (
+CREATE TABLE foundation_graph_rule (
     id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     scope                     rule_scope NOT NULL DEFAULT 'platform',
     tenant_id                 uuid,                  -- required iff scope='tenant'
@@ -145,11 +144,11 @@ CREATE TABLE core_graph_rule (
     CONSTRAINT chk_rule_scope_edition CHECK ((scope = 'edition') = (edition_id IS NOT NULL))
 );
 
-COMMENT ON TABLE core_graph_rule IS 'Governance rules for valid edges; precedence platform -> edition -> tenant -> object validation';
+COMMENT ON TABLE foundation_graph_rule IS 'Governance rules for valid edges; precedence platform -> edition -> tenant -> object validation';
 
 -- ── EDGE ────────────────────────────────────────────────────────────────────
 
-CREATE TABLE core_edge (
+CREATE TABLE foundation_edge (
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id           uuid NOT NULL,
     edition_id          edition_id  NOT NULL,
@@ -162,7 +161,7 @@ CREATE TABLE core_edge (
     lifecycle_state     edge_state NOT NULL DEFAULT 'pending_approval',
     effective_from      date,
     effective_to        date,
-    graph_rule_id       uuid REFERENCES core_graph_rule (id),
+    graph_rule_id       uuid REFERENCES foundation_graph_rule (id),
     prefix              text NOT NULL DEFAULT 'E',
     version             bigint GENERATED ALWAYS AS IDENTITY,
     created_by          text NOT NULL,
@@ -173,17 +172,17 @@ CREATE TABLE core_edge (
     annotation          jsonb NOT NULL DEFAULT '{}', -- inline payload; no separate table
 
     CONSTRAINT fk_edge_source FOREIGN KEY (source_vertex_id, tenant_id)
-        REFERENCES core_vertex (id, tenant_id),
+        REFERENCES foundation_vertex (id, tenant_id),
     CONSTRAINT fk_edge_target FOREIGN KEY (target_vertex_id, tenant_id)
-        REFERENCES core_vertex (id, tenant_id),
+        REFERENCES foundation_vertex (id, tenant_id),
     CONSTRAINT chk_edge_no_self       CHECK (source_vertex_id <> target_vertex_id),
     CONSTRAINT chk_edge_effectivity   CHECK (effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from)
 );
 
-COMMENT ON TABLE  core_edge           IS 'First-class relationships (graph edges)';
-COMMENT ON COLUMN core_edge.prefix     IS 'Numbering prefix; platform default E, tenant-overridable';
-COMMENT ON COLUMN core_edge.annotation IS 'Inline structured payload (quantity, findNumber, variantCondition, ...)';
-COMMENT ON COLUMN core_edge.version    IS 'DB-autoincremented optimistic-lock token';
+COMMENT ON TABLE  foundation_edge           IS 'First-class relationships (graph edges)';
+COMMENT ON COLUMN foundation_edge.prefix     IS 'Numbering prefix; platform default E, tenant-overridable';
+COMMENT ON COLUMN foundation_edge.annotation IS 'Inline structured payload (quantity, findNumber, variantCondition, ...)';
+COMMENT ON COLUMN foundation_edge.version    IS 'DB-autoincremented optimistic-lock token';
 
 -- Composite FKs above guarantee both endpoints belong to the same tenant as
 -- the edge itself — cross-tenant relationships are impossible at the DB layer.
@@ -201,66 +200,66 @@ END;
 $$;
 
 CREATE TRIGGER trg_vertex_bump_version
-    BEFORE UPDATE ON core_vertex
+    BEFORE UPDATE ON foundation_vertex
     FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 CREATE TRIGGER trg_edge_bump_version
-    BEFORE UPDATE ON core_edge
+    BEFORE UPDATE ON foundation_edge
     FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 CREATE TRIGGER trg_graph_rule_bump_version
-    BEFORE UPDATE ON core_graph_rule
+    BEFORE UPDATE ON foundation_graph_rule
     FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 -- ── Indexes ─────────────────────────────────────────────────────────────────
 
-CREATE INDEX idx_vertex_tenant_kind      ON core_vertex (tenant_id, kind);
-CREATE INDEX idx_vertex_tenant_lifecycle ON core_vertex (tenant_id, lifecycle_state);
+CREATE INDEX idx_vertex_tenant_kind      ON foundation_vertex (tenant_id, kind);
+CREATE INDEX idx_vertex_tenant_lifecycle ON foundation_vertex (tenant_id, lifecycle_state);
 
-CREATE INDEX idx_edge_source       ON core_edge (source_vertex_id);
-CREATE INDEX idx_edge_target       ON core_edge (target_vertex_id);
-CREATE INDEX idx_edge_tenant_kind  ON core_edge (tenant_id, kind);
-CREATE INDEX idx_edge_rule         ON core_edge (graph_rule_id) WHERE graph_rule_id IS NOT NULL;
+CREATE INDEX idx_edge_source       ON foundation_edge (source_vertex_id);
+CREATE INDEX idx_edge_target       ON foundation_edge (target_vertex_id);
+CREATE INDEX idx_edge_tenant_kind  ON foundation_edge (tenant_id, kind);
+CREATE INDEX idx_edge_rule         ON foundation_edge (graph_rule_id) WHERE graph_rule_id IS NOT NULL;
 
-CREATE INDEX idx_rule_lookup       ON core_graph_rule (scope, edition_id, edge_kind);
+CREATE INDEX idx_rule_lookup       ON foundation_graph_rule (scope, edition_id, edge_kind);
 
 -- ── Row Level Security ──────────────────────────────────────────────────────
 -- plmiq_migrator holds BYPASSRLS; every other role is fully policy-bound.
 
-ALTER TABLE core_vertex     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core_vertex     FORCE  ROW LEVEL SECURITY;
-ALTER TABLE core_edge       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core_edge       FORCE  ROW LEVEL SECURITY;
-ALTER TABLE core_graph_rule ENABLE ROW LEVEL SECURITY;
-ALTER TABLE core_graph_rule FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_vertex     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_vertex     FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_edge       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_edge       FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_graph_rule ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_graph_rule FORCE  ROW LEVEL SECURITY;
 
-CREATE POLICY vertex_tenant_isolation ON core_vertex
+CREATE POLICY vertex_tenant_isolation ON foundation_vertex
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
-CREATE POLICY edge_tenant_isolation ON core_edge
+CREATE POLICY edge_tenant_isolation ON foundation_edge
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
 -- Rules: tenants read platform/edition rules, but manage only their own.
-CREATE POLICY graph_rule_read ON core_graph_rule FOR SELECT
+CREATE POLICY graph_rule_read ON foundation_graph_rule FOR SELECT
     USING (scope <> 'tenant' OR tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_insert ON core_graph_rule FOR INSERT
+CREATE POLICY graph_rule_insert ON foundation_graph_rule FOR INSERT
     WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_update ON core_graph_rule FOR UPDATE
+CREATE POLICY graph_rule_update ON foundation_graph_rule FOR UPDATE
     USING      (scope = 'tenant' AND tenant_id = current_tenant_id())
     WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_delete ON core_graph_rule FOR DELETE
+CREATE POLICY graph_rule_delete ON foundation_graph_rule FOR DELETE
     USING (scope = 'tenant' AND tenant_id = current_tenant_id());
 
 -- ── Privileges ──────────────────────────────────────────────────────────────
 
-GRANT USAGE ON SCHEMA "plm-iq" TO plmiq_app, plmiq_migrator;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "plm-iq" TO plmiq_app;
-GRANT ALL ON ALL TABLES IN SCHEMA "plm-iq" TO plmiq_migrator;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA "plm-iq" TO plmiq_app, plmiq_migrator;
+GRANT USAGE ON SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_app;
+GRANT ALL ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_migrator;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
 
 COMMIT;
