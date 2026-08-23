@@ -30,17 +30,24 @@ _SUFFIXES = ("localhost.com", "localhost")
 
 @dataclass(frozen=True)
 class TenantContext:
-    tenant: str
-    edition: str
-    edition_label: str
-    host: str
-    valid: bool
+    tenant: str = ""
+    edition: str = ""
+    edition_label: str = ""
+    host: str = ""
+    valid: bool = False
+    matched_pattern: bool = False
 
 
-_INVALID = TenantContext(tenant="", edition="", edition_label="", host="", valid=False)
+_INVALID = TenantContext()
 
 
 def resolve_host(host_header: str | None) -> TenantContext:
+    """Classify a Host header into one of three outcomes.
+
+    valid            - {tenant}.{edition}.<suffix> with legal values: serve the workspace.
+    matched_pattern  - host is inside the workspace namespace but malformed: branded 404.
+    neither          - bare IPs, localhost, foreign domains: serve the default info page.
+    """
     if not host_header:
         return _INVALID
     host = host_header.strip().split(":")[0].lower().rstrip(".")
@@ -55,10 +62,11 @@ def resolve_host(host_header: str | None) -> TenantContext:
                 edition_label=EDITION_LABELS[labels[1]],
                 host=host,
                 valid=True,
+                matched_pattern=True,
             )
             logger.info("gateway.host.resolved", extra={"host": host, "tenant": ctx.tenant, "edition": ctx.edition})
             return ctx
         logger.warning("gateway.host.rejected", extra={"host": host})
-        return TenantContext(tenant="", edition="", edition_label="", host=host, valid=False)
-    logger.warning("gateway.host.unknown_suffix", extra={"host": host})
-    return TenantContext(tenant="", edition="", edition_label="", host=host, valid=False)
+        return TenantContext(host=host, matched_pattern=True)
+    logger.warning("gateway.host.unrecognized", extra={"host": host})
+    return TenantContext(host=host)

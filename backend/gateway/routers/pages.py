@@ -29,13 +29,19 @@ def _base_context(request: Request) -> dict[str, Any]:
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
     context = _base_context(request)
-    if not context["ctx"].valid:
-        return _render_not_found(request)
-    return templates.TemplateResponse(request, "home.html", context)
+    ctx = context["ctx"]
+    if ctx.valid:
+        return templates.TemplateResponse(request, "home.html", context)
+    if not ctx.matched_pattern:
+        return _render_default(request)
+    return _render_not_found(request)
 
 
 @router.get("/{rest:path}", response_class=HTMLResponse)
 def any_page(request: Request, rest: str) -> HTMLResponse:
+    context = _base_context(request)
+    if not context["ctx"].matched_pattern:
+        return _render_default(request)
     return _render_not_found(request, path=f"/{rest}")
 
 
@@ -44,3 +50,8 @@ def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
     context["path"] = path
     context["message"] = _NOT_FOUND_MESSAGE
     return templates.TemplateResponse(request, "not_found.html", context, status_code=404)
+
+
+def _render_default(request: Request) -> HTMLResponse:
+    context = _base_context(request)
+    return templates.TemplateResponse(request, "default.html", context)

@@ -58,20 +58,25 @@ def suite_gateway_dns(tid=None):
 
 
 def suite_gateway_bad_hosts(tid=None):
-    bad_hosts = [
+    malformed_hosts = [
         "acme.bogus.localhost.com",
         "Bad_Tenant.foundation.localhost.com",
         "ab.foundation.localhost.com",
-        "acme.foundation.other.com",
         "foo.localhost.com",
-        "localhost",
-        "127.0.0.1",
     ]
-    for host in bad_hosts:
+    for host in malformed_hosts:
         r = get("/", host)
         assert r.status_code == 404, (host, r.status_code)
         assert CONTACT_ADMIN_SNIPPET in r.text, host
         assert "404" in r.text, host
+
+    default_hosts = ["localhost", "127.0.0.1", "acme.foundation.other.com", ""]
+    for host in default_hosts:
+        r = get("/", host)
+        assert r.status_code == 200, (host, r.status_code)
+        assert "Welcome to PLM-IQ" in r.text, host
+        assert "tenant.edition.localhost.com" in r.text, host
+        assert CONTACT_ADMIN_SNIPPET not in r.text, host
 
 
 def suite_gateway_unknown_paths(tid=None):
@@ -82,6 +87,9 @@ def suite_gateway_unknown_paths(tid=None):
 
     r = get("/missing", "acme.bogus.localhost.com")
     assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
+
+    r = get("/deep/link", "127.0.0.1:8080")
+    assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text, "default page on deep path failed"
 
     r = client.get("/static/style.css")
     assert r.status_code == 200 and "text/css" in r.headers["content-type"]

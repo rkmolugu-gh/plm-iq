@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Welcome to PLM-IQ{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="hero-eyebrow">Product Lifecycle Management, connected</p>
+  <h1 class="hero-title">Welcome to PLM-IQ</h1>
+  <p class="hero-sub">
+    PLM-IQ is a cloud-native, multi-tenant platform that manages your product
+    data as one connected graph &mdash; parts, documents, specifications,
+    changes, quality, and compliance across the full lifecycle.
+  </p>
+</section>
+
+<section class="default-grid">
+  <article class="module-card default-how">
+    <h2>Open your workspace</h2>
+    <p>
+      Each organization gets its own address. Use your tenant name and edition
+      in the URL:
+    </p>
+    <p class="url-format"><code>tenant.edition.localhost.com</code></p>
+    <ul class="url-examples">
+      <li><code>acme.foundation.localhost.com</code></li>
+      <li><code>tesla.discrete.localhost.com</code></li>
+      <li><code>vale.process.localhost.com</code></li>
+      <li><code>freshfoods.food.localhost.com</code></li>
+    </ul>
+    <p class="default-hint">
+      Reached this page by accident? You are on the gateway's default address
+      &mdash; open your workspace URL above instead.
+    </p>
+  </article>
+
+  <article class="module-card">
+    <h2>Four editions, one platform</h2>
+    <div class="edition-list">
+      <span class="edition-pill edition-pill-foundation">Foundation</span>
+      <span class="edition-pill edition-pill-discrete">Discrete</span>
+      <span class="edition-pill edition-pill-process">Process</span>
+      <span class="edition-pill edition-pill-food">Food</span>
+    </div>
+    <p>
+      Every edition shares the same graph core: parts and products, multi-level
+      BOMs, controlled documents, change management with impact analysis, and
+      end-to-end traceability.
+    </p>
+  </article>
+
+  <article class="module-card">
+    <h2>What lives inside</h2>
+    <ul class="feature-list">
+      <li>Product definition &mdash; parts, documents, specifications</li>
+      <li>Product structures &mdash; BOMs, effectivity, where-used</li>
+      <li>Change management &mdash; requests, orders, approvals</li>
+      <li>Search &amp; traceability &mdash; full-text and graph navigation</li>
+      <li>AI assistance &mdash; extraction, classification, summaries</li>
+    </ul>
+  </article>
+</section>
+{% endblock %}
