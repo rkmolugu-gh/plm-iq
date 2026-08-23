@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | Draft |
-| Version | 0.3 |
+| Version | 0.4 |
 | Owner | PLM-IQ Platform Team |
 | Last Updated | 2026-08-23 |
 | Related Documents | `metamodel-prd.md` (metamodel and storage detail) |
@@ -212,6 +212,64 @@ freshfoods.food.plm-iq.com
 - Because tenant subdomains are two levels below `plm-iq.com`, each edition namespace carries its own wildcard certificate (for example, `*.discrete.plm-iq.com`). Certificates are issued and renewed automatically by the edge layer.
 - Enterprise tenants may map a vanity domain (for example, `plm.tenant.com`) to their tenant via CNAME; the platform provisions and renews the certificate automatically.
 - Tenant subdomains are immutable through self-service. Renames are a support-managed operation that creates the new subdomain and serves redirects from the old one during a configurable grace period.
+
+### Edge Routing: Static Website and Tenant Workspaces
+
+A single Caddy instance terminates all public traffic for the platform domain and routes purely by host name:
+
+| Host | Served by | Content |
+|---|---|---|
+| `{BASE_DOMAIN}`, `www.{BASE_DOMAIN}` | Caddy `file_server` | static website bundle (`setup/public_html`) |
+| `{tenant}.{edition}.{BASE_DOMAIN}` | Caddy → reverse proxy to the `api` container | tenant workspaces |
+
+The deployed base domain is configuration, not code: `BASE_DOMAIN` in the environment (production: `plm-iq.site`; local development falls back to `localhost`). Design decisions:
+
+- **Host-based routing split.** Exact-match site blocks serve the apex and www hosts from the static bundle; a separate wildcard block proxies every other subdomain to the application. Caddy's most-specific-match rule guarantees a tenant workspace can never shadow the main site.
+- **Content by volume, not image bake.** The static bundle is mounted read-only into the caddy container from `setup/public_html`. Publishing a new website version is: rebuild the bundle (`build-static-site.bat`) → upload → extract. No image rebuild or container restart is required; `file_server` reads disk per request.
+- **One variable owns the domain.** `BASE_DOMAIN` feeds both Caddy blocks and the gateway host resolver, so tenant URLs (`{tenant}.{edition}.{BASE_DOMAIN}`) derive from a single setting across edge and application layers.
+- **Branded 404 for static pages.** Static-mode file-not-found responses rewrite to the bundle's own `404.html`, keeping presentation consistent with the marketing site.
+
+Operational requirements:
+
+1. DNS records in the zone: `BASE_DOMAIN` and `www` A records plus a wildcard `*` record, all pointing at the server.
+2. `ACME_EMAIL` and a Cloudflare zone-scoped `CLOUDFLARE_API_TOKEN` in `setup/.env`. Wildcard certificates are issued through DNS-01 because individual tenant subdomains cannot be pre-declared; the apex/www pair rides on its own certificate with two SANs.
+3. Every Caddyfile change must pass `caddy validate` inside the Cloudflare-enabled custom image **with environment variables set** before deployment. Placeholder-adaptation failures — for example an empty wildcard subject when `BASE_DOMAIN` is not propagated into the container — only surface under validation, never on visual inspection.
+
+### Static Website Bundle
+
+The public website is a generated, dependency-free HTML/CSS bundle produced from the gateway's own page templates. There is exactly **one source of truth**: the server-rendered Jinja templates under `backend/gateway/templates` (platform-common) plus optional `backend/gateway/<edition>/templates` overrides per edition package. No hand-maintained copies exist anywhere else.
+
+**Build pipeline.**
+
+```text
+build-static-site.bat   →   setup/public_html/          (unpacked site)
+                        →   setup/public_html.tar.gz    (deployment artifact)
+```
+
+The builder (`backend/gateway/build_static.py`) renders every page once per edition from the shared templates, so edition folders are generated rather than hand-copied. When an edition needs distinct markup, it ships a template with the same name in its package folder and automatically overrides the shared page — in both the live gateway and the static export.
+
+**Bundle layout.**
+
+```text
+index.html                 entry page: platform overview with links to each edition
+signin.html                single neutral sign-in page (no edition branding;
+                           tenant box starts empty with a placeholder)
+404.html                   branded not-found page
+style/style.css            the single stylesheet for every page
+foundation/index.html      workspace landing rendered per edition (tenant "plm-iq")
+discrete/index.html
+process/index.html
+food/index.html
+```
+
+**Rules the bundle follows.**
+
+- Relative links only (`../style/style.css`, `../signin.html`) — the bundle works at any host root or subpath without modification.
+- Pages contain no JavaScript and call no APIs; interactive behavior is added later against `/v1`.
+- Edition divergence is additive: an edition that has not customized a page simply inherits the platform-common version at build time.
+- Generated outputs (`setup/public_html/`, `setup/public_html.tar.gz`) are gitignored; the site is always reproducible from templates plus one command.
+
+Publishing is described in *Edge Routing* above: extract the tarball over the mounted folder and Caddy serves the new content immediately.
 
 ---
 
