@@ -10,11 +10,13 @@ services:
     environment:
       ACME_EMAIL: ${ACME_EMAIL}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      BASE_DOMAIN: ${BASE_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ${PLMIQ_SETUP}/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${PLMIQ_ROOT}/setup/public_html:/srv/public_html:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

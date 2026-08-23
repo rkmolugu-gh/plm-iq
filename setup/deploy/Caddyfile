@@ -1,11 +1,22 @@
 # Caddy edge for PLM-IQ production.
-# Wildcard TLS for tenant workspaces ({tenant}.{edition}.<BASE_DOMAIN>)
-# via Cloudflare DNS-01; all workspace traffic proxies to the api container.
-# ACME_EMAIL, CLOUDFLARE_API_TOKEN and BASE_DOMAIN come from setup/.env.
+#   plm-iq.site / www.plm-iq.site      -> static website (setup/public_html)
+#   {tenant}.{edition}.plm-iq.site     -> tenant workspaces via the api container
+# Wildcard TLS uses Cloudflare DNS-01; ACME_EMAIL, CLOUDFLARE_API_TOKEN and
+# BASE_DOMAIN come from setup/.env.
 
 {
-	email {"rkmolugu@yahoo.com"}
-	acme_dns cloudflare {"cfut_RejPdIR0yawoId6GZyM0RAON92P5npMoucEW3fol260aeaf7"}
+	email {$ACME_EMAIL}
+	acme_dns cloudflare {$CLOUDFLARE_API_TOKEN}
+}
+
+{$BASE_DOMAIN}, www.{$BASE_DOMAIN} {
+	root * /srv/public_html
+	encode gzip zstd
+	file_server
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
 }
 
 *.{$BASE_DOMAIN} {
