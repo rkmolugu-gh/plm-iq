@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }}{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="hero-eyebrow">PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title">{{ ctx.tenant }}</h1>
+  <p class="hero-sub">
+    Your product lifecycle workspace is ready. Parts, documents, specifications,
+    changes, and traceability will live here &mdash; connected as one graph.
+  </p>
+  <div class="hero-actions">
+    <button class="btn btn-primary" disabled title="Coming soon">Sign in</button>
+    <button class="btn btn-ghost" disabled title="Coming soon">Explore data</button>
+  </div>
+</section>
+
+<section class="module-grid" aria-label="Modules">
+  <article class="module-card">
+    <h2>Product Definition</h2>
+    <p>Parts, documents, and specifications with revisions and lifecycles.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+  <article class="module-card">
+    <h2>Product Structures</h2>
+    <p>Multi-level BOMs, alternates, effectivity, and where-used analysis.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+  <article class="module-card">
+    <h2>Change Management</h2>
+    <p>Requests, orders, impact analysis, and approval workflows.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+  <article class="module-card">
+    <h2>Search &amp; Traceability</h2>
+    <p>Full-text search, graph navigation, and compliance traceability.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+  <article class="module-card">
+    <h2>Quality &amp; Compliance</h2>
+    <p>Requirements, validations, non-conformance, and evidence chains.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+  <article class="module-card">
+    <h2>AI Assistance</h2>
+    <p>Extraction, classification, impact summaries, and a product copilot.</p>
+    <span class="module-tag">coming soon</span>
+  </article>
+</section>
+{% endblock %}

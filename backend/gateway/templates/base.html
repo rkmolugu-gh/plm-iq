@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PLM-IQ{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="edition-{{ ctx.edition if ctx.valid else 'none' }}">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">PLM-IQ</span>
+        {% if ctx.valid %}
+        <span class="edition-badge">{{ ctx.edition_label }}</span>
+        {% endif %}
+      </a>
+      {% if ctx.valid %}
+      <nav class="topnav" aria-label="Primary">
+        <span class="topnav-item is-disabled">Items</span>
+        <span class="topnav-item is-disabled">Documents</span>
+        <span class="topnav-item is-disabled">Changes</span>
+        <span class="topnav-item is-disabled">Search</span>
+      </nav>
+      <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      {% if ctx.valid %}
+      <span>{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</span>
+      {% else %}
+      <span>PLM-IQ</span>
+      {% endif %}
+      <span>Foundation UI &mdash; API plumbing coming later</span>
+    </div>
+  </footer>
+</body>
+</html>

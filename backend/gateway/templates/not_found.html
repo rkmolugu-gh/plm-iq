@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Page not found · PLM-IQ{% endblock %}
+{% block content %}
+<section class="nf">
+  <p class="nf-code">404</p>
+  <h1 class="nf-title">Page not found</h1>
+  <p class="nf-message">{{ message }}</p>
+  {% if path %}
+  <p class="nf-detail">Requested path: <code>{{ path }}</code></p>
+  {% elif ctx.host %}
+  <p class="nf-detail">Requested address: <code>{{ ctx.host }}</code></p>
+  {% endif %}
+  <a class="btn btn-primary nf-home" href="/">Go to my workspace home</a>
+</section>
+{% endblock %}

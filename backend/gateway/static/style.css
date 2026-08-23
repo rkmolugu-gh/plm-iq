@@ -1,0 +1,309 @@
+/* ==========================================================================
+   PLM-IQ front-end styling — single source of truth for all UI pages.
+   Structure: tokens -> reset -> layout -> components (topbar, hero, cards,
+   404) -> edition accents -> responsive.
+   ========================================================================== */
+
+:root {
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --ink: #16232e;
+  --ink-soft: #55677a;
+  --ink-faint: #8aa0b4;
+  --line: #dde5ec;
+  --accent: #0e6e6e;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2f1f1;
+  --danger: #b3392f;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(22 35 46 / 6%), 0 8px 24px rgb(22 35 46 / 7%);
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+
+body.edition-discrete { --accent: #155a9c; --accent-soft: #e3edf7; }
+body.edition-process { --accent: #6d4a9e; --accent-soft: #efe9f8; }
+body.edition-food { --accent: #1f7a3f; --accent-soft: #e4f3ea; }
+body.edition-none { --accent: #44586b; --accent-soft: #eaeff3; }
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.55;
+}
+
+code {
+  background: var(--accent-soft);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-size: 0.92em;
+}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
+
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0.65rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.brand-mark {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.edition-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+}
+
+.topnav {
+  margin-left: auto;
+  display: flex;
+  gap: 1.1rem;
+}
+
+.topnav-item {
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+  cursor: not-allowed;
+}
+
+.tenant-chip {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topnav + .tenant-chip { margin-left: 0; }
+
+/* ── Page frame ─────────────────────────────────────────────────────────── */
+
+.page {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 3.5rem;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+
+.hero {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--accent-soft) 100%);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) * 1.6);
+  box-shadow: var(--shadow);
+  padding: 3rem 2.5rem;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  margin: 0 0 0.4rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1.1;
+  word-break: break-word;
+}
+
+.hero-sub {
+  margin: 0.9rem auto 0;
+  max-width: 56ch;
+  color: var(--ink-soft);
+}
+
+.hero-actions {
+  margin-top: 1.6rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  border-radius: var(--radius);
+  padding: 0.55rem 1.3rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:hover { filter: brightness(1.07); }
+
+.btn-primary[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-ghost[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Module cards ───────────────────────────────────────────────────────── */
+
+.module-grid {
+  margin-top: 2.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.module-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1.35rem 1.5rem;
+}
+
+.module-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+}
+
+.module-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.module-tag {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.95rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+}
+
+/* ── Not-found page ─────────────────────────────────────────────────────── */
+
+.nf {
+  max-width: 560px;
+  margin: 3rem auto 0;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) * 1.6);
+  box-shadow: var(--shadow);
+  padding: 3rem 2.25rem;
+}
+
+.nf-code {
+  margin: 0;
+  font-size: clamp(3rem, 8vw, 4.5rem);
+  font-weight: 800;
+  color: var(--danger);
+  line-height: 1;
+}
+
+.nf-title {
+  margin: 0.6rem 0 0.8rem;
+  font-size: 1.4rem;
+}
+
+.nf-message {
+  color: var(--ink-soft);
+  margin: 0 0 1rem;
+}
+
+.nf-detail {
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+  margin: 0 0 1.6rem;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.footer {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.footer-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .topnav { display: none; }
+  .hero { padding: 2.25rem 1.4rem; }
+}
