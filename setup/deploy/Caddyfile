@@ -3,6 +3,7 @@
 #   {tenant}.{edition}.plm-iq.site     -> tenant workspaces via the api container
 # Wildcard TLS uses Cloudflare DNS-01; ACME_EMAIL, CLOUDFLARE_API_TOKEN and
 # BASE_DOMAIN come from setup/.env.
+#cloud flare api set as os env var
 
 {
 	email {$ACME_EMAIL}
