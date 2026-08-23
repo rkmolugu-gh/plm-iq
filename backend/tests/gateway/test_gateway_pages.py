@@ -56,6 +56,16 @@ def suite_gateway_dns(tid=None):
     r = client.get("/healthz")
     assert r.status_code == 200 and r.json()["status"] == "ok"
 
+    home = get("/", "acme.foundation.localhost.com")
+    assert 'href="/signin"' in home.text, "sign-in link missing on workspace home"
+    assert "Explore data" not in home.text, "explore-data button still present"
+
+    signin = get("/signin", "acme.foundation.localhost.com")
+    assert signin.status_code == 200, signin.status_code
+    assert "acme" in signin.text and "Sign in" in signin.text
+    assert 'name="tenant" value="acme"' in signin.text, "tenant box not prefilled"
+    assert 'type="password"' in signin.text
+
 
 def suite_gateway_bad_hosts(tid=None):
     malformed_hosts = [
@@ -87,6 +97,12 @@ def suite_gateway_unknown_paths(tid=None):
 
     r = get("/missing", "acme.bogus.localhost.com")
     assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
+
+    r = get("/signin", "acme.bogus.localhost.com")
+    assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
+
+    r = get("/signin", "127.0.0.1:8080")
+    assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text, "signin on default host failed"
 
     r = get("/deep/link", "127.0.0.1:8080")
     assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text, "default page on deep path failed"

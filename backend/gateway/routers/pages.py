@@ -1,4 +1,15 @@
-"""Page routes: edition landing page and the branded 404 page."""
+"""Page routes: edition workspace pages, sign-in preview, and branded 404.
+
+Template ownership follows the edition-package model (strategy Section 5):
+
+* ``gateway/<edition>/templates/`` - edition-owned pages (e.g. the workspace
+  landing page). An edition may override any common template by shipping a
+  file with the same logical name.
+* ``gateway/templates/`` - platform-shared pages (base shell, sign-in,
+  default info page, not-found).
+
+Resolution order per request: active edition first, then common.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,22 +18,45 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 
-from ..resolver import resolve_host
+from .. import resolver
+from ..resolver import EDITIONS
 
 router = APIRouter(include_in_schema=False)
 
-_TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+_GATEWAY_DIR = Path(__file__).resolve().parents[1]
+_COMMON_TEMPLATES_DIR = _GATEWAY_DIR / "templates"
 
-_NOT_FOUND_MESSAGE = (
-    "The address you opened could not be matched to a PLM-IQ workspace. "
-    "Please contact your system administrator."
-)
+
+def _make_templates(base_dir: Path, overlay_dirs: tuple[Path, ...] = ()) -> Jinja2Templates:
+    t = Jinja2Templates(directory=str(base_dir))
+    loaders = [FileSystemLoader(str(d)) for d in overlay_dirs]
+    if loaders:
+        t.env.loader = ChoiceLoader([*loaders, t.env.loader])
+    return t
+
+
+_COMMON = _make_templates(_COMMON_TEMPLATES_DIR)
+
+# Only editions that ship a package get their own loader; everyone else
+# falls back to the platform-common templates until their package exists.
+_EDITION_TEMPLATES = {
+    name: _make_templates(_COMMON_TEMPLATES_DIR, (_GATEWAY_DIR / name / "templates",))
+    for name in EDITIONS
+    if (_GATEWAY_DIR / name / "templates").is_dir()
+}
+
+
+def _templates_for(ctx: resolver.TenantContext) -> Jinja2Templates:
+    """Active edition's package when it ships one, else platform-common."""
+    if ctx.valid:
+        return _EDITION_TEMPLATES.get(ctx.edition, _COMMON)
+    return _COMMON
 
 
 def _base_context(request: Request) -> dict[str, Any]:
-    ctx = resolve_host(request.headers.get("host"))
+    ctx = resolver.resolve_host(request.headers.get("host"))
     return {"request": request, "ctx": ctx}
 
 
@@ -31,10 +65,21 @@ def home(request: Request) -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
-        return templates.TemplateResponse(request, "home.html", context)
+        return _templates_for(ctx).TemplateResponse(request, "home.html", context)
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request)
+
+
+@router.get("/signin", response_class=HTMLResponse)
+def signin(request: Request) -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if ctx.valid:
+        return _templates_for(ctx).TemplateResponse(request, "signin.html", context)
+    if not ctx.matched_pattern:
+        return _render_default(request)
+    return _render_not_found(request, path="/signin")
 
 
 @router.get("/{rest:path}", response_class=HTMLResponse)
@@ -48,10 +93,15 @@ def any_page(request: Request, rest: str) -> HTMLResponse:
 def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
     context = _base_context(request)
     context["path"] = path
-    context["message"] = _NOT_FOUND_MESSAGE
-    return templates.TemplateResponse(request, "not_found.html", context, status_code=404)
+    context["message"] = (
+        "The address you opened could not be matched to a PLM-IQ workspace. "
+        "Please contact your system administrator."
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(
+        request, "not_found.html", context, status_code=404
+    )
 
 
 def _render_default(request: Request) -> HTMLResponse:
     context = _base_context(request)
-    return templates.TemplateResponse(request, "default.html", context)
+    return _templates_for(context["ctx"]).TemplateResponse(request, "default.html", context)

@@ -309,6 +309,76 @@ code {
 
 .feature-list li { margin-bottom: 0.45rem; }
 
+/* ── Sign-in page ───────────────────────────────────────────────────────── */
+
+.auth-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 2rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) * 1.6);
+  box-shadow: var(--shadow);
+  padding: 2.25rem 2rem;
+  text-align: left;
+}
+
+.auth-title {
+  margin: 0.3rem 0 1.4rem;
+  font-size: 1.35rem;
+  word-break: break-word;
+}
+
+.auth-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 1rem;
+}
+
+.auth-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.auth-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin-bottom: 1.25rem;
+}
+
+.auth-submit { width: 100%; justify-content: center; }
+
+.auth-note {
+  margin: 1.1rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.9rem;
+}
+
 /* ── Not-found page ─────────────────────────────────────────────────────── */
 
 .nf {
