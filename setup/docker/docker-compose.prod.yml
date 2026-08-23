@@ -27,7 +27,7 @@ services:
   api:
     build:
       context: ${PLMIQ_ROOT}
-      dockerfile: setup/docker/Dockerfile
+      dockerfile: setup/docker/Dockerfile.prod
     image: ${PLM_IQ_IMAGE:-plm-iq:prod}
     restart: unless-stopped
     init: true
@@ -39,19 +39,14 @@ services:
     expose:
       - "8000"
     volumes:
-      - ${PLMIQ_ROOT}/db:/app/db
       - plm_data:/app/data
     depends_on:
       db:
         condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-      gitea:
-        condition: service_healthy
     networks:
       - backend
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 20s
       timeout: 5s
       retries: 5

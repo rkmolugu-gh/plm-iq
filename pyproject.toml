@@ -53,10 +53,8 @@ docs = [
 # Add your CLI entry points here
 # plm-iq = "plm_iq.main:main"
 
-# To run the dev server, use: uvicorn app.main:app --reload
-
 [tool.hatch.build.targets.wheel]
-packages = ["app", "db", "plmassistant", "aisearch"]
+packages = ["backend"]
 
 [tool.ruff]
 target-version = "py310"
@@ -93,7 +91,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["app", "db", "plmassistant"]
+source = ["backend"]
 omit = ["*/tests/*", "*/test_*.py"]
 
 [tool.coverage.report]

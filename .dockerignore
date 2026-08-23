@@ -5,6 +5,10 @@
 .gitignore
 data
 db
+.venv
+frontend
+container-shared-volume
+docs
 .env
 .env.*
 __pycache__

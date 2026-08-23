@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.7
+
+# PLM-IQ production image: gateway (pages + edge) with the service layer
+# packaged alongside it for the API milestone. Build context is the repo root:
+#   docker build -f setup/docker/Dockerfile.prod -t plm-iq:prod .
+
+FROM python:3.10-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/backend \
+    UV_LINK_MODE=copy
+
+WORKDIR /app
+
+# Runtime libraries only. Add OS packages here if future document/CAD
+# processing dependencies require them.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /usr/local/bin/
+
+# README.md is required by hatchling while uv builds the project wheel.
+COPY pyproject.toml uv.lock README.md ./
+
+RUN uv sync --frozen --no-dev
+
+# Single source tree: gateway (edge/pages), api (placeholder), services.
+COPY backend ./backend
+
+# Application-owned writable directory.
+RUN mkdir -p /app/data
+
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/healthz || exit 1
+
+# Run the venv binary directly: no uv (and no network) needed at runtime.
+# Behind Caddy; trust proxy headers for scheme and client IP.
+CMD ["/app/.venv/bin/uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--forwarded-allow-ips", "*"]
