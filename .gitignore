@@ -62,5 +62,5 @@ logs/
 env/.env*
 
 # Generated static site bundle (build-static-site.bat)
-setup/public_html/
+
 setup/public_html.tar.gz

@@ -10,9 +10,12 @@ Output layout:
     <out>/
       index.html                 gateway default info page (entry point)
       404.html                   branded not-found page
+      help.html                  help center
+      signin.html                one neutral sign-in page
+      sitemap.xml                SEO sitemap (absolute canonical URLs)
+      robots.txt                 crawler directives + sitemap pointer
       style/style.css            single stylesheet
       <edition>/index.html       workspace landing per edition
-      signin.html                one neutral sign-in page
 
 Editions come from configuration (EDITIONS in .env, see gateway/settings.py);
 adding one there renders its pages automatically.
@@ -29,6 +32,7 @@ import argparse
 import shutil
 import sys
 import tarfile
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -48,6 +52,17 @@ STATIC_DIR = GATEWAY_DIR / "static"
 
 EDITIONS = settings.EDITIONS
 DEFAULT_TENANT = "plm-iq"
+
+# SEO: canonical origin for absolute sitemap URLs (first BASE_DOMAIN wins)
+SITE_ORIGIN = f"https://{(settings.BASE_DOMAIN.split(',')[0].strip().lstrip('.') or 'localhost')}"
+TODAY = date.today().isoformat()
+
+# (path relative to site root, changefreq, priority)
+SITEMAP_FIXED_PAGES = [
+    ("", "weekly", "1.0"),
+    ("help.html", "monthly", "0.5"),
+    ("signin.html", "monthly", "0.3"),
+]
 
 NOT_FOUND_MESSAGE = (
     "The address you opened could not be matched to a PLM-IQ workspace. "
@@ -147,7 +162,40 @@ def build(out_dir: Path) -> Path:
     static_out.mkdir()
     shutil.copy2(STATIC_DIR / "style.css", static_out / "style.css")
     print(f"  + {static_out.relative_to(out_dir) / 'style.css'}")
+    write_seo_files(out_dir)
     return out_dir
+
+
+def write_seo_files(out_dir: Path) -> None:
+    """Emit sitemap.xml + robots.txt for search engines.
+
+    Lists every generated page with absolute canonical URLs; error pages and
+    assets are intentionally excluded.
+    """
+    entries = list(SITEMAP_FIXED_PAGES)
+    entries += [(f"{edition}/", "monthly", "0.6") for edition in EDITIONS]
+
+    urls = "\n".join(
+        f"""  <url>
+    <loc>{SITE_ORIGIN}/{path}</loc>
+    <lastmod>{TODAY}</lastmod>
+    <changefreq>{freq}</changefreq>
+    <priority>{priority}</priority>
+  </url>"""
+        for path, freq, priority in entries
+    )
+    sitemap = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}\n</urlset>\n"
+    )
+    (out_dir / "sitemap.xml").write_text(sitemap, encoding="utf-8")
+
+    robots = f"User-agent: *\nAllow: /\n\nSitemap: {SITE_ORIGIN}/sitemap.xml\n"
+    (out_dir / "robots.txt").write_text(robots, encoding="utf-8")
+
+    print(f"  + sitemap.xml ({len(entries)} urls)")
+    print("  + robots.txt")
 
 
 def bundle(out_dir: Path) -> Path:
