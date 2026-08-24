@@ -83,10 +83,11 @@ CREATE TABLE iam_user (
     modified_on      timestamptz NOT NULL DEFAULT now(),
 
     -- login identifier is globally unique across tenants
-    CONSTRAINT uq_user_email UNIQUE (lower(email)),
+    -- (unique EXPRESSION lives in an index below; PG forbids it inline)
     CONSTRAINT ck_user_email CHECK (email ~ '@')
 );
 
+CREATE UNIQUE INDEX uq_user_email ON iam_user (lower(email));
 CREATE INDEX ix_user_tenant ON iam_user (tenant_id);
 
 COMMENT ON TABLE  iam_user               IS 'User accounts belonging to exactly one tenant';

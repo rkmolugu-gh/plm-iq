@@ -52,12 +52,13 @@ set "N=%ESC%[0m"
 exit /b 0
 
 :parse_args
-rem Sets DO_SCHEMA, DO_SEED, PROFILE.
+rem Sets DO_SCHEMA, DO_SEED, PROFILE, PREFIX.
 rem Exit codes: 0 = parsed ok, 1 = bad argument (help shown),
 rem             2 = help shown for bare invocation / explicit -h.
 set "DO_SCHEMA="
 set "DO_SEED="
 set "PROFILE=dev"
+set "PREFIX="
 if "%~1"=="" goto help_stop
 :parse_loop
 if "%~1"=="" goto parse_done
@@ -70,6 +71,29 @@ if /i "%~1"=="dev"      ( set "PROFILE=dev"  & set "ARG_OK=1" )
 if /i "%~1"=="prod"     ( set "PROFILE=prod" & set "ARG_OK=1" )
 if /i "%~1"=="-h"       goto help_stop
 if /i "%~1"=="--help"   goto help_stop
+set "PARSE_ARG=%~1"
+rem cmd treats "=" as an argument separator, so accept BOTH call styles:
+rem   deploy-schema.bat --prefix 002   (two args)
+rem   deploy-schema.bat "--prefix=002" (single arg)
+if /i "%PARSE_ARG%"=="--prefix" (
+    if "%~2"=="" (
+        echo %R%[FAIL] --prefix requires a value, e.g. --prefix 002%N%
+        call :print_help
+        exit /b 1
+    )
+    set "PREFIX=%~2"
+    set "ARG_OK=1"
+    shift
+)
+if /i "%PARSE_ARG:~0,9%"=="--prefix=" (
+    set "PREFIX=%PARSE_ARG:~9%"
+    if not defined PREFIX (
+        echo %R%[FAIL] --prefix requires a value, e.g. --prefix^=002%N%
+        call :print_help
+        exit /b 1
+    )
+    set "ARG_OK=1"
+)
 if not defined ARG_OK (
     echo %R%[FAIL] unknown argument: %~1%N%
     call :print_help
@@ -79,7 +103,7 @@ shift
 goto parse_loop
 :parse_done
 if not defined DO_SCHEMA if not defined DO_SEED set "DO_SCHEMA=1"
-echo %Y%plan: profile=%PROFILE% ^| schema=%DO_SCHEMA% seed=%DO_SEED%%N%
+echo %Y%plan: profile=%PROFILE% ^| schema=%DO_SCHEMA% seed=%DO_SEED% prefix=%PREFIX%^N%
 exit /b 0
 
 :help_stop
@@ -97,6 +121,9 @@ echo Actions:
 echo   -schema          apply pending database\schema\*.sql
 echo                    ^(default action when no -schema/-seed is given^)
 echo   -seed            apply pending database\seed\*.sql
+echo Options:
+echo   --prefix^=NNN     run only files whose name starts with NNN,
+echo                    e.g. --prefix^=002 installs just stage-002 files
 echo Target:
 echo   dev              dev stack ^(default^)
 echo   prod             prod stack
@@ -111,6 +138,8 @@ echo   deploy-schema.bat -schema              deploy schema to dev
 echo   deploy-schema.bat -seed                seed only, dev stack
 echo   deploy-schema.bat -schema -seed        schema then seed, dev stack
 echo   deploy-schema.bat -schema -seed prod   schema then seed, prod stack
+echo   deploy-schema.bat --prefix^=002 -schema -seed ^[dev^|prod^]
+echo                                          install stage-002 files only
 echo   set PLMIQ_DROP_SCHEMA=1                unattended drop-and-redeploy:
 echo   deploy-schema.bat -schema              run this afterwards
 exit /b 0
@@ -175,6 +204,14 @@ exit /b 0
 rem Usage: call :apply_file <name> <fullpath>  - applies once, then records.
 set "FNAME=%~1"
 set "FFULL=%~2"
+rem --prefix=NNN filter: only files whose name starts with the prefix run.
+if defined PREFIX (
+    echo %FNAME%| findstr /b /c:"%PREFIX%" >nul
+    if errorlevel 1 (
+        echo %Y%  skip %FNAME% ^(prefix filter: %PREFIX%^)%N%
+        exit /b 0
+    )
+)
 set "DONE=0"
 rem Capture the count via a temp file: a for /f command string would be
 rem truncated at the single quotes inside the SQL text.
