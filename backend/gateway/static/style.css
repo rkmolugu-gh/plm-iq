@@ -759,6 +759,78 @@ pre.mermaid {
   margin-bottom: 1px;
 }
 
+/* ── Relationship tree (graph view) ─────────────────────────────────────── */
+
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.25rem;
+  font-size: 0.92rem;
+}
+
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.4rem;
+  position: relative;
+}
+
+.tree li {
+  position: relative;
+  padding: 0.3rem 0 0.3rem 0.9rem;
+}
+
+.tree li::before {
+  content: "";
+  position: absolute;
+  top: -0.35rem;
+  left: 0.55rem;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  width: 0.7rem;
+  height: 1.05rem;
+  border-radius: 0 0 0 4px;
+}
+
+.tree > li { padding-left: 0; }
+.tree > li::before { display: none; }
+
+.tree ul ul::after { /* vertical guide for deeper levels */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0.55rem;
+  bottom: 0;
+  border-left: 1px solid var(--line);
+}
+
+.tree-root > .tree-vertex {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+}
+
+.tree-edge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+
+.dir {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+  font-weight: 600;
+}
+
+.dir-out { background: #e4f3ea; color: #1f7a3f; }
+.dir-in { background: #e3edf7; color: #155a9c; }
+
 /* ── Not-found page ─────────────────────────────────────────────────────── */
 
 .nf {

@@ -135,6 +135,14 @@ def suite_gateway_graph(tid=None):
     assert 'class="mermaid"' in gv.text and "flowchart LR" in gv.text, "mermaid diagram missing"
     # jinja autoescapes -> the browser receives entity-encoded arrows/quotes
     assert "ASM1000 --&gt;|&#34;BOM&#34;| PRT1001" in gv.text, "traversal edge missing from diagram"
+    assert 'click ASM1000 &#34;/graph/view/ASM-1000&#34;' in gv.text, "node click traversal missing"
+
+    assert "Relationship tree" in gv.text and "tree-root" in gv.text, "tree view missing"
+    assert ">PRT-1001 &middot; Motor Housing, Machined<" in gv.text, "tree root missing"
+    assert "dir-out" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
+    assert "dir-in" in gv.text and "ASM-1000" in gv.text and "EC-0007" in gv.text, \
+        "incoming branches missing"
+    assert gv.text.count("Has component") >= 1, "sibling edge missing from tree"
     assert "classDef focus" in gv.text, "focus styling missing"
     assert "/graph?tab=vertex" in gv.text, "back link missing"
 
@@ -151,6 +159,14 @@ def suite_gateway_graph(tid=None):
     assert 'value="BOM" selected' in f.text, "relation filter not preserved"
     assert "ASM1000 --&gt;" in f.text, "BOM edge filtered out"
     assert "DOC3010" not in f.text, "unfiltered relationship leaked through"
+    assert 'value="BOM" selected' in f.text
+    assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
+        "node traversal must carry the selected filter"
+    assert "dir-in" in f.text and "dir-out" not in f.text, \
+        "tree must reflect the applied relation filter"
+    assert 'value="BOM" selected' in f.text
+    assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
+        "node traversal must carry the selected filter"
     assert 'value="DOC-3010"' not in f.text and 'value="REFDOCS"' not in f.text, \
         "dropdowns must list only entities in the drawn diagram"
 
@@ -162,13 +178,45 @@ def suite_gateway_graph(tid=None):
     assert s.status_code == 200
     assert "EC0007" in s.text and "DOC3010" not in s.text, "source filter not applied"
     assert "No relationships match" not in s.text
+    assert s.text.count('value="EC-0007"') == 1, \
+        "selected source must disappear from the target dropdown"
+    assert 'value="ASM-1000"' in s.text, "target dropdown lost unrelated choices"
 
+    same = get(
+        "/graph/view/PRT-1001",
+        "acme.foundation.localhost.com",
+        params={"source": "PRT-1001", "target": "PRT-1001"},
+    )
+    assert same.status_code == 200 and "No relationships match" in same.text, \
+        "self-relation filter combination must match nothing"
+
+    # target filter matches GLOBALLY (focus PRT is 2+ hops from this edge)
     none = get(
         "/graph/view/PRT-1001",
         "acme.foundation.localhost.com",
         params={"target": "MAT-4001"},
     )
-    assert none.status_code == 200 and "No relationships match" in none.text
+    assert none.status_code == 200
+    assert 'ASM1000 --&gt;|&#34;USES&#34;| MAT4001' in none.text, \
+        "target filter must draw every matching relationship workspace-wide"
+    assert "No relationships match" not in none.text
+
+    # relation filter draws matching edges even when unrelated to the focus
+    g = get(
+        "/graph/view/DOC-3010",
+        "acme.foundation.localhost.com",
+        params={"relation": "AFFECTS"},
+    )
+    assert g.status_code == 200
+    assert 'EC0007 --&gt;|&#34;AFFECTS&#34;| PRT1001' in g.text, \
+        "global relation filtering failed"
+
+    z = get(
+        "/graph/view/PRT-1001",
+        "acme.foundation.localhost.com",
+        params={"source": "EC-0007", "relation": "BOM"},
+    )
+    assert z.status_code == 200 and "No relationships match" in z.text
 
     reset = get("/graph/view/PRT-1001", "acme.foundation.localhost.com")
     assert reset.status_code == 200 and "DOC3010" in reset.text, "reset lost unfiltered view"

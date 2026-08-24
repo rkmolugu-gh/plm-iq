@@ -65,13 +65,15 @@ def build_graph_view(
     relation: str = "",
     target: str = "",
 ) -> dict | None:
-    """Undirected breadth-first walk over the sample graph, focused on one vertex.
+    """Graph view semantics:
 
-    Only relationships matching the optional source/relation/target filters are
-    drawn and expanded. Filter dropdowns cover just this focus vertex's
-    unfiltered neighborhood - never the wider dataset. Returns mermaid markup
-    (clickable nodes traverse to their own view), reached vertices, and the
-    relationships drawn.
+    - No filters: traversal up to ``max_depth`` hops around the focus vertex.
+    - Any filter set (source/relation/target): EVERY relationship in the
+      workspace matching the pattern is shown, regardless of focus or depth -
+      e.g. All/BOM/All renders the full BOM connectivity.
+
+    Diagram reads left-to-right: source nodes on the left, relationship labels
+    mid-arrow, target nodes on the right.
     """
     vmap = {v["number"]: v for v in GRAPH["vertices"]}
     if number not in vmap:
@@ -83,6 +85,8 @@ def build_graph_view(
             and (not relation or edge["kind"] == relation)
             and (not target or edge["target"] == target)
         )
+
+    filters_active = bool(source or relation or target)
 
     def walk(predicate) -> tuple[list[str], dict[tuple, dict]]:
         visited = {number}
@@ -107,39 +111,67 @@ def build_graph_view(
             depth += 1
         return order, found
 
-    # Option universe = exactly the entities in the drawn diagram: the focus
-    # vertex plus every endpoint of a relationship that passed the filters.
-    universe_nodes, _ = walk(lambda edge: True)
-    _, drawn = walk(matches)
-
-    drawn_nodes = {number}
-    for edge in drawn.values():
-        drawn_nodes.update((edge["source"], edge["target"]))
+    if filters_active:
+        drawn_list = [e for e in GRAPH["edges"] if matches(e)]
+        node_set = {e["source"] for e in drawn_list} | {e["target"] for e in drawn_list}
+        node_set.add(number)  # focus always visible for context
+        found_map = {(e["source"], e["target"], e["kind"]): e for e in drawn_list}
+        node_order = sorted(node_set)
+    else:
+        node_order, found_map = walk(lambda edge: True)
 
     def nid(n: str) -> str:
         return n.replace("-", "")
 
+    # Node clicks traverse to that vertex's own view, carrying the current
+    # filters so the dropdown selection survives navigation.
+    qs_parts = [f"{k}={v}" for k, v in (("source", source), ("relation", relation), ("target", target)) if v]
+    qs = "?" + "&".join(qs_parts) if qs_parts else ""
+
     lines = ["flowchart LR"]
-    for n in universe_nodes:  # stable ordering; membership filtered below
-        if n not in drawn_nodes:
-            continue
+    for n in node_order:
         meta = vmap[n]
         # single-line labels: autoescaped output must stay valid mermaid
         lines.append(f'    {nid(n)}["{n} - {meta["name"]}"]')
-    for edge in drawn.values():
+    for edge in found_map.values():
         lines.append(f'    {nid(edge["source"])} -->|"{edge["kind"]}"| {nid(edge["target"])}')
-    lines.append("    classDef focus fill:#e2f1f1,stroke:#0e6e6e,stroke-width:2px;")
-    lines.append(f"    class {nid(number)} focus")
+    for n in node_order:
+        lines.append(f'    click {nid(n)} "/graph/view/{n}{qs}" "Traverse to {n}"')
+    if number in node_order:  # highlight focus only when part of the drawing
+        lines.append("    classDef focus fill:#e2f1f1,stroke:#0e6e6e,stroke-width:2px;")
+        lines.append(f"    class {nid(number)} focus")
+
+    # Relationship tree: focus as root, each touching relationship as a child,
+    # the counterpart vertex beneath it. Outgoing first, then incoming.
+    tree = []
+    for edge in sorted(found_map.values(), key=lambda e: (e["source"] != number, e["kind"])):
+        if edge["source"] == number:
+            tree.append({"edge": edge, "direction": "out", "other": vmap[edge["target"]]})
+        elif edge["target"] == number:
+            tree.append({"edge": edge, "direction": "in", "other": vmap[edge["source"]]})
+
+    # A vertex cannot relate to itself: once a Source (or Target) is picked,
+    # that vertex is removed from the opposite dropdown's choices.
+    all_option_vertices = sorted(
+        {e["source"] for e in found_map.values()}
+        | {e["target"] for e in found_map.values()}
+        | {number}
+    )
+    source_options = [v for v in all_option_vertices if v != target]
+    target_options = [v for v in all_option_vertices if v != source]
 
     return {
         "focus": number,
         "meta": vmap[number],
         "mermaid": "\n".join(lines),
-        "edges": list(drawn.values()),
-        "nodes": [vmap[n] for n in universe_nodes if n in drawn_nodes],
+        "edges": list(found_map.values()),
+        "nodes": [vmap[n] for n in node_order],
+        "tree": tree,
         "options": {
-            "vertices": sorted(drawn_nodes),
-            "relations": sorted({e["kind"] for e in drawn.values()}),
+            "source": source_options,
+            "target": target_options,
+            "relations": sorted({e["kind"] for e in found_map.values()}),
         },
         "filters": {"source": source, "relation": relation, "target": target},
+        "filtered": filters_active,
     }

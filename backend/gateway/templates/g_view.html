@@ -12,18 +12,24 @@
 
 <section class="module-card">
   <div class="table-toolbar">
-    <p class="table-desc">Traversal around <strong>{{ view.focus }}</strong> up to two hops:
-      {{ view.edges | length }} relationships drawn.
-      {% if view.filters.source or view.filters.relation or view.filters.target %}
-      Filters active. {% endif %}
-      The highlighted node is the focus.</p>
+    {% if view.filtered %}
+    <p class="table-desc">Showing every relationship in the workspace that matches the
+      current filters. Reading order: sources on the left, relationship labels on the
+      arrows, targets on the right. The focus vertex is highlighted when part of the
+      result.</p>
+    {% else %}
+    <p class="table-desc">Traversal around <strong>{{ view.focus }}</strong> up to two hops.
+      Apply a source, relation, or target filter to see every matching relationship
+      across the workspace instead. Sources render left, relationships mid-arrow,
+      targets right.</p>
+    {% endif %}
   </div>
   <form class="filter-bar" method="get" action="/graph/view/{{ view.focus }}">
     <label class="filter-field">
       Source
       <select name="source">
         <option value="">All</option>
-        {% for v in view.options.vertices %}
+        {% for v in view.options.source %}
         <option value="{{ v }}"{{ ' selected' if v == view.filters.source }}>{{ v }}</option>
         {% endfor %}
       </select>
@@ -41,7 +47,7 @@
       Target
       <select name="target">
         <option value="">All</option>
-        {% for v in view.options.vertices %}
+        {% for v in view.options.target %}
         <option value="{{ v }}"{{ ' selected' if v == view.filters.target }}>{{ v }}</option>
         {% endfor %}
       </select>
@@ -54,6 +60,42 @@
   {% if not view.edges %}
   <p class="table-desc">No relationships match the current filters.</p>
   {% endif %}
+</section>
+
+<section class="module-card table-card">
+  <div class="table-toolbar">
+    <p class="table-desc">Relationship tree &mdash; the selected vertex as root; each
+      relationship below it leads to the counterpart vertex. Outgoing first,
+      then incoming.</p>
+  </div>
+  <ul class="tree">
+    <li class="tree-root">
+      <span class="tree-vertex">{{ view.focus }} &middot; {{ view.meta.name }}</span>
+      {% if view.tree %}
+      <ul>
+        {% for t in view.tree %}
+        <li>
+          <span class="tree-edge">
+            <span class="dir dir-{{ t.direction }}">{{ 'outgoing' if t.direction == 'out' else 'incoming' }}</span>
+            {{ t.edge.kind }} &middot; {{ t.edge.name }}
+          </span>
+          <ul>
+            <li>
+              <span class="tree-vertex">{{ t.other.number }} &middot; {{ t.other.name }}</span>
+              <span class="pill lc-{{ t.other.lifecycle }}">{{ t.other.lifecycle.replace('_', ' ') }}</span>
+            </li>
+          </ul>
+        </li>
+        {% endfor %}
+      </ul>
+      {% elif view.edges %}
+      <ul><li><span class="table-desc">Drawn relationships do not connect to
+        {{ view.focus }} directly &mdash; shown in the table below.</span></li></ul>
+      {% else %}
+      <ul><li><span class="table-desc">No relationships match the current filters.</span></li></ul>
+      {% endif %}
+    </li>
+  </ul>
 </section>
 
 <section class="module-card table-card">
