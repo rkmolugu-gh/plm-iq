@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
 
-from .. import resolver
+from .. import dummy_data, resolver
 from ..resolver import EDITIONS
 
 router = APIRouter(include_in_schema=False)
@@ -80,6 +80,26 @@ def signin(request: Request) -> HTMLResponse:
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path="/signin")
+
+
+@router.post("/signin")
+def signin_submit(request: Request) -> RedirectResponse:
+    """Sign-in bypass: any credentials open the sample workspace dashboard."""
+    ctx = resolver.resolve_host(request.headers.get("host"))
+    target = "/dashboard" if ctx.valid else "/"
+    return RedirectResponse(target, status_code=303)
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request) -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if ctx.valid:
+        context.update(dash=dummy_data.DASHBOARD)
+        return _templates_for(ctx).TemplateResponse(request, "dashboard.html", context)
+    if not ctx.matched_pattern:
+        return _render_default(request)
+    return _render_not_found(request, path="/dashboard")
 
 
 @router.get("/{rest:path}", response_class=HTMLResponse)

@@ -44,4 +44,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # Run the venv binary directly: no uv (and no network) needed at runtime.
 # Behind Caddy; trust proxy headers for scheme and client IP.
-CMD ["/app/.venv/bin/uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--forwarded-allow-ips", "*"]
+# BASE_DOMAIN/GATEWAY_PORT shape the sample URLs echoed at startup
+# (defaults: localhost / 8080 for direct-access testing).
+CMD ["sh", "-c", "echo ''; echo 'PLM-IQ gateway is up'; \
+    echo \"  Sign-in   http://acme.foundation.${BASE_DOMAIN:-localhost}:${GATEWAY_PORT:-8080}/signin\"; \
+    echo \"  Dashboard http://acme.foundation.${BASE_DOMAIN:-localhost}:${GATEWAY_PORT:-8080}/dashboard\"; \
+    echo '(replace acme with any tenant name)'; echo; \
+    exec /app/.venv/bin/uvicorn gateway.main:app --host 0.0.0.0 --port 8000 --workers 2 --forwarded-allow-ips '*'"]

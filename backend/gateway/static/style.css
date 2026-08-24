@@ -379,6 +379,134 @@ code {
   padding-top: 0.9rem;
 }
 
+/* ── Dashboard ──────────────────────────────────────────────────────────── */
+
+.dash-head { text-align: center; margin-bottom: 1.75rem; }
+
+.dash-title { font-size: clamp(1.5rem, 3.5vw, 2.1rem); }
+
+.dash-note { margin-top: 0.4rem; font-size: 0.9rem; color: var(--ink-faint); }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+  text-align: center;
+}
+
+.stat-num {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.15;
+}
+
+.stat-label {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.span-2 { grid-column: span 2; }
+
+@media (max-width: 720px) {
+  .span-2 { grid-column: auto; }
+}
+
+.feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feed-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.92rem;
+}
+
+.feed-list li:last-child { border-bottom: none; }
+
+.feed-who { font-weight: 600; color: var(--accent); }
+
+.feed-action { color: var(--ink-soft); }
+
+.feed-item { font-weight: 600; }
+
+.feed-when { margin-left: auto; color: var(--ink-faint); font-size: 0.8rem; }
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.bar-label { font-size: 0.85rem; color: var(--ink-soft); }
+
+.bar-track {
+  height: 10px;
+  background: var(--accent-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.bar-num { text-align: right; font-weight: 600; font-size: 0.88rem; }
+
+.quality-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.quality-list li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.quality-count {
+  min-width: 1.9rem;
+  text-align: center;
+  font-weight: 700;
+  color: var(--danger);
+  background: #fbeeec;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  padding: 0.05rem 0.3rem;
+}
+
 /* ── Not-found page ─────────────────────────────────────────────────────── */
 
 .nf {

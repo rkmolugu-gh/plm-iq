@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Workspace overview</h1>
+  <p class="hero-sub dash-note">Sample data &mdash; live aggregates arrive with the API milestone.</p>
+</section>
+
+<section class="stat-grid">
+  {% for label, value in dash.stats %}
+  <article class="stat-card">
+    <p class="stat-num">{{ value }}</p>
+    <p class="stat-label">{{ label }}</p>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="dash-grid">
+  <article class="module-card span-2">
+    <h2>Recent activity</h2>
+    <ul class="feed-list">
+      {% for entry in dash.activity %}
+      <li>
+        <span class="feed-who">{{ entry.who }}</span>
+        <span class="feed-action">{{ entry.action }}</span>
+        <span class="feed-item">{{ entry.item }}</span>
+        <span class="feed-when">{{ entry.when }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="module-card">
+    <h2>Lifecycle pipeline</h2>
+    {% for state, count, pct in dash.pipeline %}
+    <div class="bar-row">
+      <span class="bar-label">{{ state }}</span>
+      <span class="bar-track"><span class="bar-fill" style="width: {{ pct }}%;"></span></span>
+      <span class="bar-num">{{ count }}</span>
+    </div>
+    {% endfor %}
+  </article>
+
+  <article class="module-card">
+    <h2>Recently released</h2>
+    <ul class="feed-list">
+      {% for item in dash.released %}
+      <li><span class="feed-item">{{ item.number }}</span> {{ item.name }}</li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="module-card">
+    <h2>Data quality</h2>
+    <ul class="quality-list">
+      {% for label, count in dash.quality %}
+      <li><span class="quality-count">{{ count }}</span> {{ label }}</li>
+      {% endfor %}
+    </ul>
+    <span class="module-tag">sample data</span>
+  </article>
+</section>
+{% endblock %}

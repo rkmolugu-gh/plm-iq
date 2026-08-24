@@ -10,20 +10,24 @@ Output layout:
     <out>/
       index.html                 gateway default info page (entry point)
       404.html                   branded not-found page
-      style/style.css           single stylesheet
-      foundation/index.html      workspace landing per edition
-      foundation/signin.html     sign-in preview per edition
-      discrete/... process/... food/...
+      style/style.css            single stylesheet
+      <edition>/index.html       workspace landing per edition
+      signin.html                one neutral sign-in page
+
+Editions come from configuration (EDITIONS in .env, see gateway/settings.py);
+adding one there renders its pages automatically.
 
 Bundle: <out>.tar.gz next to the output folder (upload to hosting).
 
 Usage:
+    python -m gateway.build_static [--out setup/public_html]   (from backend/)
     python backend/gateway/build_static.py [--out setup/public_html]
 """
 from __future__ import annotations
 
 import argparse
 import shutil
+import sys
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,12 +35,18 @@ from types import SimpleNamespace
 import jinja2
 from jinja2 import ChoiceLoader, FileSystemLoader
 
+if __package__ in (None, ""):  # executed as a plain script
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from gateway import settings
+else:
+    from . import settings
+
 GATEWAY_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_TEMPLATES = GATEWAY_DIR / "templates"
 STATIC_DIR = GATEWAY_DIR / "static"
 
-EDITIONS = ("foundation", "discrete", "process", "food")
+EDITIONS = settings.EDITIONS
 DEFAULT_TENANT = "plm-iq"
 
 NOT_FOUND_MESSAGE = (
@@ -59,7 +69,7 @@ def workspace_ctx(edition: str) -> SimpleNamespace:
     return SimpleNamespace(
         tenant=DEFAULT_TENANT,
         edition=edition,
-        edition_label=edition.capitalize(),
+        edition_label=settings.edition_label(edition),
         host=f"{DEFAULT_TENANT}.{edition}.example.com",
         valid=True,
     )
@@ -81,7 +91,7 @@ def build(out_dir: Path) -> Path:
     out_dir.mkdir(parents=True)
 
     common_env = make_env()
-    nav = [{"name": e, "label": e.capitalize(), "url": f"{e}/"} for e in EDITIONS]
+    nav = [{"name": e, "label": settings.edition_label(e), "url": f"{e}/"} for e in EDITIONS]
 
     print(f"Rendering static site -> {out_dir}")
     write(
@@ -107,7 +117,12 @@ def build(out_dir: Path) -> Path:
     for edition in EDITIONS:
         env = make_env(edition)
         ctx = workspace_ctx(edition)
-        links = {"brand": "../", "signin": "../signin.html", "css": "../style/style.css"}
+        links = {
+            "brand": "../",
+            "signin": "../signin.html",
+            "dashboard": "../signin.html",  # static site has no app dashboard yet
+            "css": "../style/style.css",
+        }
         write(env, "home.html", out_dir / edition / "index.html", {"ctx": ctx, "links": links}, out_dir)
 
     # One neutral sign-in page for all editions: no edition branding, the

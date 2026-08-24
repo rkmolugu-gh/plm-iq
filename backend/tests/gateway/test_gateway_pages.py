@@ -57,7 +57,8 @@ def suite_gateway_dns(tid=None):
     assert r.status_code == 200 and r.json()["status"] == "ok"
 
     home = get("/", "acme.foundation.localhost.com")
-    assert 'href="/signin"' in home.text, "sign-in link missing on workspace home"
+    assert 'href="/dashboard"' in home.text, "sign-in button must bypass straight to dashboard"
+    assert 'href="/signin"' not in home.text, "home still routes through the sign-in page"
     assert "Explore data" not in home.text, "explore-data button still present"
 
     signin = get("/signin", "acme.foundation.localhost.com")
@@ -65,6 +66,34 @@ def suite_gateway_dns(tid=None):
     assert "acme" in signin.text and "Sign in" in signin.text
     assert 'name="tenant" value="acme"' in signin.text, "tenant box not prefilled"
     assert 'type="password"' in signin.text
+    assert 'type="submit" disabled' not in signin.text, "submit should be enabled for bypass"
+
+
+def suite_gateway_dashboard(tid=None):
+    r = client.post(
+        "/signin",
+        data={"tenant": "acme", "username": "demo", "password": "demo"},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303, r.status_code
+    assert r.headers["location"] == "/dashboard"
+
+    dash = get("/dashboard", "acme.foundation.localhost.com")
+    assert dash.status_code == 200, dash.status_code
+    for marker in ("Workspace overview", "Lifecycle pipeline", "Recent activity", "Data quality"):
+        assert marker in dash.text, f"missing widget: {marker}"
+    assert "acme" in dash.text, "tenant name missing on dashboard"
+    assert "Sample data" in dash.text, "dummy-data notice missing"
+
+    other = get("/dashboard", "plm-iq.food.localhost")
+    assert other.status_code == 200 and "plm-iq" in other.text
+
+    r = get("/dashboard", "127.0.0.1:8080")
+    assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text, "dashboard on default host failed"
+
+    r = get("/dashboard", "acme.bogus.localhost.com")
+    assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
 
 
 def suite_gateway_bad_hosts(tid=None):
@@ -115,6 +144,7 @@ SUITES = [
     suite_gateway_dns,
     suite_gateway_bad_hosts,
     suite_gateway_unknown_paths,
+    suite_gateway_dashboard,
 ]
 
 

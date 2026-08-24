@@ -1,34 +1,30 @@
 """Host-header resolution for the PLM-IQ gateway.
 
 Dev domain contract (strategy Section 6): ``{tenant}.{edition}.localhost.com``
-or ``{tenant}.{edition}.localhost``. Tenant slugs are lowercase letters,
-digits, hyphens; editions are controlled platform values. Anything else is an
+or ``{tenant}.{edition}.localhost``; production adds the deployed BASE_DOMAIN.
+Tenant slugs are lowercase letters, digits, hyphens; editions are
+configuration (EDITIONS in .env, see gateway/settings.py). Anything else is an
 invalid context and renders the branded "page not found" page.
 """
 from __future__ import annotations
 
 import logging
-import os
 import re
 from dataclasses import dataclass
 
+from . import settings
+
 logger = logging.getLogger(__name__)
 
-EDITIONS = ("foundation", "discrete", "process", "food")
+EDITIONS = settings.EDITIONS
 
-EDITION_LABELS = {
-    "foundation": "Foundation",
-    "discrete": "Discrete",
-    "process": "Process",
-    "food": "Food",
-}
+EDITION_LABELS = settings.EDITION_LABELS
 
 _TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}$")
 
-# Dev suffixes always accepted; production adds the deployed base domain
-# (BASE_DOMAIN, comma-separated for co-hosted domains).
+# Dev suffixes are always accepted; production adds the deployed base domain(s).
 _PROD_SUFFIXES = tuple(
-    s.strip().lower().lstrip(".") for s in os.getenv("BASE_DOMAIN", "").split(",") if s.strip()
+    s.strip().lower().lstrip(".") for s in settings.BASE_DOMAIN.split(",") if s.strip()
 )
 _SUFFIXES = ("localhost.com", "localhost") + _PROD_SUFFIXES
 
