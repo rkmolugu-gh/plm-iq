@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Graph · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Graph explorer</h1>
+  <p class="hero-sub dash-note">Sample data &mdash; create, edit, and delete wire up to the service layer at the API milestone.</p>
+</section>
+
+<nav class="tabs" aria-label="Graph entities">
+  <a class="tab{{ ' is-active' if tab == 'vertex' }}" href="/graph?tab=vertex">
+    Vertices <span class="tab-count">{{ graph.vertices | length }}</span>
+  </a>
+  <a class="tab{{ ' is-active' if tab == 'edge' }}" href="/graph?tab=edge">
+    Edges <span class="tab-count">{{ graph.edges | length }}</span>
+  </a>
+  <a class="tab{{ ' is-active' if tab == 'annotation' }}" href="/graph?tab=annotation">
+    Edge annotations <span class="tab-count">{{ graph.annotations | length }}</span>
+  </a>
+</nav>
+
+<section class="module-card table-card">
+  {% if tab == 'vertex' %}
+  <div class="table-toolbar">
+    <p class="table-desc">Business objects of the workspace &mdash; items, documents, and
+      engineering changes, each carrying revision, lifecycle state, and classification.</p>
+    <button class="btn btn-primary btn-sm" type="button" disabled
+            title="Create wires up to the service layer at the API milestone">+ New vertex</button>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Number</th><th>Kind</th><th>Name</th><th>Rev</th><th>Lifecycle</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for v in graph.vertices %}
+      <tr>
+        <td class="cell-mono">{{ v.number }}</td>
+        <td><span class="pill">{{ v.kind }}</span></td>
+        <td>{{ v.name }}</td>
+        <td>{{ v.revision }}</td>
+        <td><span class="pill lc-{{ v.lifecycle }}">{{ v.lifecycle.replace('_', ' ') }}</span></td>
+        <td class="row-actions">
+          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% elif tab == 'edge' %}
+  <div class="table-toolbar">
+    <p class="table-desc">Governed relationships between vertices &mdash; typed by kind,
+      labeled per business meaning, and valid only inside their effectivity window.</p>
+    <button class="btn btn-primary btn-sm" type="button" disabled
+            title="Create wires up to the service layer at the API milestone">+ New edge</button>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Effectivity</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for e in graph.edges %}
+      <tr>
+        <td><span class="pill">{{ e.kind }}</span></td>
+        <td>{{ e.name }}</td>
+        <td class="cell-mono">{{ e.source }}</td>
+        <td class="cell-mono">{{ e.target }}</td>
+        <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
+        <td>{{ e.effective }}</td>
+        <td class="row-actions">
+          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% else %}
+  <div class="table-toolbar">
+    <p class="table-desc">Inline attributes carried by a relationship &mdash; quantities,
+      find numbers, effectivity notes, and business categories.</p>
+    <button class="btn btn-primary btn-sm" type="button" disabled
+            title="Create wires up to the service layer at the API milestone">+ New attribute</button>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Relationship</th><th>Attribute</th><th>Value</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in graph.annotations %}
+      <tr>
+        <td class="cell-mono">{{ a.edge }}</td>
+        <td><span class="pill">{{ a.attribute }}</span></td>
+        <td>{{ a.value }}</td>
+        <td class="row-actions">
+          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

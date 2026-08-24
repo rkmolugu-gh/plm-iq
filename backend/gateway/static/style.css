@@ -507,6 +507,199 @@ code {
   padding: 0.05rem 0.3rem;
 }
 
+/* ── App shell + left nav (dashboard pages) ─────────────────────────────── */
+
+.shell {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  width: 100%;
+}
+
+.shell.no-nav { display: block; }
+
+.sidenav {
+  width: 210px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 1rem 0.75rem;
+}
+
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.2rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a.side-link:hover { background: var(--accent-soft); }
+
+.side-link.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.side-link.is-disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  justify-content: space-between;
+}
+
+.side-soon {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+.side-sep {
+  display: block;
+  height: 1px;
+  background: var(--line);
+  margin: 0.6rem 0.25rem;
+}
+
+@media (max-width: 720px) {
+  .sidenav { display: none; }
+}
+
+/* ── Tabs + data tables (graph explorer) ────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.94rem;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -2px;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover { background: var(--accent-soft); }
+
+.tab.is-active {
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+  background: var(--surface);
+}
+
+.tab-count {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.5rem;
+  font-weight: 600;
+}
+
+.table-card { padding: 1.25rem 1.35rem; }
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.table-desc {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  max-width: 62ch;
+}
+
+.table-toolbar h2 { margin: 0; }
+
+.btn-sm { padding: 0.4rem 0.85rem; font-size: 0.85rem; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th {
+  text-align: left;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  padding: 0.4rem 0.4rem;
+  border-bottom: 2px solid var(--line);
+}
+
+.data-table td {
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:hover { background: var(--bg); }
+
+.cell-mono {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.84rem;
+}
+
+.pill {
+  display: inline-block;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.12rem 0.55rem;
+}
+
+.lc-released { background: #e4f3ea; color: #1f7a3f; }
+.lc-approved { background: #e3edf7; color: #155a9c; }
+.lc-in_review { background: #fdf3e0; color: #a06a12; }
+.lc-draft { background: var(--bg); color: var(--ink-soft); }
+.lc-active { background: #e4f3ea; color: #1f7a3f; }
+.lc-pending_approval { background: #fdf3e0; color: #a06a12; }
+
+.row-actions { white-space: nowrap; text-align: right; }
+
+.row-actions .btn-mini + .btn-mini { margin-left: 0.25rem; }
+
+.btn-mini {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.btn-mini[disabled] { opacity: 0.55; cursor: not-allowed; }
+
+.btn-danger { color: var(--danger); border-color: #eccfcb; }
+
 /* ── Not-found page ─────────────────────────────────────────────────────── */
 
 .nf {

@@ -85,6 +85,12 @@ def suite_gateway_dashboard(tid=None):
         assert marker in dash.text, f"missing widget: {marker}"
     assert "acme" in dash.text, "tenant name missing on dashboard"
     assert "Sample data" in dash.text, "dummy-data notice missing"
+    assert 'class="sidenav"' in dash.text, "left nav missing on dashboard"
+    assert 'href="/dashboard"' in dash.text and "is-active" in dash.text, "nav active state missing"
+    assert 'side-link is-disabled' in dash.text, "placeholder nav items missing"
+
+    home = get("/", "acme.foundation.localhost.com")
+    assert 'class="sidenav"' not in home.text, "marketing home must not show the app sidebar"
 
     other = get("/dashboard", "plm-iq.food.localhost")
     assert other.status_code == 200 and "plm-iq" in other.text
@@ -93,6 +99,38 @@ def suite_gateway_dashboard(tid=None):
     assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text, "dashboard on default host failed"
 
     r = get("/dashboard", "acme.bogus.localhost.com")
+    assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
+
+
+def suite_gateway_graph(tid=None):
+    assert 'href="/graph"' in get("/dashboard", "acme.foundation.localhost.com").text, \
+        "Graph nav item missing on dashboard"
+
+    v = get("/graph", "acme.foundation.localhost.com")
+    assert v.status_code == 200, v.status_code
+    for marker in ("Graph explorer", "Vertices", "PRT-1001", "New vertex"):
+        assert marker in v.text, f"missing on vertex tab: {marker}"
+    assert 'class="tab is-active"' in v.text and "Vertices" in v.text, "vertex tab not active"
+
+    e = get("/graph?tab=edge", "acme.foundation.localhost.com")
+    assert e.status_code == 200
+    for marker in ("Edges", "REFDOCS", "pending approval", "+ New edge"):
+        assert marker in e.text, f"missing on edge tab: {marker}"
+
+    a = get("/graph?tab=annotation", "acme.foundation.localhost.com")
+    assert a.status_code == 200
+    for marker in ("Edge annotations", "findNumber", "referenceCategory"):
+        assert marker in a.text, f"missing on annotation tab: {marker}"
+
+    bad = get("/graph?tab=bogus", "acme.foundation.localhost.com")
+    assert bad.status_code == 200, bad.status_code
+    assert "New vertex" in bad.text and "+ New edge" not in bad.text, \
+        "invalid tab must fall back to vertex"
+
+    r = get("/graph", "127.0.0.1:8080")
+    assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text
+
+    r = get("/graph", "acme.bogus.localhost.com")
     assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
 
 
@@ -145,6 +183,7 @@ SUITES = [
     suite_gateway_bad_hosts,
     suite_gateway_unknown_paths,
     suite_gateway_dashboard,
+    suite_gateway_graph,
 ]
 
 

@@ -95,11 +95,30 @@ def dashboard(request: Request) -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
-        context.update(dash=dummy_data.DASHBOARD)
+        context.update(dash=dummy_data.DASHBOARD, show_nav=True)
         return _templates_for(ctx).TemplateResponse(request, "dashboard.html", context)
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path="/dashboard")
+
+
+_GRAPH_TABS = ("vertex", "edge", "annotation")
+
+
+@router.get("/graph", response_class=HTMLResponse)
+def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if ctx.valid:
+        context.update(
+            graph=dummy_data.GRAPH,
+            tab=tab if tab in _GRAPH_TABS else "vertex",
+            show_nav=True,
+        )
+        return _templates_for(ctx).TemplateResponse(request, "graph.html", context)
+    if not ctx.matched_pattern:
+        return _render_default(request)
+    return _render_not_found(request, path="/graph")
 
 
 @router.get("/{rest:path}", response_class=HTMLResponse)

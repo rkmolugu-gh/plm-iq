@@ -31,9 +31,27 @@
     </div>
   </header>
 
-  <main class="page">
-    {% block content %}{% endblock %}
-  </main>
+  <div class="shell{% if not show_nav %} no-nav{% endif %}">
+    {% if show_nav %}
+    <aside class="sidenav">
+      <nav aria-label="Workspace">
+        <a class="side-link{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">
+          Dashboard
+        </a>
+        <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">
+          Graph
+        </a>
+        <span class="side-link is-disabled">Items<span class="side-soon">soon</span></span>
+        <span class="side-link is-disabled">Documents<span class="side-soon">soon</span></span>
+        <span class="side-link is-disabled">Changes<span class="side-soon">soon</span></span>
+        <span class="side-link is-disabled">Search<span class="side-soon">soon</span></span>
+        <span class="side-sep" role="separator"></span>
+        <span class="side-link is-disabled">Settings<span class="side-soon">soon</span></span>
+      </nav>
+    </aside>
+    {% endif %}
+    <main class="page">{% block content %}{% endblock %}</main>
+  </div>
 
   <footer class="footer">
     <div class="footer-inner">
