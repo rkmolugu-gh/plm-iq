@@ -58,8 +58,8 @@ services:
       GITEA__database__HOST: db
       GITEA__database__PORT: "5432"
       GITEA__database__NAME: gitea
-      GITEA__database__USER: ${POSTGRES_USER:-plmiq}
-      GITEA__database__PASSWD: ${POSTGRES_PASSWORD:-plmiq}
+      GITEA__database__USER: ${POSTGRES_USER:-platformadmin@plm-iq.site}
+      GITEA__database__PASSWD: ${POSTGRES_PASSWORD:-19691969}
       GITEA__server__ROOT_URL: ${GITEA_BASE_URL:-http://localhost:3000}/
       GITEA__server__SSH_PORT: "${GITEA_SSH_PORT:-2222}"
     ports:
@@ -115,8 +115,8 @@ services:
     image: dpage/pgadmin4:${PGADMIN_VERSION:-latest}
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-plmiq}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-platformadmin@plm-iq.site}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-19691969}
       PGADMIN_LISTEN_PORT: "80"
     ports:
       - "${PGADMIN_UI_PORT:-5050}:80"

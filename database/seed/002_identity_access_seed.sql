@@ -72,8 +72,8 @@ INSERT INTO iam_role (id, scope, tenant_id, edition_scope, code, name, descripti
                       created_by, modified_by)
 VALUES ('40000000-0000-4000-8000-000000000001', 'global', NULL, NULL, 'tenant-admin',
         'Tenant Administrator', 'Full administrative rights inside the tenant', true, 'seed', 'seed'),
-       ('40000000-0000-4000-8000-000000000002', 'global', NULL, NULL, 'engineer',
-        'Engineer', 'Author and release product data', true, 'seed', 'seed'),
+       ('40000000-0000-4000-8000-000000000002', 'global', NULL, NULL, 'platform-admin',
+        'Platform Admin', 'Manage Platform Data.', true, 'seed', 'seed'),
        ('40000000-0000-4000-8000-000000000003', 'global', NULL, NULL, 'contributor',
         'Contributor', 'Author product data for review', true, 'seed', 'seed'),
        ('40000000-0000-4000-8000-000000000004', 'global', NULL, NULL, 'viewer',

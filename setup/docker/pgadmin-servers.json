@@ -6,8 +6,8 @@
       "Host": "db",
       "Port": 5432,
       "MaintenanceDB": "plmiq",
-      "Username": "plmiq",
-      "Password": "plmiq",
+      "Username": "platformadmin@plm-iq.site",
+      "Password": "19691969",
       "SSLMode": "prefer",
       "Comment": "PLM-IQ dev Postgres (compose service 'db')"
     }
