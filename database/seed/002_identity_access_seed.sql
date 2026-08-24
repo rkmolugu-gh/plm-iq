@@ -5,7 +5,8 @@
 --
 -- Contents
 --   * iam_tenant            : 1 row  (the demo tenant used by foundation seeds)
---   * iam_user              : 3 rows (Dane = tenant admin, Nick, Priya)
+--   * iam_user              : 4 rows (Dane = tenant admin, Nick, Priya,
+--                                      plm-iq = service login, password 19691969)
 --   * iam_permission        : 16 platform capabilities
 --   * iam_role              : 4 global system roles
 --   * iam_role_permission   : role -> permission mappings
@@ -23,7 +24,7 @@ SET LOCAL search_path = plmiqdb;
 INSERT INTO iam_tenant (id, subdomain, name, contact_email, secret, edition_id, status,
                         created_by, modified_by)
 VALUES ('11111111-1111-1111-1111-111111111111',
-        'plm-iq', 'PLM-IQ Demo', 'admin@plm-iq.site', 'demo-secret-change-me',
+        'plm-iq', 'PLM-IQ Demo', 'platform-admin@plm-iq.site', 'demo-secret-change-me',
         'foundation', 'active', 'seed', 'seed');
 
 -- ── Users (demo tenant) ─────────────────────────────────────────────────────
@@ -35,6 +36,15 @@ VALUES ('20000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-1111111
         'nick@plm-iq.site', 'Nick', false, 'active', 'seed', 'seed'),
        ('20000000-0000-4000-8000-000000000003', '11111111-1111-1111-1111-111111111111',
         'priya@plm-iq.site', 'Priya', false, 'active', 'seed', 'seed');
+
+-- Service login for the plm-iq tenant: a bare login id (no '@') with a
+-- bcrypt-hashed password. Dev-only secret; rotate operationally.
+INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, password_hash,
+                      status, created_by, modified_by)
+VALUES ('20000000-0000-4000-8000-000000000004', '11111111-1111-1111-1111-111111111111',
+        'platformadmin@plm-iq.site', 'PLM-IQ Service Login', true,
+        '$2b$10$wnddFhsUX2Eh3l1CMS.z2.fj9fDTE2lRDneFTgomOHfVboRcX8s62',
+        'active', 'seed', 'seed');
 
 -- ── Permissions ─────────────────────────────────────────────────────────────
 
@@ -105,6 +115,8 @@ INSERT INTO iam_user_role (user_id, role_id, tenant_id, assigned_by) VALUES
 ('20000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000002',
  '11111111-1111-1111-1111-111111111111', 'seed'),
 ('20000000-0000-4000-8000-000000000003', '40000000-0000-4000-8000-000000000003',
+ '11111111-1111-1111-1111-111111111111', 'seed'),
+('20000000-0000-4000-8000-000000000004', '40000000-0000-4000-8000-000000000001',
  '11111111-1111-1111-1111-111111111111', 'seed');
 
 COMMIT;

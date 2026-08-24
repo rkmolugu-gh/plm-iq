@@ -85,7 +85,11 @@ CREATE TABLE iam_user (
 
     -- login identifier is globally unique across tenants
     -- (unique EXPRESSION lives in an index below; PG forbids it inline)
-    CONSTRAINT ck_user_email CHECK (email ~ '@')
+    -- accepts either an email address or a bare login id such as 'plm-iq'
+    CONSTRAINT ck_user_email CHECK (
+        email ~ '@'
+        OR email ~ '^[a-z0-9][a-z0-9-]{0,62}$'
+    )
 );
 
 CREATE UNIQUE INDEX uq_user_email ON iam_user (lower(email));

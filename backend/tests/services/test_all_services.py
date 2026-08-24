@@ -95,6 +95,7 @@ from services.tenant_service import (  # noqa: E402
 )
 from services.user_service import (  # noqa: E402
     create_user,
+    find_user_by_login,
     get_user,
     list_users,
     record_login,
@@ -638,10 +639,17 @@ def suite_user_service(tid):
             ),
         )
         expect_error(
-            "email without @ must be ValidationFailed",
+            "malformed login id must be ValidationFailed",
             ValidationFailed,
-            lambda: op(tid2, lambda s: create_user(s, tid2, UserCreate(email="nope", full_name="Nope"), ACTOR)),
+            lambda: op(tid2, lambda s: create_user(s, tid2, UserCreate(email="bad id!", full_name="Nope"), ACTOR)),
         )
+        bare = op(
+            tid2,
+            lambda s: create_user(s, tid2, UserCreate(email=f"svc-{sfx}", full_name="Service Login"), ACTOR),
+        )
+        assert bare.email == f"svc-{sfx}" and "@" not in bare.email
+        found_login = op_admin(lambda s: find_user_by_login(s, f"  SVC-{sfx} "))
+        assert found_login is not None and found_login["id"] == bare.id
         expect_error(
             "user in unknown tenant must Conflict",
             Conflict,

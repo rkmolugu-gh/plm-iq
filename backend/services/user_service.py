@@ -2,11 +2,13 @@
 
 Every function runs inside ``tenant_session(tenant_id)``; row-level security
 plus the tenant_id predicates below keep accounts isolated per workspace.
-Email is the globally unique login identifier (lower(email) index in 002).
+Email is the globally unique login identifier (lower(email) index in 002)
+and accepts either an email address or a bare login id such as 'plm-iq'.
 """
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime as dt
 from uuid import UUID
 
@@ -19,6 +21,9 @@ from .errors import Conflict, NotFound, ValidationFailed
 from .schemas import Page, UserCreate, UserOut, UserUpdate
 
 logger = logging.getLogger(__name__)
+
+# Bare login ids (no '@') mirror the ck_user_email check in 002.
+LOGIN_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 USER_TRANSITIONS: dict[enums.UserStatus, frozenset[enums.UserStatus]] = {
     enums.UserStatus.ACTIVE: frozenset({enums.UserStatus.DISABLED, enums.UserStatus.LOCKED}),
@@ -38,6 +43,19 @@ def _to_out(row) -> UserOut:
     mapping = dict(getattr(row, "_mapping", row))
     mapping.pop("password_hash", None)
     return UserOut.model_validate(mapping)
+
+
+def find_user_by_login(session: Session, login_id: str) -> dict | None:
+    """Resolve a globally unique login id (email or bare id) to a user.
+
+    Login happens before any tenant is known, so callers must run this via
+    ``db.admin_session()`` — iam_user's RLS policy would otherwise deny every
+    row. Verify ``password_hash`` with bcrypt before trusting the result.
+    """
+    row = session.execute(
+        select(tables.iam_user).where(func.lower(tables.iam_user.c.email) == login_id.strip().lower())
+    ).one_or_none()
+    return dict(row._mapping) if row else None
 
 
 def find_user(session: Session, tenant_id: UUID, user_id: UUID) -> dict | None:
@@ -95,8 +113,10 @@ def list_users(
 
 
 def create_user(session: Session, tenant_id: UUID, data: UserCreate, actor: str) -> UserOut:
-    if "@" not in data.email:
-        raise ValidationFailed(f"invalid email '{data.email}': must contain '@'")
+    if "@" not in data.email and not LOGIN_ID_RE.fullmatch(data.email):
+        raise ValidationFailed(
+            f"invalid login id '{data.email}': must be an email address or match {LOGIN_ID_RE.pattern}"
+        )
     values = data.model_dump(exclude_unset=True)
     values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
     try:
