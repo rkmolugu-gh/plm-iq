@@ -57,3 +57,14 @@ def tenant_session(tenant_id: UUID) -> Iterator[Session]:
             {"tenant_id": str(tenant_id)},
         )
         yield session
+
+
+@contextmanager
+def admin_session() -> Iterator[Session]:
+    """Yield a plain transactional Session without the RLS tenant GUC.
+
+    For the cross-tenant registry (iam_tenant), which deliberately carries no
+    row-level security and is governed by GRANTs only (002 isolation notes).
+    """
+    with SessionLocal() as session, session.begin():
+        yield session

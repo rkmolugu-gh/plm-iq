@@ -1,4 +1,5 @@
-"""PLM-IQ service layer: vertices, edges, graph rules, and traversals.
+"""PLM-IQ service layer: tenants, users, roles, vertices, edges, graph rules,
+and traversals.
 
 Public surface re-exported for the API layer; services depend only on this
 package's modules downward (api -> services -> db/tables).
@@ -6,7 +7,7 @@ package's modules downward (api -> services -> db/tables).
 from __future__ import annotations
 
 from . import enums
-from .db import engine, tenant_session
+from .db import admin_session, engine, tenant_session
 from .errors import Conflict, Forbidden, NotFound, ServiceError, ValidationFailed
 from .schemas import (
     EdgeCreate,
@@ -16,6 +17,16 @@ from .schemas import (
     GraphRuleOut,
     GraphRuleUpdate,
     Page,
+    PermissionOut,
+    RoleCreate,
+    RoleOut,
+    RoleUpdate,
+    TenantCreate,
+    TenantOut,
+    TenantUpdate,
+    UserCreate,
+    UserOut,
+    UserUpdate,
     VertexCreate,
     VertexOut,
     VertexUpdate,
@@ -25,6 +36,7 @@ __all__ = [
     "enums",
     "engine",
     "tenant_session",
+    "admin_session",
     "ServiceError",
     "NotFound",
     "Conflict",
@@ -40,4 +52,14 @@ __all__ = [
     "GraphRuleOut",
     "GraphRuleUpdate",
     "Page",
+    "TenantCreate",
+    "TenantOut",
+    "TenantUpdate",
+    "UserCreate",
+    "UserOut",
+    "UserUpdate",
+    "RoleCreate",
+    "RoleOut",
+    "RoleUpdate",
+    "PermissionOut",
 ]

@@ -1,4 +1,4 @@
-"""Python mirrors of the PostgreSQL enums declared in 001_graph_foundation_schema.sql."""
+"""Python mirrors of the PostgreSQL enums declared in database/schema/*.sql."""
 from __future__ import annotations
 
 from enum import Enum
@@ -69,3 +69,21 @@ class Participation(str, Enum):
 
 class RuleDirection(str, Enum):
     SOURCE_TO_TARGET = "source_to_target"
+
+
+class TenantStatus(str, Enum):
+    PROVISIONING = "provisioning"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    ARCHIVED = "archived"
+
+
+class UserStatus(str, Enum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    LOCKED = "locked"
+
+
+class RoleScope(str, Enum):
+    GLOBAL = "global"
+    TENANT = "tenant"

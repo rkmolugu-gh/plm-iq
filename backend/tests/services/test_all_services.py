@@ -46,16 +46,60 @@ from services.graph_rule_service import (  # noqa: E402
     list_rules,
     update_rule,
 )
+from services.role_service import (  # noqa: E402
+    assign_roles_to_user,
+    create_role,
+    delete_role,
+    effective_permissions,
+    get_role,
+    grant_role_permissions,
+    list_permissions,
+    list_roles,
+    list_user_roles,
+    revoke_role_permissions,
+    unassign_roles_from_user,
+    update_role,
+)
 from services.rule_engine import resolve_rule, validate_against_rule  # noqa: E402
 from services.schemas import (  # noqa: E402
     EdgeCreate,
     EdgeUpdate,
     GraphRuleCreate,
     GraphRuleUpdate,
+    RoleCreate,
+    RoleUpdate,
+    TenantCreate,
+    TenantUpdate,
+    UserCreate,
+    UserUpdate,
     VertexCreate,
     VertexUpdate,
 )
-from services.tables import foundation_edge, foundation_graph_rule, foundation_vertex  # noqa: E402
+from services.tables import (  # noqa: E402
+    foundation_edge,
+    foundation_graph_rule,
+    foundation_vertex,
+    iam_role,
+    iam_role_permission,
+    iam_tenant,
+    iam_user,
+    iam_user_role,
+)
+from services.tenant_service import (  # noqa: E402
+    find_tenant_by_subdomain,
+    get_tenant,
+    list_tenants,
+    provision_tenant,
+    rotate_secret,
+    update_tenant,
+)
+from services.user_service import (  # noqa: E402
+    create_user,
+    get_user,
+    list_users,
+    record_login,
+    update_user,
+)
 from services.vertex_service import (  # noqa: E402
     create_vertex,
     get_vertex,
@@ -128,6 +172,43 @@ def cleanup_tenant(tenant_id):
             session.execute(delete(foundation_vertex).where(foundation_vertex.c.tenant_id == tenant_id))
     except Exception as e:
         print(f"\033[93m  ! cleanup failed for tenant {tenant_id}: {e}\033[0m")
+
+
+def op_admin(fn):
+    """Run one registry-level interaction outside any RLS tenant context."""
+    with db.admin_session() as session:
+        return fn(session)
+
+
+def mk_tenant(subdomain, **kw):
+    payload = {
+        "subdomain": subdomain,
+        "name": f"Acme {subdomain}",
+        "contact_email": f"admin@{subdomain}.example.com",
+        "secret": "initial-secret",
+    }
+    payload.update(kw)
+    return op_admin(lambda s: provision_tenant(s, TenantCreate(**payload), ACTOR))
+
+
+def cleanup_iam_tenant(tenant_id):
+    """Remove every IAM row created under a throwaway tenant, then the row."""
+    if tenant_id is None:
+        return
+    try:
+        op(
+            tenant_id,
+            lambda s: (
+                s.execute(delete(iam_user_role).where(iam_user_role.c.tenant_id == tenant_id)),
+                s.execute(delete(iam_role_permission).where(iam_role_permission.c.tenant_id == tenant_id)),
+                s.execute(delete(iam_role).where(iam_role.c.tenant_id == tenant_id)),
+                s.execute(delete(iam_user).where(iam_user.c.tenant_id == tenant_id)),
+                None,
+            ),
+        )
+        op_admin(lambda s: s.execute(delete(iam_tenant).where(iam_tenant.c.id == tenant_id)))
+    except Exception as e:
+        print(f"\033[93m  ! iam cleanup failed for tenant {tenant_id}: {e}\033[0m")
 
 
 # ── vertex_service ──────────────────────────────────────────────────────────
@@ -445,12 +526,302 @@ def suite_graph_query_service(tid):
     assert mid.id in shallow_ids and leaf.id not in shallow_ids
 
 
+# ── tenant_service ──────────────────────────────────────────────────────────
+
+
+def suite_tenant_service(tid):
+    created: list[uuidlib.UUID] = []
+    sfx = str(tid)[:8]
+
+    def tracked(subdomain, **kw):
+        t = mk_tenant(subdomain, **kw)
+        created.append(t.id)
+        return t
+
+    try:
+        t1 = tracked(f"acme-{sfx}")
+        assert t1.status == enums.TenantStatus.PROVISIONING and t1.version >= 1
+
+        found = op_admin(lambda s: find_tenant_by_subdomain(s, f"acme-{sfx}"))
+        assert found["id"] == t1.id
+
+        expect_error("duplicate subdomain must Conflict", Conflict, lambda: tracked(f"acme-{sfx}"))
+        expect_error(
+            "uppercase subdomain must be ValidationFailed",
+            ValidationFailed,
+            lambda: tracked(f"BAD-{sfx}"),
+        )
+        expect_error(
+            "contact without @ must be ValidationFailed",
+            ValidationFailed,
+            lambda: mk_tenant(f"acme2-{sfx}", contact_email="no-at"),
+        )
+
+        renamed = op_admin(
+            lambda s: update_tenant(s, t1.id, TenantUpdate(version=t1.version, name="Acme Renamed"), ACTOR)
+        )
+        assert renamed.version == t1.version + 1 and renamed.name == "Acme Renamed"
+
+        expect_error(
+            "stale version on tenant update must Conflict",
+            Conflict,
+            lambda: op_admin(
+                lambda s: update_tenant(s, t1.id, TenantUpdate(version=t1.version + 9, name="x"), ACTOR)
+            ),
+        )
+        expect_error(
+            "provisioning -> archived must be ValidationFailed",
+            ValidationFailed,
+            lambda: op_admin(
+                lambda s: update_tenant(
+                    s, t1.id, TenantUpdate(version=renamed.version, status=enums.TenantStatus.ARCHIVED), ACTOR
+                )
+            ),
+        )
+
+        active = op_admin(
+            lambda s: update_tenant(s, t1.id, TenantUpdate(version=renamed.version, status=enums.TenantStatus.ACTIVE), ACTOR)
+        )
+        assert active.status == enums.TenantStatus.ACTIVE
+
+        rotated_tenant, secret = op_admin(lambda s: rotate_secret(s, t1.id, version=active.version, actor=ACTOR))
+        assert secret != "initial-secret" and rotated_tenant.version == active.version + 1
+
+        suspended = op_admin(
+            lambda s: update_tenant(s, t1.id, TenantUpdate(version=rotated_tenant.version, status=enums.TenantStatus.SUSPENDED), ACTOR)
+        )
+        archived = op_admin(
+            lambda s: update_tenant(s, t1.id, TenantUpdate(version=suspended.version, status=enums.TenantStatus.ARCHIVED), ACTOR)
+        )
+        assert archived.status == enums.TenantStatus.ARCHIVED
+        expect_error(
+            "archived tenant must be immutable",
+            Conflict,
+            lambda: op_admin(
+                lambda s: update_tenant(s, t1.id, TenantUpdate(version=archived.version, name="nope"), ACTOR)
+            ),
+        )
+
+        page = op_admin(lambda s: list_tenants(s, statuses=[enums.TenantStatus.ARCHIVED], name_like="Acme"))
+        assert any(item.id == t1.id for item in page.items)
+
+        expect_error("unknown tenant must NotFound", NotFound, lambda: op_admin(lambda s: get_tenant(s, uuidlib.uuid4())))
+    finally:
+        for cid in created:
+            cleanup_iam_tenant(cid)
+
+
+# ── user_service ────────────────────────────────────────────────────────────
+
+
+def suite_user_service(tid):
+    sfx = str(tid)[:8]
+    tenant = None
+    try:
+        tid2 = mk_tenant(f"usr-{sfx}").id
+        tenant = tid2
+
+        admin = op(
+            tid2,
+            lambda s: create_user(
+                s, tid2, UserCreate(email=f"dane-{sfx}@acme.io", full_name="Dane", is_tenant_admin=True), ACTOR
+            ),
+        )
+        assert admin.status == enums.UserStatus.ACTIVE and admin.is_tenant_admin
+
+        expect_error(
+            "duplicate email must Conflict (case-insensitive)",
+            Conflict,
+            lambda: op(
+                tid2,
+                lambda s: create_user(s, tid2, UserCreate(email=f"DANE-{sfx}@ACME.io", full_name="Dup"), ACTOR),
+            ),
+        )
+        expect_error(
+            "email without @ must be ValidationFailed",
+            ValidationFailed,
+            lambda: op(tid2, lambda s: create_user(s, tid2, UserCreate(email="nope", full_name="Nope"), ACTOR)),
+        )
+        expect_error(
+            "user in unknown tenant must Conflict",
+            Conflict,
+            lambda: op(
+                uuidlib.uuid4(),
+                lambda s: create_user(s, uuidlib.uuid4(), UserCreate(email=f"x-{sfx}@acme.io", full_name="X"), ACTOR),
+            ),
+        )
+
+        nick = op(tid2, lambda s: create_user(s, tid2, UserCreate(email=f"nick-{sfx}@acme.io", full_name="Nick"), ACTOR))
+        renamed = op(
+            tid2,
+            lambda s: update_user(s, tid2, nick.id, UserUpdate(version=nick.version, full_name="Nick N."), ACTOR),
+        )
+        assert renamed.version == nick.version + 1 and renamed.full_name == "Nick N."
+
+        expect_error(
+            "stale version on user update must Conflict",
+            Conflict,
+            lambda: op(tid2, lambda s: update_user(s, tid2, nick.id, UserUpdate(version=nick.version + 5), ACTOR)),
+        )
+
+        disabled = op(
+            tid2,
+            lambda s: update_user(s, tid2, nick.id, UserUpdate(version=renamed.version, status=enums.UserStatus.DISABLED), ACTOR),
+        )
+        assert disabled.status == enums.UserStatus.DISABLED
+        expect_error(
+            "disabled -> locked must be ValidationFailed",
+            ValidationFailed,
+            lambda: op(
+                tid2,
+                lambda s: update_user(s, tid2, nick.id, UserUpdate(version=disabled.version, status=enums.UserStatus.LOCKED), ACTOR),
+            ),
+        )
+        reactivated = op(
+            tid2,
+            lambda s: update_user(s, tid2, nick.id, UserUpdate(version=disabled.version, status=enums.UserStatus.ACTIVE), ACTOR),
+        )
+        locked = op(
+            tid2,
+            lambda s: update_user(s, tid2, nick.id, UserUpdate(version=reactivated.version, status=enums.UserStatus.LOCKED), ACTOR),
+        )
+        assert locked.status == enums.UserStatus.LOCKED
+
+        login = op(tid2, lambda s: record_login(s, tid2, nick.id))
+        assert login.last_login_on is not None and login.version > locked.version
+
+        page = op(tid2, lambda s: list_users(s, tid2, statuses=[enums.UserStatus.LOCKED], email_like="nick"))
+        assert page.total == 1 and page.items[0].id == nick.id
+        admins = op(tid2, lambda s: list_users(s, tid2, admins_only=True))
+        assert [u.id for u in admins.items] == [admin.id]
+
+        expect_error("unknown user must NotFound", NotFound, lambda: op(tid2, lambda s: get_user(s, tid2, uuidlib.uuid4())))
+    finally:
+        cleanup_iam_tenant(tenant)
+
+
+# ── role_service ────────────────────────────────────────────────────────────
+
+
+def suite_role_service(tid):
+    sfx = str(tid)[:8]
+    tenant_id = other_id = None
+    try:
+        tenant_id = mk_tenant(f"rol-{sfx}").id
+        user = op(
+            tenant_id,
+            lambda s: create_user(s, tenant_id, UserCreate(email=f"user-{sfx}@acme.io", full_name="U"), ACTOR),
+        )
+
+        perms_page = op(tenant_id, lambda s: list_permissions(s, resources=["vertex"]))
+        assert perms_page.total >= 5 and all(p.code.startswith("vertex:") for p in perms_page.items)
+
+        role = op(
+            tenant_id,
+            lambda s: create_role(
+                s, tenant_id, RoleCreate(code=f"approver-{sfx}", name="Approver", description="Tenant approvals"), ACTOR
+            ),
+        )
+        assert role.scope == enums.RoleScope.TENANT and role.tenant_id == tenant_id and not role.is_system
+
+        expect_error(
+            "duplicate role code within a tenant must Conflict",
+            Conflict,
+            lambda: op(
+                tenant_id, lambda s: create_role(s, tenant_id, RoleCreate(code=f"approver-{sfx}", name="Dup"), ACTOR)
+            ),
+        )
+
+        # Same code in ANOTHER tenant is legal now that uniqueness is tiered
+        # via partial unique indexes instead of UNIQUE (code, scope).
+        other_id = mk_tenant(f"oth-{sfx}").id
+        twin = op(other_id, lambda s: create_role(s, other_id, RoleCreate(code=f"approver-{sfx}", name="Approver"), ACTOR))
+        assert twin.scope == enums.RoleScope.TENANT and twin.tenant_id == other_id
+
+        globals_page = op(tenant_id, lambda s: list_roles(s, tenant_id=tenant_id, scopes=[enums.RoleScope.GLOBAL]))
+        engineer = next(r for r in globals_page.items if r.code == "engineer")
+
+        expect_error(
+            "editing a global role must be Forbidden",
+            Forbidden,
+            lambda: op(
+                tenant_id,
+                lambda s: update_role(s, tenant_id, engineer.id, RoleUpdate(version=engineer.version, name="Hijacked"), ACTOR),
+            ),
+        )
+        expect_error(
+            "deleting a system role must be Forbidden",
+            Forbidden,
+            lambda: op(tenant_id, lambda s: delete_role(s, tenant_id, engineer.id, ACTOR)),
+        )
+
+        renamed = op(
+            tenant_id,
+            lambda s: update_role(s, tenant_id, role.id, RoleUpdate(version=role.version, description="v2"), ACTOR),
+        )
+        assert renamed.description == "v2" and renamed.version == role.version + 1
+        expect_error(
+            "stale version on role update must Conflict",
+            Conflict,
+            lambda: op(
+                tenant_id,
+                lambda s: update_role(s, tenant_id, role.id, RoleUpdate(version=role.version, name="late"), ACTOR),
+            ),
+        )
+
+        granted = op(
+            tenant_id,
+            lambda s: grant_role_permissions(s, tenant_id, role.id, ["vertex:read", "edge:read"], ACTOR),
+        )
+        assert sorted(p.code for p in granted) == ["edge:read", "vertex:read"]
+        expect_error(
+            "unknown permission code must be ValidationFailed",
+            ValidationFailed,
+            lambda: op(tenant_id, lambda s: grant_role_permissions(s, tenant_id, role.id, ["bogus:perm"], ACTOR)),
+        )
+        again = op(tenant_id, lambda s: grant_role_permissions(s, tenant_id, role.id, ["vertex:read"], ACTOR))
+        assert len(again) == 2  # idempotent re-grant
+
+        assigned = op(
+            tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [role.id, engineer.id], ACTOR)
+        )
+        assert {r.code for r in assigned} == {"engineer", f"approver-{sfx}"}
+
+        # The seed's mappings for global roles belong to the demo tenant and
+        # stay invisible here; each tenant provisions its own bundle.
+        eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
+        assert eff == ["edge:read", "vertex:read"], eff
+
+        op(tenant_id, lambda s: grant_role_permissions(s, tenant_id, engineer.id, ["graph:view"], ACTOR))
+        eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
+        assert eff == ["edge:read", "graph:view", "vertex:read"], eff
+
+        remaining = op(tenant_id, lambda s: revoke_role_permissions(s, tenant_id, role.id, ["edge:read"], ACTOR))
+        assert sorted(p.code for p in remaining) == ["vertex:read"]
+
+        left = op(tenant_id, lambda s: unassign_roles_from_user(s, tenant_id, user.id, [engineer.id], ACTOR))
+        assert [r.code for r in left] == [f"approver-{sfx}"]
+        eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
+        assert eff == ["vertex:read"], eff
+
+        op(tenant_id, lambda s: list_user_roles(s, tenant_id, user.id))
+
+        op(tenant_id, lambda s: delete_role(s, tenant_id, role.id, ACTOR))
+        expect_error("deleted role must NotFound", NotFound, lambda: op(tenant_id, lambda s: get_role(s, role.id)))
+    finally:
+        cleanup_iam_tenant(tenant_id)
+        cleanup_iam_tenant(other_id)
+
+
 SUITES = [
     suite_vertex_service,
     suite_graph_rule_service,
     suite_rule_engine,
     suite_edge_service,
     suite_graph_query_service,
+    suite_tenant_service,
+    suite_user_service,
+    suite_role_service,
 ]
 
 

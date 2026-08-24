@@ -186,6 +186,114 @@ class GraphRuleOut(GraphRuleBase):
     modified_on: datetime
 
 
+# ── Identity & access ───────────────────────────────────────────────────────
+
+
+class TenantCreate(CamelModel):
+    subdomain: str
+    name: str
+    contact_email: str
+    secret: str
+    edition_id: enums.EditionId = enums.EditionId.FOUNDATION
+
+
+class TenantUpdate(CamelModel):
+    version: int
+    name: str | None = None
+    contact_email: str | None = None
+    edition_id: enums.EditionId | None = None
+    status: enums.TenantStatus | None = None
+
+
+class TenantOut(CamelModel):
+    """Tenant row without ``secret``; rotation returns the new secret explicitly."""
+
+    id: UUID
+    subdomain: str
+    name: str
+    contact_email: str
+    edition_id: enums.EditionId
+    status: enums.TenantStatus
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+
+
+class UserCreate(CamelModel):
+    email: str
+    full_name: str
+    is_tenant_admin: bool = False
+    password_hash: str | None = None
+    mfa_enabled: bool = False
+
+
+class UserUpdate(CamelModel):
+    version: int
+    full_name: str | None = None
+    is_tenant_admin: bool | None = None
+    password_hash: str | None = None
+    mfa_enabled: bool | None = None
+    status: enums.UserStatus | None = None
+
+
+class UserOut(CamelModel):
+    id: UUID
+    tenant_id: UUID
+    email: str
+    full_name: str
+    is_tenant_admin: bool
+    status: enums.UserStatus
+    mfa_enabled: bool
+    last_login_on: datetime | None
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+
+
+class RoleCreate(CamelModel):
+    """Tenants author only scope='tenant' roles; scope/tenancy are service-assigned."""
+
+    code: str
+    name: str
+    description: str = ""
+    edition_scope: enums.EditionId | None = None
+
+
+class RoleUpdate(CamelModel):
+    version: int
+    name: str | None = None
+    description: str | None = None
+    edition_scope: enums.EditionId | None = None
+
+
+class RoleOut(CamelModel):
+    id: UUID
+    scope: enums.RoleScope
+    tenant_id: UUID | None
+    edition_scope: enums.EditionId | None
+    code: str
+    name: str
+    description: str
+    is_system: bool
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+
+
+class PermissionOut(CamelModel):
+    id: UUID
+    code: str
+    resource: str
+    action: str
+    description: str
+
+
 # ── Pagination ──────────────────────────────────────────────────────────────
 
 ItemT = TypeVar("ItemT")

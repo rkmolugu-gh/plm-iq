@@ -15,6 +15,7 @@
 --   * UUID PKs via gen_random_uuid()
 --   * audit columns (created_by/on, modified_by/on)
 --   * bigint GENERATED ALWAYS AS IDENTITY `version` optimistic-lock tokens
+--     bumped by a BEFORE UPDATE trigger (bump_version() reused from 001)
 --   * row-level security keyed on the app.tenant_id session setting
 --     through the current_tenant_id() helper defined in 001
 --
@@ -114,12 +115,17 @@ CREATE TABLE iam_role (
     CONSTRAINT ck_role_scope_tenant CHECK (
         (scope = 'global' AND tenant_id IS NULL)
         OR (scope = 'tenant' AND tenant_id IS NOT NULL)
-    ),
-    CONSTRAINT uq_role_code_global UNIQUE (code, scope),
-    CONSTRAINT uq_role_code_tenant UNIQUE (tenant_id, code)
+    )
 );
 
 CREATE INDEX ix_role_tenant ON iam_role (tenant_id);
+
+-- Role codes are unique within their tier only: one namespace for the
+-- platform-provided global roles and one per customer for tenant roles.
+-- (Inline UNIQUE (code, scope) would wrongly forbid two tenants from both
+-- authoring a role with the same code; partial indexes express this.)
+CREATE UNIQUE INDEX uq_role_code_global ON iam_role (code) WHERE scope = 'global';
+CREATE UNIQUE INDEX uq_role_code_tenant ON iam_role (tenant_id, code) WHERE scope = 'tenant';
 
 COMMENT ON TABLE  iam_role              IS 'Named bundles of permissions; global roles are shared, tenant roles are private';
 COMMENT ON COLUMN iam_role.scope        IS 'global = provided by the platform, tenant = authored by a customer';
@@ -146,7 +152,10 @@ CREATE TABLE iam_role_permission (
     permission_id uuid NOT NULL REFERENCES iam_permission (id) ON DELETE CASCADE,
     tenant_id     uuid NOT NULL REFERENCES iam_tenant (id),
 
-    PRIMARY KEY (role_id, permission_id)
+    -- tenant_id participates in the key: several tenants attach their own
+    -- bundle to the SAME global role, and every tenant-isolated copy must
+    -- coexist (RLS then hides foreign copies).
+    PRIMARY KEY (role_id, permission_id, tenant_id)
 );
 
 CREATE INDEX ix_role_perm_permission ON iam_role_permission (permission_id);
@@ -207,6 +216,15 @@ CREATE POLICY role_perm_tenant_isolation ON iam_role_permission
 CREATE POLICY user_role_tenant_isolation ON iam_user_role
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
+
+-- ── Version bump triggers ───────────────────────────────────────────────────
+-- Reuses bump_version() from 001. Identity columns cannot be written by DML,
+-- so the database owns the optimistic-lock counter end to end: the sequence
+-- assigns it on INSERT and the trigger increments it on every UPDATE.
+
+CREATE TRIGGER trg_iam_tenant_bump_version BEFORE UPDATE ON iam_tenant FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_iam_user_bump_version   BEFORE UPDATE ON iam_user   FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_iam_role_bump_version   BEFORE UPDATE ON iam_role   FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 -- ── Privileges (new tables only; 001 already granted schema usage) ─────────
 

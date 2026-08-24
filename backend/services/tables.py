@@ -95,3 +95,87 @@ foundation_edge = Table(
     Column("tenant_attributes", JSONB, nullable=False),
     Column("annotation", JSONB, nullable=False),
 )
+
+# ── Identity & access (002_identity_access_schema.sql) ─────────────────────
+
+iam_tenant = Table(
+    "iam_tenant",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("subdomain", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("contact_email", Text, nullable=False),
+    Column("secret", Text, nullable=False),
+    Column("edition_id", _enum(enums.EditionId, "edition_id"), nullable=False),
+    Column("status", _enum(enums.TenantStatus, "iam_tenant_status"), nullable=False),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+iam_user = Table(
+    "iam_user",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("email", Text, nullable=False),
+    Column("full_name", Text, nullable=False),
+    Column("is_tenant_admin", Boolean, nullable=False),
+    Column("password_hash", Text),
+    Column("status", _enum(enums.UserStatus, "iam_user_status"), nullable=False),
+    Column("mfa_enabled", Boolean, nullable=False),
+    Column("last_login_on", DateTime(timezone=True)),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+iam_role = Table(
+    "iam_role",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("scope", _enum(enums.RoleScope, "iam_role_scope"), nullable=False),
+    Column("tenant_id", UUID(as_uuid=True)),
+    Column("edition_scope", _enum(enums.EditionId, "edition_id")),
+    Column("code", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("description", Text, nullable=False),
+    Column("is_system", Boolean, nullable=False),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+iam_permission = Table(
+    "iam_permission",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("code", Text, nullable=False),
+    Column("resource", Text, nullable=False),
+    Column("action", Text, nullable=False),
+    Column("description", Text, nullable=False),
+)
+
+iam_role_permission = Table(
+    "iam_role_permission",
+    metadata,
+    Column("role_id", UUID(as_uuid=True), primary_key=True),
+    Column("permission_id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+)
+
+iam_user_role = Table(
+    "iam_user_role",
+    metadata,
+    Column("user_id", UUID(as_uuid=True), primary_key=True),
+    Column("role_id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("assigned_by", Text, nullable=False),
+    Column("assigned_on", DateTime(timezone=True), nullable=False),
+)
