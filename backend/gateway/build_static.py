@@ -135,6 +135,14 @@ def build(out_dir: Path) -> Path:
         out_dir,
     )
 
+    write(
+        common_env,
+        "help.html",
+        out_dir / "help.html",
+        {"ctx": INVALID_CTX, "links": {"brand": "index.html", "css": "style/style.css"}},
+        out_dir,
+    )
+
     static_out = out_dir / "style"
     static_out.mkdir()
     shutil.copy2(STATIC_DIR / "style.css", static_out / "style.css")

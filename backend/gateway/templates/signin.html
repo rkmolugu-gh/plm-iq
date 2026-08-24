@@ -2,7 +2,7 @@
 {% block title %}Sign in{% if ctx.tenant %} · {{ ctx.tenant }}{% endif %}{% endblock %}
 {% block content %}
 <section class="auth-wrap">
-  <form class="auth-card">
+  <form class="auth-card" method="post" action="/signin">
     {% if ctx.edition_label %}
     <p class="hero-eyebrow">PLM-IQ {{ ctx.edition_label }} Edition</p>
     {% else %}

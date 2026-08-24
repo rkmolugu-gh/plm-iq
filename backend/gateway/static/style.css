@@ -117,7 +117,14 @@ code {
   white-space: nowrap;
 }
 
-.topnav + .tenant-chip { margin-left: 0; }
+.side-section {
+  margin: 0.9rem 0.4rem 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-faint);
+}
 
 /* ── Page frame ─────────────────────────────────────────────────────────── */
 
@@ -562,13 +569,6 @@ a.side-link:hover { background: var(--accent-soft); }
   padding: 0.05rem 0.4rem;
 }
 
-.side-sep {
-  display: block;
-  height: 1px;
-  background: var(--line);
-  margin: 0.6rem 0.25rem;
-}
-
 @media (max-width: 720px) {
   .sidenav { display: none; }
 }
@@ -628,7 +628,6 @@ a.side-link:hover { background: var(--accent-soft); }
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
-  max-width: 62ch;
 }
 
 .table-toolbar h2 { margin: 0; }
@@ -667,15 +666,6 @@ a.side-link:hover { background: var(--accent-soft); }
 .cell-anno {
   font-size: 0.78rem;
   color: var(--ink-soft);
-}
-
-.tree-rev {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--ink-faint);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.06rem 0.45rem;
 }
 
 .pill {
@@ -818,12 +808,124 @@ pre.mermaid {
   border-left: 1px solid var(--line);
 }
 
+.tree-root > .tree-vertex {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+}
+
 .tree-edge {
   font-weight: 600;
   color: var(--ink-soft);
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.84rem;
 }
+
+/* ── Profile dropdown (top-right) ───────────────────────────────────────── */
+
+.profile {
+  position: relative;
+}
+
+.profile-btn {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.profile-btn::-webkit-details-marker { display: none; }
+
+.profile-btn:hover,
+.profile[open] .profile-btn {
+  background: var(--bg);
+  border-color: var(--line);
+}
+
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar svg { width: 15px; height: 15px; }
+
+.profile-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.chev { font-size: 0.6rem; color: var(--ink-faint); }
+
+.profile-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  min-width: 230px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.35rem;
+  z-index: 60;
+}
+
+.profile-id,
+.profile-menu .pm-tenant {
+  margin: 0;
+}
+
+.pm-tenant {
+  padding: 0.5rem 0.65rem 0;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
+.pm-user {
+  margin: 0.15rem 0 0;
+  padding: 0 0.65rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.pm-role {
+  margin: 0.1rem 0 0;
+  padding: 0 0.65rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+
+.pm-sep {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.25rem 0;
+}
+
+.pm-item {
+  display: block;
+  padding: 0.45rem 0.65rem;
+  border-radius: 7px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+
+.pm-item:hover { background: var(--accent-soft); }
+
+.pm-signout { color: var(--danger); }
 
 /* ── Not-found page ─────────────────────────────────────────────────────── */
 

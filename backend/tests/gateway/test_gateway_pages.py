@@ -88,6 +88,47 @@ def suite_gateway_dashboard(tid=None):
     assert 'class="sidenav"' in dash.text, "left nav missing on dashboard"
     assert 'href="/dashboard"' in dash.text and "is-active" in dash.text, "nav active state missing"
     assert 'side-link is-disabled' in dash.text, "placeholder nav items missing"
+    for section in ("Domain", "Admin", "Settings"):
+        assert f'side-section">{section}<' in dash.text, f"sidebar section missing: {section}"
+    assert ">Users<" in dash.text and ">Audit trail<" in dash.text
+
+    # profile dropdown (top-right): tenant, user, role, help, sign out
+    assert 'class="profile"' in dash.text, "profile dropdown missing"
+    assert 'pm-tenant">acme<' in dash.text
+    assert "Demo User" in dash.text and "Tenant Administrator" in dash.text
+    assert ">Help<" in dash.text and 'href="/signout"' in dash.text
+
+    so = client.get(
+        "/signout",
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert so.status_code == 303 and so.headers["location"] == "/signin"
+
+    empty = client.post(
+        "/signin",
+        data={},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert empty.status_code == 303 and empty.headers["location"] == "/dashboard", \
+        "sign-in must work with an empty form"
+
+
+def suite_gateway_help(tid=None):
+    h = get("/help", "acme.foundation.localhost.com")
+    assert h.status_code == 200, h.status_code
+    for marker in ("Help center", "Getting started", "Lifecycle quick reference"):
+        assert marker in h.text, f"missing on help page: {marker}"
+    assert "acme" in h.text and "Foundation" in h.text, "tenant context missing"
+    assert 'href="/help"' in get("/dashboard", "acme.foundation.localhost.com").text, \
+        "help links missing (profile menu / sidebar)"
+
+    d = get("/help", "127.0.0.1:8080")
+    assert d.status_code == 200 and "Help center" in d.text
+
+    r = get("/help", "acme.bogus.localhost.com")
+    assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
 
     home = get("/", "acme.foundation.localhost.com")
     assert 'class="sidenav"' not in home.text, "marketing home must not show the app sidebar"
@@ -108,8 +149,9 @@ def suite_gateway_graph(tid=None):
 
     v = get("/graph", "acme.foundation.localhost.com")
     assert v.status_code == 200, v.status_code
-    for marker in ("Graph explorer", "Vertices", "PRT-1001", "New vertex"):
+    for marker in ("Graph explorer", "Vertices", "PRT-1001/A", "New vertex"):
         assert marker in v.text, f"missing on vertex tab: {marker}"
+    assert ">EC-0007</td>" in v.text, "empty revision must render bare number"
     assert 'class="tab is-active"' in v.text and "Vertices" in v.text, "vertex tab not active"
     assert 'href="/graph/view/PRT-1001">GView' in v.text, "GView action missing on vertex rows"
     assert '/graph/view/' not in get("/graph?tab=edge", "acme.foundation.localhost.com").text, \
@@ -135,10 +177,14 @@ def suite_gateway_graph(tid=None):
     assert 'class="mermaid"' in gv.text and "flowchart LR" in gv.text, "mermaid diagram missing"
     # jinja autoescapes -> the browser receives entity-encoded arrows/quotes
     assert "ASM1000 --&gt;|&#34;BOM&#34;| PRT1001" in gv.text, "traversal edge missing from diagram"
+    assert "PRT-1001/A - Motor Housing" in gv.text, "diagram label missing revision"
     assert 'click ASM1000 &#34;/graph/view/ASM-1000&#34;' in gv.text, "node click traversal missing"
 
     assert "Relationship tree" in gv.text and "tree-root" in gv.text, "tree view missing"
-    assert ">PRT-1001 &middot;" not in gv.text, "root vertex must not be labeled"
+    assert ">PRT-1001/A &middot; Motor Housing, Machined<" in gv.text, "root vertex missing from tree"
+    assert "ASM-1000/B &middot; Electric Drive Unit" in gv.text, "counterpart revision missing"
+    assert ">EC-0007 &middot;" in gv.text, "empty-revision counterpart must render bare"
+    assert "tree-rev" not in gv.text, "stale revision chip remains"
     # outgoing branches: KIND --> (flow toward child); incoming: <-- KIND (flow into root)
     assert "REFDOCS --&gt;" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
     assert "&lt;-- BOM" in gv.text and "ASM-1000" in gv.text, "incoming branch missing"
@@ -146,11 +192,10 @@ def suite_gateway_graph(tid=None):
 
     tree_section = gv.text.split("Relationship tree", 1)[1].split("</section>", 1)[0]
     assert "Has component" not in tree_section, "edge name must not appear as tree label"
+    # revision is inline in the identifier (number/revision); no separate chip
+    assert "tree-rev" not in gv.text and "rev B" not in gv.text
+    assert "ASM-1000/B" in tree_section, "counterpart identifier missing revision"
 
-    # revision chip only when present
-    assert "rev B" in gv.text, "revision chip missing for ASM-1000"
-    assert gv.text.count('class="tree-rev"') == 2, \
-        "revision chips must render only for counterparts with a revision"
     assert "classDef focus" in gv.text, "focus styling missing"
     assert "/graph?tab=vertex" in gv.text, "back link missing"
 
@@ -296,6 +341,7 @@ SUITES = [
     suite_gateway_bad_hosts,
     suite_gateway_unknown_paths,
     suite_gateway_dashboard,
+    suite_gateway_help,
     suite_gateway_graph,
 ]
 

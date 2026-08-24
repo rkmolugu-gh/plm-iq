@@ -34,7 +34,7 @@
     <tbody>
       {% for v in graph.vertices %}
       <tr>
-        <td class="cell-mono">{{ v.number }}</td>
+        <td class="cell-mono">{{ v.number }}{% if v.revision %}/{{ v.revision }}{% endif %}</td>
         <td><span class="pill">{{ v.kind }}</span></td>
         <td>{{ v.name }}</td>
         <td>{{ v.revision }}</td>

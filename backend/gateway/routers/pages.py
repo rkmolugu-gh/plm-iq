@@ -57,7 +57,11 @@ def _templates_for(ctx: resolver.TenantContext) -> Jinja2Templates:
 
 def _base_context(request: Request) -> dict[str, Any]:
     ctx = resolver.resolve_host(request.headers.get("host"))
-    return {"request": request, "ctx": ctx}
+    context: dict[str, Any] = {"request": request, "ctx": ctx}
+    if ctx.valid:
+        # bypass-mode identity; replaced by real auth at the identity milestone
+        context["user"] = {"name": "Demo User", "role": "Tenant Administrator"}
+    return context
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -88,6 +92,12 @@ def signin_submit(request: Request) -> RedirectResponse:
     ctx = resolver.resolve_host(request.headers.get("host"))
     target = "/dashboard" if ctx.valid else "/"
     return RedirectResponse(target, status_code=303)
+
+
+@router.get("/signout")
+def signout(request: Request) -> RedirectResponse:
+    ctx = resolver.resolve_host(request.headers.get("host"))
+    return RedirectResponse("/signin" if ctx.valid else "/", status_code=303)
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -140,6 +150,18 @@ def graph_view(
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path=f"/graph/view/{number}")
+
+
+@router.get("/help", response_class=HTMLResponse)
+def help_page(request: Request) -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if not ctx.matched_pattern:
+        context["ctx"] = resolver.TenantContext()
+        return _templates_for(ctx).TemplateResponse(request, "help.html", context)
+    if ctx.valid:
+        return _templates_for(ctx).TemplateResponse(request, "help.html", context)
+    return _render_not_found(request, path="/help")
 
 
 @router.get("/{rest:path}", response_class=HTMLResponse)

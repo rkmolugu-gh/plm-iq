@@ -131,6 +131,11 @@ def build_graph_view(
     def nid(n: str) -> str:
         return n.replace("-", "")
 
+    def disp(n: str) -> str:
+        """Display identity: parts are always number/revision."""
+        meta = vmap[n]
+        return f"{n}/{meta['revision']}" if meta["revision"] else n
+
     # Node clicks traverse to that vertex's own view, carrying the current
     # filters so the dropdown selection survives navigation.
     qs_parts = [f"{k}={v}" for k, v in (("source", source), ("relation", relation), ("target", target)) if v]
@@ -140,7 +145,7 @@ def build_graph_view(
     for n in node_order:
         meta = vmap[n]
         # single-line labels: autoescaped output must stay valid mermaid
-        lines.append(f'    {nid(n)}["{n} - {meta["name"]}"]')
+        lines.append(f'    {nid(n)}["{disp(n)} - {meta["name"]}"]')
     for edge in found_map.values():
         lines.append(f'    {nid(edge["source"])} -->|"{edge["kind"]}"| {nid(edge["target"])}')
     for n in node_order:
@@ -158,6 +163,13 @@ def build_graph_view(
         elif edge["target"] == number:
             tree.append({"edge": edge, "direction": "in", "other": vmap[edge["source"]]})
 
+    drawn_out = []
+    for edge in found_map.values():
+        shown = dict(edge)
+        shown["source_label"] = disp(edge["source"])
+        shown["target_label"] = disp(edge["target"])
+        drawn_out.append(shown)
+
     # A vertex cannot relate to itself: once a Source (or Target) is picked,
     # that vertex is removed from the opposite dropdown's choices.
     all_option_vertices = sorted(
@@ -172,7 +184,7 @@ def build_graph_view(
         "focus": number,
         "meta": vmap[number],
         "mermaid": "\n".join(lines),
-        "edges": list(found_map.values()),
+        "edges": drawn_out,
         "nodes": [vmap[n] for n in node_order],
         "tree": tree,
         "options": {

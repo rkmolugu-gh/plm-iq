@@ -70,6 +70,7 @@
   </div>
   <ul class="tree">
     <li class="tree-root">
+      <span class="tree-vertex">{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %} &middot; {{ view.meta.name }}</span>
       {% if view.tree %}
       <ul>
         {% for t in view.tree %}
@@ -77,8 +78,7 @@
           <span class="tree-edge">{% if t.direction == 'out' %}{{ t.edge.kind }} --&gt;{% else %}&lt;-- {{ t.edge.kind }}{% endif %}</span>
           <ul>
             <li>
-              <span class="tree-vertex">{{ t.other.number }} &middot; {{ t.other.name }}</span>
-              {% if t.other.revision %}<span class="tree-rev">rev {{ t.other.revision }}</span>{% endif %}
+              <span class="tree-vertex">{{ t.other.number }}{% if t.other.revision %}/{{ t.other.revision }}{% endif %} &middot; {{ t.other.name }}</span>
               <span class="pill lc-{{ t.other.lifecycle }}">{{ t.other.lifecycle.replace('_', ' ') }}</span>
             </li>
           </ul>
@@ -108,8 +108,8 @@
       <tr>
         <td><span class="pill">{{ e.kind }}</span></td>
         <td>{{ e.name }}</td>
-        <td class="cell-mono">{{ e.source }}</td>
-        <td class="cell-mono">{{ e.target }}</td>
+        <td class="cell-mono">{{ e.source_label }}</td>
+        <td class="cell-mono">{{ e.target_label }}</td>
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
         <td>{{ e.effective }}</td>
         <td class="cell-anno">

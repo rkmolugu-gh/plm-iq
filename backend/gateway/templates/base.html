@@ -20,13 +20,32 @@
         {% endif %}
       </a>
       {% if ctx.valid %}
+      <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
+      {% endif %}
       <nav class="topnav" aria-label="Primary">
         <span class="topnav-item is-disabled">Items</span>
         <span class="topnav-item is-disabled">Documents</span>
         <span class="topnav-item is-disabled">Changes</span>
         <span class="topnav-item is-disabled">Search</span>
       </nav>
-      <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
+      {% if user %}
+      <details class="profile">
+        <summary class="profile-btn" title="Account">
+          <span class="avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+          </span>
+          <span class="profile-name">{{ user.name }}</span>
+          <span class="chev">&#9662;</span>
+        </summary>
+        <div class="profile-menu">
+          <p class="pm-tenant">{{ ctx.tenant }}</p>
+          <p class="pm-user">{{ user.name }}</p>
+          <p class="pm-role">{{ user.role }}</p>
+          <hr class="pm-sep">
+          <a class="pm-item" href="/help">Help</a>
+          <a class="pm-item pm-signout" href="/signout">Sign out</a>
+        </div>
+      </details>
       {% endif %}
     </div>
   </header>
@@ -38,15 +57,22 @@
         <a class="side-link{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">
           Dashboard
         </a>
-        <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">
-          Graph
-        </a>
+
+        <p class="side-section">Domain</p>
         <span class="side-link is-disabled">Items<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Documents<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Changes<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Search<span class="side-soon">soon</span></span>
-        <span class="side-sep" role="separator"></span>
-        <span class="side-link is-disabled">Settings<span class="side-soon">soon</span></span>
+
+        <p class="side-section">Admin</p>
+        <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">
+          Graph
+        </a>
+        <span class="side-link is-disabled">Users<span class="side-soon">soon</span></span>
+        <span class="side-link is-disabled">Audit trail<span class="side-soon">soon</span></span>
+
+        <p class="side-section">Settings</p>
+        <span class="side-link is-disabled">Preferences<span class="side-soon">soon</span></span>
       </nav>
     </aside>
     {% endif %}
