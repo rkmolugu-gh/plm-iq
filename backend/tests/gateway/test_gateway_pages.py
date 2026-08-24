@@ -161,11 +161,15 @@ def suite_gateway_graph(tid=None):
     assert e.status_code == 200
     for marker in ("Edges", "REFDOCS", "pending approval", "+ New edge"):
         assert marker in e.text, f"missing on edge tab: {marker}"
+    assert "ASM-1000/B" in e.text and ">PRT-1001/A</td>" in e.text, \
+        "edge endpoints missing revision identifiers"
 
     a = get("/graph?tab=annotation", "acme.foundation.localhost.com")
     assert a.status_code == 200
     for marker in ("findNumber", "referenceCategory"):
         assert marker in a.text, f"missing on annotation tab: {marker}"
+    assert "ASM-1000/B -[BOM]-&gt; PRT-1001/A" in a.text, \
+        "annotation relationship label missing revisions"
 
     bad = get("/graph?tab=bogus", "acme.foundation.localhost.com")
     assert bad.status_code == 200, bad.status_code

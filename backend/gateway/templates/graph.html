@@ -65,8 +65,8 @@
       <tr>
         <td><span class="pill">{{ e.kind }}</span></td>
         <td>{{ e.name }}</td>
-        <td class="cell-mono">{{ e.source }}</td>
-        <td class="cell-mono">{{ e.target }}</td>
+        <td class="cell-mono">{{ e.source_label }}</td>
+        <td class="cell-mono">{{ e.target_label }}</td>
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
         <td>{{ e.effective }}</td>
         <td class="row-actions">
@@ -92,7 +92,7 @@
     <tbody>
       {% for a in graph.annotations %}
       <tr>
-        <td class="cell-mono">{{ a.edge }}</td>
+        <td class="cell-mono">{{ a.label }}</td>
         <td><span class="pill">{{ a.attribute }}</span></td>
         <td>{{ a.value }}</td>
         <td class="row-actions">

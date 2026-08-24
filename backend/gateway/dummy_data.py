@@ -57,13 +57,31 @@ GRAPH = {
          "effective": "-", "annotation": {"reason": "Supplier quality escape"}},
     ],
     "annotations": [
-        {"edge": "ASM-1000 -[BOM]-> PRT-1001", "attribute": "quantity", "value": "4"},
-        {"edge": "ASM-1000 -[BOM]-> PRT-1001", "attribute": "unitOfMeasure", "value": "EA"},
-        {"edge": "ASM-1000 -[BOM]-> PRT-1001", "attribute": "findNumber", "value": "020"},
-        {"edge": "PRT-1001 -[REFDOCS]-> DOC-3010", "attribute": "note", "value": "Specification valid until 2027-01-01"},
-        {"edge": "PRT-1001 -[REFDOCS]-> DOC-3010", "attribute": "referenceCategory", "value": "Engineering Specification"},
+        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "quantity", "value": "4"},
+        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "unitOfMeasure", "value": "EA"},
+        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "findNumber", "value": "020"},
+        {"source": "PRT-1001", "kind": "REFDOCS", "target": "DOC-3010", "attribute": "note", "value": "Specification valid until 2027-01-01"},
+        {"source": "PRT-1001", "kind": "REFDOCS", "target": "DOC-3010", "attribute": "referenceCategory", "value": "Engineering Specification"},
     ],
 }
+
+# Parts are identified as number/revision everywhere they are displayed.
+_VERTEX_MAP = {v["number"]: v for v in GRAPH["vertices"]}
+
+
+def _display(number: str) -> str:
+    revision = _VERTEX_MAP[number]["revision"]
+    return f"{number}/{revision}" if revision else number
+
+
+for _edge in GRAPH["edges"]:
+    _edge["source_label"] = _display(_edge["source"])
+    _edge["target_label"] = _display(_edge["target"])
+
+for _annotation in GRAPH["annotations"]:
+    _annotation["label"] = (
+        f"{_display(_annotation['source'])} -[{_annotation['kind']}]-> {_display(_annotation['target'])}"
+    )
 
 
 def build_graph_view(
