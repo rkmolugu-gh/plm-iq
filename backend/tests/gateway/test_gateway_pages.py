@@ -32,8 +32,8 @@ client = TestClient(app)
 CONTACT_ADMIN_SNIPPET = "contact your system administrator"
 
 
-def get(path: str, host: str):
-    return client.get(path, headers={"host": host})
+def get(path: str, host: str, params: dict | None = None):
+    return client.get(path, params=params, headers={"host": host})
 
 
 def suite_gateway_dns(tid=None):
@@ -111,6 +111,9 @@ def suite_gateway_graph(tid=None):
     for marker in ("Graph explorer", "Vertices", "PRT-1001", "New vertex"):
         assert marker in v.text, f"missing on vertex tab: {marker}"
     assert 'class="tab is-active"' in v.text and "Vertices" in v.text, "vertex tab not active"
+    assert 'href="/graph/view/PRT-1001">GView' in v.text, "GView action missing on vertex rows"
+    assert '/graph/view/' not in get("/graph?tab=edge", "acme.foundation.localhost.com").text, \
+        "GView must only appear on vertex rows"
 
     e = get("/graph?tab=edge", "acme.foundation.localhost.com")
     assert e.status_code == 200
@@ -119,13 +122,67 @@ def suite_gateway_graph(tid=None):
 
     a = get("/graph?tab=annotation", "acme.foundation.localhost.com")
     assert a.status_code == 200
-    for marker in ("Edge annotations", "findNumber", "referenceCategory"):
+    for marker in ("findNumber", "referenceCategory"):
         assert marker in a.text, f"missing on annotation tab: {marker}"
 
     bad = get("/graph?tab=bogus", "acme.foundation.localhost.com")
     assert bad.status_code == 200, bad.status_code
     assert "New vertex" in bad.text and "+ New edge" not in bad.text, \
         "invalid tab must fall back to vertex"
+
+    gv = get("/graph/view/PRT-1001", "acme.foundation.localhost.com")
+    assert gv.status_code == 200, gv.status_code
+    assert 'class="mermaid"' in gv.text and "flowchart LR" in gv.text, "mermaid diagram missing"
+    # jinja autoescapes -> the browser receives entity-encoded arrows/quotes
+    assert "ASM1000 --&gt;|&#34;BOM&#34;| PRT1001" in gv.text, "traversal edge missing from diagram"
+    assert "classDef focus" in gv.text, "focus styling missing"
+    assert "/graph?tab=vertex" in gv.text, "back link missing"
+
+    hop = get("/graph/view/DOC-3010", "acme.foundation.localhost.com")
+    assert hop.status_code == 200 and "DOC3009" in hop.text, "multi-hop traversal failed"
+
+    f = get(
+        "/graph/view/PRT-1001",
+        "acme.foundation.localhost.com",
+        params={"relation": "BOM"},
+    )
+    assert f.status_code == 200, f.status_code
+    assert 'name="relation"' in f.text and "<select" in f.text, "filter dropdowns missing"
+    assert 'value="BOM" selected' in f.text, "relation filter not preserved"
+    assert "ASM1000 --&gt;" in f.text, "BOM edge filtered out"
+    assert "DOC3010" not in f.text, "unfiltered relationship leaked through"
+    assert 'value="DOC-3010"' not in f.text and 'value="REFDOCS"' not in f.text, \
+        "dropdowns must list only entities in the drawn diagram"
+
+    s = get(
+        "/graph/view/PRT-1001",
+        "acme.foundation.localhost.com",
+        params={"source": "EC-0007", "relation": "AFFECTS"},
+    )
+    assert s.status_code == 200
+    assert "EC0007" in s.text and "DOC3010" not in s.text, "source filter not applied"
+    assert "No relationships match" not in s.text
+
+    none = get(
+        "/graph/view/PRT-1001",
+        "acme.foundation.localhost.com",
+        params={"target": "MAT-4001"},
+    )
+    assert none.status_code == 200 and "No relationships match" in none.text
+
+    reset = get("/graph/view/PRT-1001", "acme.foundation.localhost.com")
+    assert reset.status_code == 200 and "DOC3010" in reset.text, "reset lost unfiltered view"
+
+    scoped = get("/graph/view/DOC-3009", "acme.foundation.localhost.com")
+    assert scoped.status_code == 200, scoped.status_code
+    assert 'value="DOC-3010"' in scoped.text, "neighbor option missing from dropdown"
+    assert 'value="ASM-1000"' not in scoped.text, "dropdown lists vertex outside this diagram"
+    assert 'value="MAT-4001"' not in scoped.text, "dropdown lists vertex outside this diagram"
+    assert 'value="USES"' not in scoped.text, "dropdown lists relation outside this diagram"
+    assert 'value="SUPERSEDES"' in scoped.text
+
+    unknown = get("/graph/view/NOPE-9999", "acme.foundation.localhost.com")
+    assert unknown.status_code == 404 and CONTACT_ADMIN_SNIPPET in unknown.text
 
     r = get("/graph", "127.0.0.1:8080")
     assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text

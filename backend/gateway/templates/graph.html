@@ -40,6 +40,7 @@
         <td>{{ v.revision }}</td>
         <td><span class="pill lc-{{ v.lifecycle }}">{{ v.lifecycle.replace('_', ' ') }}</span></td>
         <td class="row-actions">
+          <a class="btn-mini" href="/graph/view/{{ v.number }}">GView</a>
           <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
           <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
         </td>

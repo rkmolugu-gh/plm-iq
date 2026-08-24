@@ -18,6 +18,13 @@ def create_app() -> FastAPI:
     app = FastAPI(title="PLM-IQ Gateway", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+    @app.middleware("http")
+    async def no_html_caching(request, call_next):
+        response = await call_next(request)
+        if response.headers.get("content-type", "").startswith("text/html"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}

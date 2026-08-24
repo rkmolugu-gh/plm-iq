@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Graph · {{ view.focus }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Graph view · {{ view.focus }}</h1>
+  <p class="hero-sub dash-note">
+    <a class="back-link" href="/graph?tab=vertex">&larr; Back to graph explorer</a>
+    &middot; click any node to traverse to it &middot; sample data
+  </p>
+</section>
+
+<section class="module-card">
+  <div class="table-toolbar">
+    <p class="table-desc">Traversal around <strong>{{ view.focus }}</strong> up to two hops:
+      {{ view.edges | length }} relationships drawn.
+      {% if view.filters.source or view.filters.relation or view.filters.target %}
+      Filters active. {% endif %}
+      The highlighted node is the focus.</p>
+  </div>
+  <form class="filter-bar" method="get" action="/graph/view/{{ view.focus }}">
+    <label class="filter-field">
+      Source
+      <select name="source">
+        <option value="">All</option>
+        {% for v in view.options.vertices %}
+        <option value="{{ v }}"{{ ' selected' if v == view.filters.source }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="filter-field">
+      Relation
+      <select name="relation">
+        <option value="">All</option>
+        {% for k in view.options.relations %}
+        <option value="{{ k }}"{{ ' selected' if k == view.filters.relation }}>{{ k }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="filter-field">
+      Target
+      <select name="target">
+        <option value="">All</option>
+        {% for v in view.options.vertices %}
+        <option value="{{ v }}"{{ ' selected' if v == view.filters.target }}>{{ v }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+    <a class="btn-mini" href="/graph/view/{{ view.focus }}">Reset</a>
+  </form>
+  <pre class="mermaid">{{ view.mermaid }}</pre>
+  <noscript><p class="table-desc">Enable JavaScript to render the diagram.</p></noscript>
+  {% if not view.edges %}
+  <p class="table-desc">No relationships match the current filters.</p>
+  {% endif %}
+</section>
+
+<section class="module-card table-card">
+  <div class="table-toolbar">
+    <p class="table-desc">Relationships in this view.</p>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for e in view.edges %}
+      <tr>
+        <td><span class="pill">{{ e.kind }}</span></td>
+        <td>{{ e.name }}</td>
+        <td class="cell-mono">{{ e.source }}</td>
+        <td class="cell-mono">{{ e.target }}</td>
+        <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
+        <td class="row-actions"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "neutral" });
+</script>
+{% endblock %}

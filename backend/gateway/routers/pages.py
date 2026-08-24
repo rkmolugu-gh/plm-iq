@@ -121,6 +121,27 @@ def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
     return _render_not_found(request, path="/graph")
 
 
+@router.get("/graph/view/{number}", response_class=HTMLResponse)
+def graph_view(
+    request: Request,
+    number: str,
+    source: str = "",
+    relation: str = "",
+    target: str = "",
+) -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if ctx.valid:
+        view = dummy_data.build_graph_view(number, source=source, relation=relation, target=target)
+        if view is not None:
+            context.update(view=view, show_nav=True)
+            return _templates_for(ctx).TemplateResponse(request, "g_view.html", context)
+        return _render_not_found(request, path=f"/graph/view/{number}")
+    if not ctx.matched_pattern:
+        return _render_default(request)
+    return _render_not_found(request, path=f"/graph/view/{number}")
+
+
 @router.get("/{rest:path}", response_class=HTMLResponse)
 def any_page(request: Request, rest: str) -> HTMLResponse:
     context = _base_context(request)
