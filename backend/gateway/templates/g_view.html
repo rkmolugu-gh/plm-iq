@@ -70,18 +70,15 @@
   </div>
   <ul class="tree">
     <li class="tree-root">
-      <span class="tree-vertex">{{ view.focus }} &middot; {{ view.meta.name }}</span>
       {% if view.tree %}
       <ul>
         {% for t in view.tree %}
         <li>
-          <span class="tree-edge">
-            <span class="dir dir-{{ t.direction }}">{{ 'outgoing' if t.direction == 'out' else 'incoming' }}</span>
-            {{ t.edge.kind }} &middot; {{ t.edge.name }}
-          </span>
+          <span class="tree-edge">{% if t.direction == 'out' %}{{ t.edge.kind }} --&gt;{% else %}&lt;-- {{ t.edge.kind }}{% endif %}</span>
           <ul>
             <li>
               <span class="tree-vertex">{{ t.other.number }} &middot; {{ t.other.name }}</span>
+              {% if t.other.revision %}<span class="tree-rev">rev {{ t.other.revision }}</span>{% endif %}
               <span class="pill lc-{{ t.other.lifecycle }}">{{ t.other.lifecycle.replace('_', ' ') }}</span>
             </li>
           </ul>
@@ -104,7 +101,7 @@
   </div>
   <table class="data-table">
     <thead>
-      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th></th></tr>
+      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Effectivity</th><th>Annotation</th><th></th></tr>
     </thead>
     <tbody>
       {% for e in view.edges %}
@@ -114,6 +111,12 @@
         <td class="cell-mono">{{ e.source }}</td>
         <td class="cell-mono">{{ e.target }}</td>
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
+        <td>{{ e.effective }}</td>
+        <td class="cell-anno">
+          {% if e.annotation %}
+            {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{{ ' &middot; ' if not loop.last }}{% endfor %}
+          {% else %}&mdash;{% endif %}
+        </td>
         <td class="row-actions"></td>
       </tr>
       {% endfor %}

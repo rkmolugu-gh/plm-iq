@@ -138,11 +138,19 @@ def suite_gateway_graph(tid=None):
     assert 'click ASM1000 &#34;/graph/view/ASM-1000&#34;' in gv.text, "node click traversal missing"
 
     assert "Relationship tree" in gv.text and "tree-root" in gv.text, "tree view missing"
-    assert ">PRT-1001 &middot; Motor Housing, Machined<" in gv.text, "tree root missing"
-    assert "dir-out" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
-    assert "dir-in" in gv.text and "ASM-1000" in gv.text and "EC-0007" in gv.text, \
-        "incoming branches missing"
-    assert gv.text.count("Has component") >= 1, "sibling edge missing from tree"
+    assert ">PRT-1001 &middot;" not in gv.text, "root vertex must not be labeled"
+    # outgoing branches: KIND --> (flow toward child); incoming: <-- KIND (flow into root)
+    assert "REFDOCS --&gt;" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
+    assert "&lt;-- BOM" in gv.text and "ASM-1000" in gv.text, "incoming branch missing"
+    assert "&lt;-- AFFECTS" in gv.text and "EC-0007" in gv.text, "second sibling missing"
+
+    tree_section = gv.text.split("Relationship tree", 1)[1].split("</section>", 1)[0]
+    assert "Has component" not in tree_section, "edge name must not appear as tree label"
+
+    # revision chip only when present
+    assert "rev B" in gv.text, "revision chip missing for ASM-1000"
+    assert gv.text.count('class="tree-rev"') == 2, \
+        "revision chips must render only for counterparts with a revision"
     assert "classDef focus" in gv.text, "focus styling missing"
     assert "/graph?tab=vertex" in gv.text, "back link missing"
 
@@ -162,7 +170,7 @@ def suite_gateway_graph(tid=None):
     assert 'value="BOM" selected' in f.text
     assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
         "node traversal must carry the selected filter"
-    assert "dir-in" in f.text and "dir-out" not in f.text, \
+    assert "&lt;-- BOM" in f.text and "REFDOCS" not in f.text, \
         "tree must reflect the applied relation filter"
     assert 'value="BOM" selected' in f.text
     assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
@@ -180,7 +188,7 @@ def suite_gateway_graph(tid=None):
     assert "No relationships match" not in s.text
     assert s.text.count('value="EC-0007"') == 1, \
         "selected source must disappear from the target dropdown"
-    assert 'value="ASM-1000"' in s.text, "target dropdown lost unrelated choices"
+    assert 'value="PRT-1001"' in s.text, "target dropdown lost unrelated choices"
 
     same = get(
         "/graph/view/PRT-1001",
