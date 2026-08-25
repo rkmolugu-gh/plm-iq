@@ -989,3 +989,82 @@ pre.mermaid {
   .topnav { display: none; }
   .hero { padding: 2.25rem 1.4rem; }
 }
+
+/* ── Tenant admin (flashes + inline CRUD forms) ─────────────────────────── */
+
+.flash {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.flash-ok {
+  background: #e4f3ea;
+  color: #1f7a3f;
+  border: 1px solid #bfe0cb;
+}
+
+.flash-err {
+  background: #fbeeec;
+  color: var(--danger);
+  border: 1px solid #eccfcb;
+}
+
+.auth-error {
+  margin: 0 0 1.1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: #fbeeec;
+  border: 1px solid #eccfcb;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.crud-form {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.crud-form h2 { margin: 0 0 0.8rem; font-size: 0.98rem; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.7rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.form-grid input,
+.form-grid select {
+  font: inherit;
+  font-weight: 400;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.form-grid label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+}
+
+.form-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+.inline-form { display: inline; }

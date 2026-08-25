@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Tenant admin · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ identity.tenant_name }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Tenant administration</h1>
+  <p class="hero-sub dash-note">Live workspace registry and accounts &mdash; served straight from the data services.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<nav class="tabs" aria-label="Tenant admin entities">
+  <a class="tab{{ ' is-active' if tab == 'tenants' }}" href="/admin/tenant?tab=tenants">
+    Tenants <span class="tab-count">{{ tenants | length }}</span>
+  </a>
+  <a class="tab{{ ' is-active' if tab == 'users' }}" href="/admin/tenant?tab=users">
+    Users <span class="tab-count">{{ users | length }}</span>
+  </a>
+  <a class="tab{{ ' is-active' if tab == 'roles' }}" href="/admin/tenant?tab=roles">
+    Roles <span class="tab-count">{{ roles | length }}</span>
+  </a>
+</nav>
+
+<section class="module-card table-card">
+
+{# ── Tenants ───────────────────────────────────────────────────────────── #}
+{% if tab == 'tenants' %}
+  {% if editing_tenant %}
+  <form class="crud-form" method="post" action="/admin/tenant/tenants/{{ editing_tenant.id }}/update">
+    <h2>Edit tenant {{ editing_tenant.name }}</h2>
+    <input type="hidden" name="version" value="{{ editing_tenant.version }}">
+    <div class="form-grid">
+      <label>Name <input name="name" value="{{ editing_tenant.name }}"></label>
+      <label>Contact email <input name="contact_email" value="{{ editing_tenant.contact_email }}"></label>
+      <label>Edition
+        <select name="edition_id">
+          {% for e in editions %}<option value="{{ e }}"{{ ' selected' if e == editing_tenant.edition_id }}>{{ e }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Status
+        <select name="status">
+          {% for s in ['provisioning', 'active', 'suspended', 'archived'] %}<option value="{{ s }}"{{ ' selected' if s == editing_tenant.status }}>{{ s }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/admin/tenant?tab=tenants">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <form class="crud-form" method="post" action="/admin/tenant/tenants/create">
+    <h2>Provision a new tenant</h2>
+    <div class="form-grid">
+      <label>Subdomain <input name="subdomain" placeholder="acme" pattern="[a-z0-9][a-z0-9-]{2,62}" required></label>
+      <label>Name <input name="name" required></label>
+      <label>Contact email <input name="contact_email" type="email" required></label>
+      <label>Integration secret <input name="secret" required></label>
+      <label>Edition
+        <select name="edition_id">{% for e in editions %}<option value="{{ e }}">{{ e }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Provision tenant</button></div>
+  </form>
+  {% endif %}
+
+  <table class="data-table">
+    <thead><tr><th>Subdomain</th><th>Name</th><th>Contact</th><th>Edition</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for t in tenants %}
+      <tr>
+        <td class="cell-mono">{{ t.subdomain }}</td>
+        <td>{{ t.name }}</td>
+        <td>{{ t.contact_email }}</td>
+        <td><span class="pill">{{ t.edition_id }}</span></td>
+        <td><span class="pill lc-{{ t.status }}">{{ t.status }}</span></td>
+        <td class="row-actions"><a class="btn-mini" href="/admin/tenant?tab=tenants&edit={{ t.id }}">Edit</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+{# ── Users ─────────────────────────────────────────────────────────────── #}
+{% elif tab == 'users' %}
+  {% if editing_user %}
+  <form class="crud-form" method="post" action="/admin/tenant/users/{{ editing_user.id }}/update">
+    <h2>Edit user {{ editing_user.email }}</h2>
+    <input type="hidden" name="version" value="{{ editing_user.version }}">
+    <div class="form-grid">
+      <label>Full name <input name="full_name" value="{{ editing_user.full_name }}"></label>
+      <label>New password <input name="password" type="password" placeholder="(unchanged)"></label>
+      <label>Status
+        <select name="status">
+          {% for s in ['active', 'disabled', 'locked'] %}<option value="{{ s }}"{{ ' selected' if s == editing_user.status }}>{{ s }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="is_tenant_admin"{{ ' checked' if editing_user.is_tenant_admin }}> Tenant admin</label>
+      <label class="check"><input type="checkbox" name="mfa_enabled"{{ ' checked' if editing_user.mfa_enabled }}> MFA enabled</label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/admin/tenant?tab=users">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <form class="crud-form" method="post" action="/admin/tenant/users/create">
+    <h2>Add a user to {{ identity.tenant_name }}</h2>
+    <div class="form-grid">
+      <label>Email or login id <input name="email" required></label>
+      <label>Full name <input name="full_name" required></label>
+      <label>Password <input name="password" type="password"></label>
+      <label class="check"><input type="checkbox" name="is_tenant_admin"> Tenant admin</label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create user</button></div>
+  </form>
+  {% endif %}
+
+  <table class="data-table">
+    <thead><tr><th>Email / login</th><th>Full name</th><th>Status</th><th>Admin</th><th>MFA</th><th>Last login</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td class="cell-mono">{{ u.email }}</td>
+        <td>{{ u.full_name }}</td>
+        <td><span class="pill lc-{{ u.status }}">{{ u.status }}</span></td>
+        <td>{{ 'yes' if u.is_tenant_admin else '-' }}</td>
+        <td>{{ 'yes' if u.mfa_enabled else '-' }}</td>
+        <td>{{ u.last_login_on.strftime('%Y-%m-%d %H:%M') if u.last_login_on else 'never' }}</td>
+        <td class="row-actions"><a class="btn-mini" href="/admin/tenant?tab=users&edit={{ u.id }}">Edit</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+{# ── Roles ─────────────────────────────────────────────────────────────── #}
+{% else %}
+  {% if editing_role %}
+  <form class="crud-form" method="post" action="/admin/tenant/roles/{{ editing_role.id }}/update">
+    <h2>Edit role {{ editing_role.code }}</h2>
+    <input type="hidden" name="version" value="{{ editing_role.version }}">
+    <div class="form-grid">
+      <label>Name <input name="name" value="{{ editing_role.name }}"></label>
+      <label>Description <input name="description" value="{{ editing_role.description }}"></label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/admin/tenant?tab=roles">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <form class="crud-form" method="post" action="/admin/tenant/roles/create">
+    <h2>Create a tenant role</h2>
+    <div class="form-grid">
+      <label>Code <input name="code" placeholder="approver" required></label>
+      <label>Name <input name="name" required></label>
+      <label>Description <input name="description"></label>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create role</button></div>
+  </form>
+  {% endif %}
+
+  <table class="data-table">
+    <thead><tr><th>Code</th><th>Name</th><th>Scope</th><th>Edition</th><th>System</th><th></th></tr></thead>
+    <tbody>
+      {% for r in roles %}
+      <tr>
+        <td class="cell-mono">{{ r.code }}</td>
+        <td>{{ r.name }}</td>
+        <td><span class="pill">{{ r.scope }}</span></td>
+        <td>{{ r.edition_scope or 'any' }}</td>
+        <td>{{ 'platform-managed' if r.is_system else 'tenant-owned' }}</td>
+        <td class="row-actions">
+          {% if not r.is_system %}
+          <a class="btn-mini" href="/admin/tenant?tab=roles&edit={{ r.id }}">Edit</a>
+          <form class="inline-form" method="post" action="/admin/tenant/roles/{{ r.id }}/delete">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+          {% else %}
+          <span class="cell-anno">read-only</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+</section>
+{% endblock %}

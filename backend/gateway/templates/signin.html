@@ -10,6 +10,15 @@
     {% endif %}
     <h1 class="auth-title">Sign in{% if ctx.tenant %} to {{ ctx.tenant }}{% endif %}</h1>
 
+    {% if request.query_params.get('error') %}
+    <p class="auth-error">
+      {% set e = request.query_params.get('error') %}
+      {% if e == 'invalid' %}Unknown tenant, account, or wrong password.
+      {% elif e == 'missing' %}Tenant, username and password are required.
+      {% else %}Your session has expired &mdash; please sign in again.{% endif %}
+    </p>
+    {% endif %}
+
     <label class="auth-label">
       Tenant
       <input class="auth-input" type="text" name="tenant" value="{{ ctx.tenant }}"
@@ -33,7 +42,7 @@
     <button class="btn btn-primary auth-submit" type="submit">Sign in</button>
 
     <p class="auth-note">
-      Demo mode &mdash; any credentials continue to the sample workspace dashboard.
+      Sign in with your workspace account. Contact your tenant administrator if you need access.
     </p>
   </form>
 </section>

@@ -7,7 +7,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}PLM-IQ{% endblock %}</title>
+  <title>{% block title %}{% if ctx.valid %}{{ ctx.tenant | capitalize }} · {% endif %}PLM-IQ{% if ctx.valid %} {{ ctx.edition_label }} Edition{% endif %}{% endblock %}</title>
   <link rel="stylesheet" href="{{ l_css }}">
 </head>
 <body class="edition-{{ ctx.edition if ctx.valid else 'none' }}">
@@ -68,6 +68,7 @@
         <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">
           Graph
         </a>
+        <a class="side-link{{ ' is-active' if request.url.path.startswith('/admin/tenant') }}" href="/admin/tenant">Tenant</a>
         <span class="side-link is-disabled">Users<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Audit trail<span class="side-soon">soon</span></span>
 

@@ -70,33 +70,51 @@ def suite_gateway_dns(tid=None):
 
 
 def suite_gateway_dashboard(tid=None):
-    r = client.post(
+    """Real authentication against the seeded demo tenant (DB required)."""
+    # wrong credentials are rejected and bounced back to the sign-in page
+    bad = client.post(
         "/signin",
-        data={"tenant": "acme", "username": "demo", "password": "demo"},
+        data={"tenant": "plm-iq", "username": "platformadmin@plm-iq.site", "password": "nope"},
+        headers={"host": "plm-iq.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert bad.status_code == 303, bad.status_code
+    assert bad.headers["location"].startswith("/signin?error="), "invalid credentials must not open the workspace"
+
+    empty = client.post(
+        "/signin",
+        data={},
         headers={"host": "acme.foundation.localhost.com"},
         follow_redirects=False,
     )
-    assert r.status_code == 303, r.status_code
-    assert r.headers["location"] == "/dashboard"
+    assert empty.status_code == 303 and empty.headers["location"].startswith("/signin?error="), \
+        "sign-in without credentials must fail"
+
+    ok = client.post(
+        "/signin",
+        data={"tenant": "plm-iq", "username": "platformadmin@plm-iq.site", "password": "19691969"},
+        headers={"host": "plm-iq.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert ok.status_code == 303, ok.status_code
+    assert ok.headers["location"] == "/dashboard"
 
     dash = get("/dashboard", "acme.foundation.localhost.com")
     assert dash.status_code == 200, dash.status_code
     for marker in ("Workspace overview", "Lifecycle pipeline", "Recent activity", "Data quality"):
         assert marker in dash.text, f"missing widget: {marker}"
-    assert "acme" in dash.text, "tenant name missing on dashboard"
-    assert "Sample data" in dash.text, "dummy-data notice missing"
+    # signed-in identity overrides the host-derived tenant everywhere
+    assert "plm-iq" in dash.text, "logged-in tenant missing on dashboard"
     assert 'class="sidenav"' in dash.text, "left nav missing on dashboard"
-    assert 'href="/dashboard"' in dash.text and "is-active" in dash.text, "nav active state missing"
-    assert 'side-link is-disabled' in dash.text, "placeholder nav items missing"
+    assert ">Tenant<" in dash.text and 'href="/admin/tenant"' in dash.text, "Tenant admin nav item missing"
     for section in ("Domain", "Admin", "Settings"):
         assert f'side-section">{section}<' in dash.text, f"sidebar section missing: {section}"
-    assert ">Users<" in dash.text and ">Audit trail<" in dash.text
 
-    # profile dropdown (top-right): tenant, user, role, help, sign out
+    # profile dropdown shows the real signed-in user and assigned role
     assert 'class="profile"' in dash.text, "profile dropdown missing"
-    assert 'pm-tenant">acme<' in dash.text
-    assert "Demo User" in dash.text and "Tenant Administrator" in dash.text
-    assert ">Help<" in dash.text and 'href="/signout"' in dash.text
+    assert "PLM-IQ Service Login" in dash.text, "real user name missing from profile"
+    assert "Tenant Administrator" in dash.text, "assigned role missing from profile"
+    assert 'href="/help"' in dash.text, "help link missing from signed-in profile menu"
 
     so = client.get(
         "/signout",
@@ -105,14 +123,102 @@ def suite_gateway_dashboard(tid=None):
     )
     assert so.status_code == 303 and so.headers["location"] == "/signin"
 
-    empty = client.post(
+    anon = get("/dashboard", "acme.foundation.localhost.com")
+    assert 'class="profile"' not in anon.text, "profile must hide after sign-out"
+
+
+def suite_gateway_tenant_admin(tid=None):
+    """Tabbed Tenant/User/Role CRUD page backed by live services."""
+    r = client.get("/admin/tenant", headers={"host": "acme.foundation.localhost.com"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/signin?error=session"), \
+        "anonymous access to tenant admin must redirect to sign-in"
+
+    login = client.post(
         "/signin",
-        data={},
+        data={"tenant": "plm-iq", "username": "platformadmin@plm-iq.site", "password": "19691969"},
+        headers={"host": "plm-iq.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 303
+
+    t = get("/admin/tenant?tab=tenants", "acme.foundation.localhost.com")
+    assert t.status_code == 200, t.status_code
+    assert "Tenant administration" in t.text
+    for marker in ("Provision a new tenant", "plm-iq", "PLM-IQ Demo"):
+        assert marker in t.text, f"missing on tenants tab: {marker}"
+    assert 'class="tab is-active"' in t.text and "Tenants" in t.text
+
+    u = get("/admin/tenant?tab=users", "acme.foundation.localhost.com")
+    assert u.status_code == 200
+    for marker in ("Add a user to", "dane@plm-iq.site", "platformadmin@plm-iq.site"):
+        assert marker in u.text, f"missing on users tab: {marker}"
+
+    ro = get("/admin/tenant?tab=roles", "acme.foundation.localhost.com")
+    assert ro.status_code == 200
+    for marker in ("Create a tenant role", "tenant-admin", "read-only"):
+        assert marker in ro.text, f"missing on roles tab: {marker}"
+
+    bad = get("/admin/tenant?tab=bogus", "acme.foundation.localhost.com")
+    assert bad.status_code == 200 and "Provision a new tenant" in bad.text, "invalid tab must fall back to tenants"
+
+    # CRUD round-trip: create -> edit -> delete a tenant role (unique code per run)
+    import uuid as _uuid
+    code = "smoke-" + _uuid.uuid4().hex[:8]
+    create = client.post(
+        "/admin/tenant/roles/create",
+        data={"code": code, "name": "Smoke Tester", "description": "temporary role"},
         headers={"host": "acme.foundation.localhost.com"},
         follow_redirects=False,
     )
-    assert empty.status_code == 303 and empty.headers["location"] == "/dashboard", \
-        "sign-in must work with an empty form"
+    assert create.status_code == 303 and "roles&msg=role%20created" in create.headers["location"], \
+        f"role create failed: {create.headers.get('location')}"
+
+    listing = get("/admin/tenant?tab=roles", "acme.foundation.localhost.com")
+    assert code in listing.text, "created role missing from list"
+
+    import re as _re
+    row = _re.search(rf'<td class="cell-mono">{code}</td>.*?edit=([0-9a-f-]+)', listing.text, _re.S)
+    assert row, "edit link for created role missing"
+    rid = row.group(1)
+
+    detail = get(f"/admin/tenant?tab=roles&edit={rid}", "acme.foundation.localhost.com")
+    assert detail.status_code == 200 and f"Edit role {code}" in detail.text
+
+    # version is a DB-wide identity token; take the real one from the form
+    ver = _re.search(r'name="version" value="(\d+)"', detail.text)
+    assert ver, "version hidden field missing on edit form"
+
+    update = client.post(
+        f"/admin/tenant/roles/{rid}/update",
+        data={"version": ver.group(1), "name": "Smoke Tester v2"},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert update.status_code == 303 and "msg=saved" in update.headers["location"], \
+        f"role update failed: {update.headers.get('location')}"
+
+    delete = client.post(
+        f"/admin/tenant/roles/{rid}/delete",
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert delete.status_code == 303 and "msg=role%20deleted" in delete.headers["location"]
+    after = get("/admin/tenant?tab=roles", "acme.foundation.localhost.com")
+    assert code not in after.text, "deleted role still listed"
+
+    # system roles reject deletion via the service guard
+    sys_row = _re.search(r'cell-mono">tenant-admin</td>', after.text)
+    assert sys_row, "global role missing from list"
+    sys_id = _re.search(r'cell-mono">tenant-admin</td>.*?delete" action="/admin/tenant/roles/([0-9a-f-]+)/delete"', after.text, _re.S)
+    if sys_id:
+        denied = client.post(
+            f"/admin/tenant/roles/{sys_id.group(1)}/delete",
+            headers={"host": "acme.foundation.localhost.com"},
+            follow_redirects=False,
+        )
+        assert "err=" in denied.headers["location"], "system role deletion must be refused"
+
+    client.get("/signout", headers={"host": "acme.foundation.localhost.com"})
 
 
 def suite_gateway_help(tid=None):
@@ -121,8 +227,6 @@ def suite_gateway_help(tid=None):
     for marker in ("Help center", "Getting started", "Lifecycle quick reference"):
         assert marker in h.text, f"missing on help page: {marker}"
     assert "acme" in h.text and "Foundation" in h.text, "tenant context missing"
-    assert 'href="/help"' in get("/dashboard", "acme.foundation.localhost.com").text, \
-        "help links missing (profile menu / sidebar)"
 
     d = get("/help", "127.0.0.1:8080")
     assert d.status_code == 200 and "Help center" in d.text
@@ -345,6 +449,7 @@ SUITES = [
     suite_gateway_bad_hosts,
     suite_gateway_unknown_paths,
     suite_gateway_dashboard,
+    suite_gateway_tenant_admin,
     suite_gateway_help,
     suite_gateway_graph,
 ]

@@ -1,22 +1,21 @@
 @echo off
 setlocal EnableExtensions
 
-rem ── PLM-IQ build/run/term ─────────────────────────────────────────────
-rem   build-run-term.bat dev  build -> docker compose build (dev env)
-rem   build-run-term.bat dev  run   -> docker compose up -d  (dev env)
-rem   build-run-term.bat dev  term  -> open a shell in the dev api container
-rem   build-run-term.bat prod build -> docker compose build (prod env)
-rem   build-run-term.bat prod run   -> docker compose up -d  (prod env)
-rem   build-run-term.bat prod term  -> open a shell in the prod api container
-rem ────────────────────────────────────────────────────────────────────
+rem -- PLM-IQ build/run/term ------------------------------------------
+rem   plmiq-ctx.bat dev  build -> docker compose build (dev env)
+rem   plmiq-ctx.bat dev  run   -> docker compose up -d  (dev env)
+rem   plmiq-ctx.bat dev  term  -> open a shell in the dev api container
+rem   plmiq-ctx.bat prod build -> docker compose build (prod env)
+rem   plmiq-ctx.bat prod run   -> docker compose up -d  (prod env)
+rem   plmiq-ctx.bat prod term  -> open a shell in the prod api container
+rem --------------------------------------------------------------------
 
-rem This script lives in setup\docker. Derive paths from it.
-set "PLMIQ_DOCKER=%~dp0"
-rem setup\ (config: .env, .env.dev.example, deploy\) is one level up;
-rem resolve via %%~fi to a clean absolute path (no "\.." segments)
-for %%i in ("%~dp0..")    do set "PLMIQ_SETUP=%%~fi"
-rem repo root (source, data, db) is two levels up
-for %%i in ("%~dp0..\..") do set "PLMIQ_ROOT=%%~fi"
+rem This script lives at the repo root; derive all paths from it.
+rem The "." suffix makes %%~fi drop the trailing backslash, so quoted
+rem use never ends in \" ; paths resolve clean (no ".." segments).
+for %%i in ("%~dp0.")             do set "PLMIQ_ROOT=%%~fi"
+for %%i in ("%~dp0setup")         do set "PLMIQ_SETUP=%%~fi"
+for %%i in ("%~dp0setup\docker")  do set "PLMIQ_DOCKER=%%~fi\"
 
 set "PROFILE=%~1"
 set "ACTION=%~2"
@@ -59,12 +58,12 @@ if /i "%ACTION%"=="term" (
 :dev_urls
 echo %G%  Dev service URLs (ports are defaults; override in setup\.env):%N%
 echo %G%    api           : http://localhost:8000  (docs: /docs)%N%
-echo %G%    pgAdmin       : http://localhost:5050  (admin@example.com / plmiq; server 'plm-iq' pre-registered)%N%
+echo %G%    pgAdmin       : http://localhost:5050  (platformadmin@plm-iq.site / 19691969; server 'plm-iq' pre-registered)%N%
 echo %G%    Gitea         : http://localhost:3000%N%
 echo %G%    Mailpit UI    : http://localhost:8025  (SMTP on localhost:1025)%N%
-echo %G%    Elasticsearch : http://localhost:9200  (elastic / elastic)%N%
+echo %G%    Elasticsearch : http://localhost:9200  (elastic / 19691969)%N%
 goto :eof
 
 :usage
-echo %Y%Usage: build-run-term.bat ^<dev^|prod^> ^<build^|run^|term^>%N%
+echo %Y%Usage: plmiq-ctx.bat ^<dev^|prod^> ^<build^|run^|term^>%N%
 exit /b 1

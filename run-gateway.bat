@@ -8,9 +8,10 @@ rem     http://acme.foundation.localhost.com:8080/
 rem   For that to resolve locally, add once (admin PowerShell):
 rem     127.0.0.1 acme.foundation.localhost.com
 rem   Plain http://127.0.0.1:8080/ intentionally shows the branded 404.
-rem -------------------------------------------------------------------------
+rem --------------------------------------------------------------------------
 
-cd /d "%~dp0"
+rem This script lives at the repo root; the app package is under backend\.
+cd /d "%~dp0backend"
 
 where uv >nul 2>nul
 if %errorlevel%==0 (

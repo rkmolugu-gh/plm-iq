@@ -22,7 +22,7 @@ over a shared core.
 database\deploy-schema.bat -schema -seed   :: provision dev Postgres
 run-services-tests.bat                     :: service-layer suites (needs DB)
 run-gateway-tests.bat                      :: gateway page suites (no DB)
-backend\run-gateway.bat                    :: gateway on http://localhost:8080
+run-gateway.bat                              :: gateway on http://localhost:8080
 build-static-site.bat                      :: setup\public_html(.tar.gz)
 ```
 
