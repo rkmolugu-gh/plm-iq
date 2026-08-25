@@ -29,11 +29,10 @@
   {% if editing_tenant %}
   <form class="crud-form" method="post" action="/admin/tenant/tenants/{{ editing_tenant.id }}/update">
     <h2>Edit tenant {{ editing_tenant.name }}</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <input type="hidden" name="version" value="{{ editing_tenant.version }}">
     <div class="form-grid">
-      <label>Name <span class="req">*</span><input name="name" value="{{ editing_tenant.name }}" required></label>
-      <label>Contact email <span class="req">*</span><input name="contact_email" value="{{ editing_tenant.contact_email }}" type="email" required></label>
+      <label>Name<input name="name" value="{{ editing_tenant.name }}" required></label>
+      <label>Contact email<input name="contact_email" value="{{ editing_tenant.contact_email }}" type="email" required></label>
       <label>Edition
         <select name="edition_id">
           {% for e in editions %}<option value="{{ e }}"{{ ' selected' if e == editing_tenant.edition_id }}>{{ e }}</option>{% endfor %}
@@ -70,8 +69,13 @@
     <p class="cell-anno">No users belong to this tenant yet.</p>
     {% endif %}
     <div class="form-grid add-user-row">
-      <label>Add existing user (email or login id) <span class="req">*</span>
-        <input name="login_id" placeholder="user@example.com" required>
+      <label>Add existing user
+        <select name="login_id" required>
+          <option value="" disabled selected>pick a user&hellip;</option>
+          {% for u in tenant_candidates %}
+          <option value="{{ u.email }}">{{ u.email }} &middot; {{ u.full_name }}</option>
+          {% endfor %}
+        </select>
       </label>
     </div>
     <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Add user to tenant</button></div>
@@ -79,12 +83,11 @@
   {% else %}
   <form class="crud-form" method="post" action="/admin/tenant/tenants/create">
     <h2>Provision a new tenant</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <div class="form-grid">
-      <label>Subdomain <span class="req">*</span><input name="subdomain" placeholder="acme" pattern="[a-z0-9][a-z0-9-]{2,62}" required></label>
-      <label>Name <span class="req">*</span><input name="name" required></label>
-      <label>Contact email <span class="req">*</span><input name="contact_email" type="email" required></label>
-      <label>Integration secret <span class="req">*</span><input name="secret" required></label>
+      <label>Subdomain<input name="subdomain" placeholder="acme" pattern="[a-z0-9][a-z0-9-]{2,62}" required></label>
+      <label>Name<input name="name" required></label>
+      <label>Contact email<input name="contact_email" type="email" required></label>
+      <label>Integration secret<input name="secret" required></label>
       <label>Edition
         <select name="edition_id">{% for e in editions %}<option value="{{ e }}">{{ e }}</option>{% endfor %}</select>
       </label>
@@ -114,10 +117,9 @@
   {% if editing_user %}
   <form class="crud-form" method="post" action="/admin/tenant/users/{{ editing_user.id }}/update">
     <h2>Edit user {{ editing_user.email }}</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <input type="hidden" name="version" value="{{ editing_user.version }}">
     <div class="form-grid">
-      <label>Full name <span class="req">*</span><input name="full_name" value="{{ editing_user.full_name }}" required></label>
+      <label>Full name<input name="full_name" value="{{ editing_user.full_name }}" required></label>
       <label>New password <input name="password" type="password" placeholder="(unchanged)"></label>
       <label>Status
         <select name="status">
@@ -135,10 +137,9 @@
   {% else %}
   <form class="crud-form" method="post" action="/admin/tenant/users/create">
     <h2>Add a user to {{ identity.tenant_name }}</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <div class="form-grid">
-      <label>Email or login id <span class="req">*</span><input name="email" required></label>
-      <label>Full name <span class="req">*</span><input name="full_name" required></label>
+      <label>Email or login id<input name="email" required></label>
+      <label>Full name<input name="full_name" required></label>
       <label>Password <input name="password" type="password"></label>
       <label class="check"><input type="checkbox" name="is_tenant_admin"> Tenant admin</label>
     </div>
@@ -168,10 +169,9 @@
   {% if editing_role %}
   <form class="crud-form" method="post" action="/admin/tenant/roles/{{ editing_role.id }}/update">
     <h2>Edit role {{ editing_role.code }}</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <input type="hidden" name="version" value="{{ editing_role.version }}">
     <div class="form-grid">
-      <label>Name <span class="req">*</span><input name="name" value="{{ editing_role.name }}" required></label>
+      <label>Name<input name="name" value="{{ editing_role.name }}" required></label>
       <label>Description <input name="description" value="{{ editing_role.description }}"></label>
     </div>
     <div class="form-actions">
@@ -182,10 +182,9 @@
   {% else %}
   <form class="crud-form" method="post" action="/admin/tenant/roles/create">
     <h2>Create a tenant role</h2>
-    <p class="form-note"><span class="req">*</span> required</p>
     <div class="form-grid">
-      <label>Code <span class="req">*</span><input name="code" placeholder="approver" required></label>
-      <label>Name <span class="req">*</span><input name="name" required></label>
+      <label>Code<input name="code" placeholder="approver" required></label>
+      <label>Name<input name="name" required></label>
       <label>Description <input name="description"></label>
     </div>
     <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create role</button></div>

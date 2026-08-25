@@ -236,9 +236,12 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
             if eid:
                 editing_tenant = tenant_service.get_tenant(session, eid)
     tenant_users = []
+    tenant_candidates = []
     if editing_tenant is not None:
         with db.tenant_session(editing_tenant["id"]) as session:
             tenant_users = user_service.list_users(session, editing_tenant["id"], limit=200).items
+        with db.admin_session() as session:
+            tenant_candidates = user_service.list_users_outside_tenant(session, editing_tenant["id"])
     with db.tenant_session(tid) as session:
         users_page = user_service.list_users(session, tid, limit=200)
         roles_page = role_service.list_roles(session, tenant_id=tid, limit=200)
@@ -262,6 +265,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
         editing_user=editing_user,
         editing_role=editing_role,
         tenant_users=tenant_users,
+        tenant_candidates=tenant_candidates,
         flash_msg=msg,
         flash_err=err,
     )

@@ -1069,21 +1069,11 @@ pre.mermaid {
 
 .inline-form { display: inline; }
 
-/* mandatory-input markers */
-.req {
-  color: var(--danger);
-  font-weight: 700;
-}
-
-.form-note {
-  margin: -0.4rem 0 0.8rem;
-  font-size: 0.74rem;
-  color: var(--ink-faint);
-}
-
+/* mandatory inputs: light red background instead of asterisks */
 .form-grid input[required],
 .form-grid select[required] {
-  border-left: 3px solid var(--accent);
+  background: #fdefed;
+  border-left: 3px solid #e8a49c;
 }
 
 .form-grid input:user-invalid {

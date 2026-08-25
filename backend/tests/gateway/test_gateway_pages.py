@@ -250,6 +250,11 @@ def suite_gateway_tenant_admin(tid=None):
     assert mkuser.status_code == 303 and "users&msg=user%20created" in mkuser.headers["location"], \
         f"user create failed: {mkuser.headers.get('location')}"
 
+    # candidates for the dropdown come from outside the edited tenant only
+    pick = get(f"/admin/tenant?tab=tenants&edit={tid}", "acme.foundation.localhost.com")
+    assert f'value="{mover}"' in pick.text, "created user missing from add-user dropdown"
+    assert 'value="dane@plm-iq.site"' in pick.text, "existing users missing from dropdown"
+
     add = client.post(
         f"/admin/tenant/tenants/{tid}/add-user",
         data={"login_id": mover},

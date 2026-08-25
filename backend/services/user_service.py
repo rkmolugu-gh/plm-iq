@@ -157,6 +157,20 @@ def update_user(session: Session, tenant_id: UUID, user_id: UUID, data: UserUpda
     return _to_out(updated)
 
 
+def list_users_outside_tenant(session: Session, tenant_id: UUID, *, limit: int = 200) -> list[UserOut]:
+    """Accounts NOT in the given tenant — candidates for 'add existing user'.
+
+    Cross-tenant read: run via ``db.admin_session()``.
+    """
+    rows = session.execute(
+        select(tables.iam_user)
+        .where(tables.iam_user.c.tenant_id != tenant_id)
+        .order_by(tables.iam_user.c.email)
+        .limit(min(max(limit, 1), _MAX_LIMIT))
+    ).all()
+    return [_to_out(r) for r in rows]
+
+
 def assign_user_to_tenant(session: Session, target_tenant_id: UUID, login_id: str, actor: str) -> UserOut:
     """Move an existing account into the target tenant.
 
