@@ -304,6 +304,20 @@ class PermissionOut(CamelModel):
     description: str
 
 
+class PermissionCreate(CamelModel):
+    code: str
+    resource: str
+    action: str
+    description: str = ""
+
+
+class PermissionUpdate(CamelModel):
+    code: str | None = None
+    resource: str | None = None
+    action: str | None = None
+    description: str | None = None
+
+
 # ── Pagination ──────────────────────────────────────────────────────────────
 
 ItemT = TypeVar("ItemT")

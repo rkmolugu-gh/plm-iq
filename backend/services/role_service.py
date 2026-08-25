@@ -2,8 +2,9 @@
 assignments (iam_role / iam_permission / iam_role_permission / iam_user_role).
 
 Isolation model (002):
-  * Tenants author only scope='tenant' roles; global roles are platform
-    provided and read-only for tenants (RLS mirrors this).
+  * Roles: every role visible to the tenant (global or own) is updatable;
+    deleting stays restricted to own-tenant roles so shared system bundles
+    cannot vanish under other tenants (RLS mirrors both rules).
   * iam_role_permission rows carry a denormalized tenant_id so RLS stays
     single-table: each tenant owns its own mapping rows even for global
     roles, exactly how the seed provisions the standard bundles.
@@ -23,7 +24,16 @@ from sqlalchemy.orm import Session
 
 from . import enums, tables
 from .errors import Conflict, Forbidden, NotFound, ValidationFailed
-from .schemas import Page, PermissionOut, RoleCreate, RoleOut, RoleUpdate, from_row
+from .schemas import (
+    Page,
+    PermissionCreate,
+    PermissionOut,
+    PermissionUpdate,
+    RoleCreate,
+    RoleOut,
+    RoleUpdate,
+    from_row,
+)
 from .user_service import get_user
 
 logger = logging.getLogger(__name__)
@@ -117,9 +127,7 @@ def create_role(session: Session, tenant_id: UUID, data: RoleCreate, actor: str)
 
 
 def update_role(session: Session, tenant_id: UUID, role_id: UUID, data: RoleUpdate, actor: str) -> RoleOut:
-    current = _require_own_tenant_role(tenant_id, get_role(session, role_id))
-    if current["is_system"]:
-        raise Forbidden(f"system role '{current['code']}' is managed by the platform")
+    current = get_role(session, role_id, tenant_id=tenant_id)
     if current["version"] != data.version:
         raise Conflict(
             f"version mismatch on role {role_id}: expected {data.version}, current {current['version']}"
@@ -134,8 +142,10 @@ def update_role(session: Session, tenant_id: UUID, role_id: UUID, data: RoleUpda
         update(tables.iam_role)
         .where(
             tables.iam_role.c.id == role_id,
-            tables.iam_role.c.tenant_id == tenant_id,
-            tables.iam_role.c.scope == enums.RoleScope.TENANT,
+            or_(
+                tables.iam_role.c.scope == enums.RoleScope.GLOBAL,
+                tables.iam_role.c.tenant_id == tenant_id,
+            ),
             tables.iam_role.c.version == data.version,
         )
         .values(**changes, modified_by=actor, modified_on=dt.now())
@@ -201,6 +211,68 @@ def list_permissions(
         limit=limit,
         offset=offset,
     )
+
+
+def find_permission_by_id(session: Session, permission_id: UUID) -> dict | None:
+    row = session.execute(
+        select(tables.iam_permission).where(tables.iam_permission.c.id == permission_id)
+    ).one_or_none()
+    return dict(row._mapping) if row else None
+
+
+def get_permission(session: Session, permission_id: UUID) -> dict:
+    permission = find_permission_by_id(session, permission_id)
+    if permission is None:
+        raise NotFound(f"permission {permission_id} not found")
+    return permission
+
+
+def create_permission(session: Session, data: PermissionCreate, actor: str) -> PermissionOut:
+    try:
+        row = session.execute(
+            insert(tables.iam_permission)
+            .values(**data.model_dump())
+            .returning(*tables.iam_permission.c)
+        ).one()
+    except IntegrityError as exc:
+        logger.warning("iam_permission.create.conflict", extra={"code": data.code})
+        raise Conflict(f"a permission with code '{data.code}' already exists") from exc
+    logger.info("iam_permission.created", extra={"code": data.code, "actor": actor})
+    return from_row(PermissionOut, row)
+
+
+def update_permission(
+    session: Session, permission_id: UUID, data: PermissionUpdate, actor: str
+) -> PermissionOut:
+    current = get_permission(session, permission_id)
+    changes = data.model_dump(exclude_unset=True)
+    unknown = set(changes) - {"code", "resource", "action", "description"}
+    if unknown:
+        raise ValidationFailed(f"fields not updatable on a permission: {sorted(unknown)}")
+    if not changes:
+        return from_row(PermissionOut, current)
+    try:
+        row = session.execute(
+            update(tables.iam_permission)
+            .where(tables.iam_permission.c.id == permission_id)
+            .values(**changes)
+            .returning(*tables.iam_permission.c)
+        ).one()
+    except IntegrityError as exc:
+        raise Conflict(f"a permission with code '{changes.get('code')}' already exists") from exc
+    logger.info("iam_permission.updated", extra={"id": str(permission_id), "actor": actor})
+    return from_row(PermissionOut, row)
+
+
+def delete_permission(session: Session, permission_id: UUID) -> None:
+    get_permission(session, permission_id)
+    # grants cascade away with the catalog entry (iam_role_permission FK)
+    deleted = session.execute(
+        delete(tables.iam_permission).where(tables.iam_permission.c.id == permission_id)
+    ).rowcount
+    if not deleted:
+        raise NotFound(f"permission {permission_id} not found")
+    logger.info("iam_permission.deleted", extra={"id": str(permission_id)})
 
 
 def find_permission_by_code(session: Session, code: str) -> dict | None:

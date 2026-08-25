@@ -370,6 +370,10 @@ def suite_gateway_graph(tid=None):
     assert "Sign in to see the governing rules" in rl.text, \
         "anonymous visitors must not see rule rows"
 
+    gb = get("/graph?tab=graph", "plm-iq.foundation.localhost.com")
+    assert gb.status_code == 200 and "Sign in to build relationships" in gb.text, \
+        "anonymous visitors must not see the drag-and-drop builder"
+
     # rule CRUD requires sign-in
     denied = client.post(
         "/graph/rules/create",
@@ -390,14 +394,17 @@ def suite_gateway_graph(tid=None):
     assert 'class="mermaid"' in gv.text and "flowchart LR" in gv.text, "mermaid diagram missing"
     # jinja autoescapes -> the browser receives entity-encoded arrows/quotes
     assert "ASM1000 --&gt;|&#34;BOM&#34;| PRT1001" in gv.text, "traversal edge missing from diagram"
-    assert "PRT-1001/A - Motor Housing" in gv.text, "diagram label missing revision"
+    assert "PRT-1001/A · Node · Motor Housing" in gv.text, "diagram label missing revision or kind"
     assert 'click ASM1000 &#34;/graph/view/ASM-1000&#34;' in gv.text, "node click traversal missing"
 
     assert "Relationship tree" in gv.text and "tree-root" in gv.text, "tree view missing"
-    assert ">PRT-1001/A &middot; Motor Housing, Machined<" in gv.text, "root vertex missing from tree"
-    assert "ASM-1000/B &middot; Electric Drive Unit" in gv.text, "counterpart revision missing"
+    assert ">PRT-1001/A &middot; Node &middot; Motor Housing, Machined<" in gv.text, "root vertex missing from tree"
+    assert "ASM-1000/B &middot; Node &middot; Electric Drive Unit" in gv.text, "counterpart revision missing"
     assert ">EC-0007 &middot;" in gv.text, "empty-revision counterpart must render bare"
     assert "tree-rev" not in gv.text, "stale revision chip remains"
+    assert "Effectivity" not in gv.text, "effectivity column was removed from the view page"
+    assert "quantity=1" in gv.text and "unitOfMeasure=EA" in gv.text, \
+        "annotations must render as key=value pairs on one line"
     # outgoing branches: KIND --> (flow toward child); incoming: <-- KIND (flow into root)
     assert "REFDOCS --&gt;" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
     assert "&lt;-- BOM" in gv.text and "ASM-1000" in gv.text, "incoming branch missing"

@@ -171,7 +171,7 @@ def build_graph_view(
     for n in node_order:
         meta = vmap[n]
         # single-line labels: autoescaped output must stay valid mermaid
-        lines.append(f'    {nid(n)}["{disp(n)} - {meta["name"]}"]')
+        lines.append(f'    {nid(n)}["{disp(n)} · {meta["kind"]} · {meta["name"]}"]')
     for edge in found_map.values():
         lines.append(f'    {nid(edge["source"])} -->|"{edge["kind"]}"| {nid(edge["target"])}')
     for n in node_order:

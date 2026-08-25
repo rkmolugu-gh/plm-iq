@@ -176,14 +176,39 @@
 
 {# ── Permissions ───────────────────────────────────────────────────────── #}
 {% elif tab == 'permissions' %}
+  {% if editing_permission %}
+  <form class="crud-form" method="post" action="/admin/tenant/permissions/{{ editing_permission.id }}/update">
+    <h2>Edit permission {{ editing_permission.code }}</h2>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/admin/tenant?tab=permissions">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Code<input name="code" value="{{ editing_permission.code }}" required></label>
+      <label>Resource<input name="resource" value="{{ editing_permission.resource }}" required></label>
+      <label>Action<input name="action" value="{{ editing_permission.action }}" required></label>
+      <label>Description <input name="description" value="{{ editing_permission.description }}"></label>
+    </div>
+  </form>
+  {% else %}
+  <form class="crud-form" method="post" action="/admin/tenant/permissions/create">
+    <h2>Add a permission</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create permission</button></div>
+    <div class="form-grid">
+      <label>Code<input name="code" placeholder="vertex:export" pattern="[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*" required></label>
+      <label>Resource<input name="resource" placeholder="vertex" required></label>
+      <label>Action<input name="action" placeholder="export" required></label>
+      <label>Description <input name="description"></label>
+    </div>
+  </form>
+  {% endif %}
   <div class="table-toolbar">
     <p class="table-desc">Platform capability catalog &mdash; what each permission grants and
-      which of this tenant's roles hold it. Grant or revoke through the roles;
-      the catalog itself is platform-managed.</p>
+      which of this tenant's roles hold it. Grant or revoke through the roles.</p>
   </div>
   {% if permissions %}
   <table class="data-table">
-    <thead><tr><th>Permission</th><th>Resource</th><th>Action</th><th>Description</th><th>Held by roles</th></tr></thead>
+    <thead><tr><th>Permission</th><th>Resource</th><th>Action</th><th>Description</th><th>Held by roles</th><th></th></tr></thead>
     <tbody>
       {% for p in permissions %}
       <tr>
@@ -192,6 +217,12 @@
         <td>{{ p.action }}</td>
         <td>{{ p.description }}</td>
         <td class="cell-anno">{{ p.roles }}</td>
+        <td class="row-actions">
+          <a class="btn-mini" href="/admin/tenant?tab=permissions&edit={{ p.id }}">Edit</a>
+          <form class="inline-form" method="post" action="/admin/tenant/permissions/{{ p.id }}/delete">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -238,13 +269,11 @@
         <td>{{ r.edition_scope or 'any' }}</td>
         <td>{{ 'platform-managed' if r.is_system else 'tenant-owned' }}</td>
         <td class="row-actions">
-          {% if not r.is_system %}
           <a class="btn-mini" href="/admin/tenant?tab=roles&edit={{ r.id }}">Edit</a>
+          {% if not r.is_system %}
           <form class="inline-form" method="post" action="/admin/tenant/roles/{{ r.id }}/delete">
             <button class="btn-mini btn-danger" type="submit">Delete</button>
           </form>
-          {% else %}
-          <span class="cell-anno">read-only</span>
           {% endif %}
         </td>
       </tr>

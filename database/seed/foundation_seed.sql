@@ -32,7 +32,7 @@ INSERT INTO foundation_vertex (
     solution_attributes, tenant_attributes
 ) VALUES
 ('00000000-0000-4000-8000-000000000001',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Node',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
  '00000000-0000-4000-8000-000000000999',
  'V', '1001', 'Motor Housing',
  'Machined aluminum housing for the electric drive unit motor', 'A',
@@ -42,7 +42,7 @@ INSERT INTO foundation_vertex (
  '{"customerPartCode": "TES-MTR-HSG-001", "internalProgram": "EV Platform X"}'),
 
 ('00000000-0000-4000-8000-000000000002',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Node',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
  '00000000-0000-4000-8000-000000000999',
  'V', '1000', 'Electric Drive Unit',
  'Complete drive unit assembly integrating motor, housing and inverter interface', 'B',
@@ -95,7 +95,7 @@ INSERT INTO foundation_graph_rule (
 ) VALUES
 ('00000000-0000-4000-8000-000000000101',
  'platform', NULL, NULL,
- 'REFDOCS', 'Node', 'Document', 'source_to_target',
+ 'REFDOCS', 'Item', 'Document', 'source_to_target',
  '0..N', '0..N', 'optional', 'optional',
  false,
  ARRAY['draft', 'in_review', 'released']::lifecycle_state[],
@@ -106,7 +106,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000102',
  'platform', NULL, NULL,
- 'BOM', 'Node', 'Node', 'source_to_target',
+ 'BOM', 'Item', 'Item', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['in_review', 'approved', 'released']::lifecycle_state[],
@@ -117,7 +117,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000103',
  'edition', NULL, 'foundation',
- 'AFFECTS', 'EC', 'Node', 'source_to_target',
+ 'AFFECTS', 'EC', 'Item', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['draft', 'in_review']::lifecycle_state[],
@@ -128,7 +128,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000104',
  'tenant', '11111111-1111-1111-1111-111111111111', NULL,
- 'REFDOCS', 'Node', 'Document', 'source_to_target',
+ 'REFDOCS', 'Item', 'Document', 'source_to_target',
  '0..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['approved', 'released']::lifecycle_state[],
@@ -161,7 +161,7 @@ INSERT INTO foundation_edge (
 ) VALUES
 ('00000000-0000-4000-9000-000000000001',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000001', 'Node',
+ '00000000-0000-4000-8000-000000000001', 'Item',
  '00000000-0000-4000-8000-000000000003', 'Document',
  'active', '2026-01-01', '2027-01-01',
  '00000000-0000-4000-8000-000000000104', 'E',
@@ -171,7 +171,7 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000002',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000002', 'Node',
+ '00000000-0000-4000-8000-000000000002', 'Item',
  '00000000-0000-4000-8000-000000000003', 'Document',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000101', 'E',
@@ -181,8 +181,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000003',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'BOM', 'Includes component',
- '00000000-0000-4000-8000-000000000002', 'Node',
- '00000000-0000-4000-8000-000000000001', 'Node',
+ '00000000-0000-4000-8000-000000000002', 'Item',
+ '00000000-0000-4000-8000-000000000001', 'Item',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000102', 'E',
  'seed', '2025-12-18 10:20:00+00', 'seed', '2025-12-18 10:20:00+00',
@@ -190,9 +190,9 @@ INSERT INTO foundation_edge (
  '{"quantity": 1, "unitOfMeasure": "EA", "findNumber": "010", "usageType": "Required", "referenceDesignator": "M1", "variantCondition": null}'),
 
 ('00000000-0000-4000-9000-000000000004',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Affects Node',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Affects Item',
  '00000000-0000-4000-8000-000000000005', 'EC',
- '00000000-0000-4000-8000-000000000001', 'Node',
+ '00000000-0000-4000-8000-000000000001', 'Item',
  'active', '2026-03-01', NULL,
  '00000000-0000-4000-8000-000000000103', 'E',
  'seed', '2026-02-25 17:45:00+00', 'seed', '2026-02-25 17:45:00+00',
@@ -257,7 +257,19 @@ INSERT INTO iam_permission (id, code, resource, action, description) VALUES
 ('30000000-0000-4000-8000-000000000013', 'rule:update',       'rule',    'update', 'Edit tenant graph rules'),
 ('30000000-0000-4000-8000-000000000014', 'user:invite',       'user',    'invite', 'Invite users to the tenant'),
 ('30000000-0000-4000-8000-000000000015', 'user:manage',       'user',    'manage', 'Manage users and role assignments'),
-('30000000-0000-4000-8000-000000000016', 'tenant:manage',     'tenant',  'manage', 'Manage tenant configuration');
+('30000000-0000-4000-8000-000000000016', 'tenant:manage',     'tenant',  'manage', 'Manage tenant configuration'),
+('30000000-0000-4000-8000-000000000017', 'tenant:create',     'tenant',  'create', 'Provision tenants'),
+('30000000-0000-4000-8000-000000000018', 'tenant:read',       'tenant',  'read',   'View the tenant registry'),
+('30000000-0000-4000-8000-000000000019', 'tenant:update',     'tenant',  'update', 'Edit tenant configuration and status'),
+('30000000-0000-4000-8000-000000000020', 'tenant:delete',     'tenant',  'delete', 'Archive or remove tenants'),
+('30000000-0000-4000-8000-000000000021', 'role:create',       'role',    'create', 'Author roles'),
+('30000000-0000-4000-8000-000000000022', 'role:read',         'role',    'read',   'View roles'),
+('30000000-0000-4000-8000-000000000023', 'role:update',       'role',    'update', 'Edit roles'),
+('30000000-0000-4000-8000-000000000024', 'role:delete',       'role',    'delete', 'Delete roles'),
+('30000000-0000-4000-8000-000000000025', 'permission:create', 'permission', 'create', 'Add permissions to the catalog'),
+('30000000-0000-4000-8000-000000000026', 'permission:read',   'permission', 'read',   'View the permission catalog'),
+('30000000-0000-4000-8000-000000000027', 'permission:update', 'permission', 'update', 'Edit catalog entries'),
+('30000000-0000-4000-8000-000000000028', 'permission:delete', 'permission', 'delete', 'Remove permissions from the catalog');
 
 -- ── Global system roles ─────────────────────────────────────────────────────
 
@@ -279,13 +291,12 @@ INSERT INTO iam_role_permission (role_id, permission_id, tenant_id)
 SELECT '40000000-0000-4000-8000-000000000001', p.id, '11111111-1111-1111-1111-111111111111'
 FROM iam_permission p;
 
--- engineer: full graph access + release + rule authoring; no user/tenant admin
+-- platform-admin: full CRUD over tenants, users, roles and permissions
+-- (every permission whose resource is one of the management domains)
 INSERT INTO iam_role_permission (role_id, permission_id, tenant_id)
 SELECT '40000000-0000-4000-8000-000000000002', p.id, '11111111-1111-1111-1111-111111111111'
 FROM iam_permission p
-WHERE p.code IN ('graph:view', 'vertex:create', 'vertex:read', 'vertex:update',
-                 'vertex:release', 'edge:create', 'edge:read', 'edge:update',
-                 'edge:delete', 'rule:read', 'rule:create', 'rule:update');
+WHERE p.resource IN ('tenant', 'user', 'role', 'permission');
 
 -- contributor: author only, no release
 INSERT INTO iam_role_permission (role_id, permission_id, tenant_id)

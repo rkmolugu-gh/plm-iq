@@ -30,6 +30,8 @@ from services.schemas import (
     EdgeUpdate,
     GraphRuleCreate,
     GraphRuleUpdate,
+    PermissionCreate,
+    PermissionUpdate,
     RoleCreate,
     RoleUpdate,
     TenantCreate,
@@ -190,7 +192,7 @@ def dashboard(request: Request) -> HTMLResponse:
     return _render_not_found(request, path="/dashboard")
 
 
-_GRAPH_TABS = ("vertex", "edge", "rule")
+_GRAPH_TABS = ("vertex", "edge", "graph", "rule")
 
 
 def _safe_uuid(raw: str) -> UUID | None:
@@ -363,11 +365,12 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
             "version": d["version"],
         }
 
+    gv_rules = [rule_view(r) for r in rules_page.items]
     context: dict[str, Any] = {
         "graph_live": True,
         "gv_vertices": gv_vertices,
         "gv_edges": gv_edges,
-        "gv_rules": [rule_view(r) for r in rules_page.items],
+        "gv_rules": gv_rules,
         "tab": tab,
         "show_nav": True,
         "flash_msg": params.get("msg") or "",
@@ -380,6 +383,11 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
         "edge_states": [s.value for s in enums.EdgeState],
         "cardinalities": [c.value for c in enums.Cardinality],
         "participations": [p.value for p in enums.Participation],
+        # drag-and-drop builder: rule patterns drive the edge-kind proposals
+        "builder_rules": [
+            {"kind": r["kind"], "sk": r["source_kind"], "tk": r["target_kind"], "scope": r["scope"]}
+            for r in gv_rules
+        ],
     }
 
     def vertex_out(row) -> dict:
@@ -849,7 +857,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
     err = request.query_params.get("err") or ""
 
     tenants_page = users_page = roles_page = None
-    editing_tenant = editing_user = editing_role = None
+    editing_tenant = editing_user = editing_role = editing_permission = None
     tid = UUID(identity.tenant_id)
 
     def _safe_id(raw: str) -> UUID | None:
@@ -892,8 +900,13 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
             for r in roles_page.items:
                 for perm in role_service.list_role_permissions(session, tid, r.id):
                     grants.setdefault(perm.code, set()).add(r.code)
+            if edit_id:
+                eid = _safe_id(edit_id)
+                if eid:
+                    editing_permission = role_service.get_permission(session, eid)
         permissions_view = [
             {
+                "id": str(p.id),
                 "code": p.code, "resource": p.resource, "action": p.action,
                 "description": p.description,
                 "roles": ", ".join(sorted(grants.get(p.code, set()))) or "\u2014",
@@ -913,6 +926,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
         editing_tenant=editing_tenant,
         editing_user=editing_user,
         editing_role=editing_role,
+        editing_permission=editing_permission,
         tenant_users=tenant_users,
         tenant_candidates=tenant_candidates,
         flash_msg=msg,
@@ -1124,6 +1138,77 @@ def role_delete_action(request: Request, role_id: UUID) -> RedirectResponse:
         return RedirectResponse("/admin/tenant?tab=roles&msg=role deleted", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=roles&err={quote(str(exc))}", status_code=303)
+
+
+@router.post("/admin/tenant/permissions/create")
+def permission_create_action(
+    request: Request,
+    code: str = Form(...),
+    resource: str = Form(...),
+    action: str = Form(...),
+    description: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            role_service.create_permission(
+                session,
+                PermissionCreate(code=code.strip(), resource=resource.strip(),
+                                 action=action.strip(), description=description.strip()),
+                actor=_actor(request),
+            )
+        note = f"permission {code.strip()} created"
+        return RedirectResponse(f"/admin/tenant?tab=permissions&msg={quote(note)}", status_code=303)
+    except ServiceError as exc:
+        return RedirectResponse(f"/admin/tenant?tab=permissions&err={quote(str(exc))}", status_code=303)
+
+
+@router.post("/admin/tenant/permissions/{permission_id}/update")
+def permission_update_action(
+    request: Request,
+    permission_id: UUID,
+    code: str = Form(""),
+    resource: str = Form(""),
+    action: str = Form(""),
+    description: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    changes: dict[str, Any] = {}
+    if code.strip():
+        changes["code"] = code.strip()
+    if resource.strip():
+        changes["resource"] = resource.strip()
+    if action.strip():
+        changes["action"] = action.strip()
+    changes["description"] = description.strip()
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            role_service.update_permission(
+                session, permission_id, PermissionUpdate(**changes), actor=_actor(request)
+            )
+        return RedirectResponse("/admin/tenant?tab=permissions&msg=saved", status_code=303)
+    except ServiceError as exc:
+        return RedirectResponse(
+            f"/admin/tenant?tab=permissions&err={quote(str(exc))}&edit={permission_id}",
+            status_code=303,
+        )
+
+
+@router.post("/admin/tenant/permissions/{permission_id}/delete")
+def permission_delete_action(request: Request, permission_id: UUID) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            role_service.delete_permission(session, permission_id)
+        return RedirectResponse("/admin/tenant?tab=permissions&msg=permission deleted", status_code=303)
+    except ServiceError as exc:
+        return RedirectResponse(f"/admin/tenant?tab=permissions&err={quote(str(exc))}", status_code=303)
 
 
 def _actor(request: Request) -> str:

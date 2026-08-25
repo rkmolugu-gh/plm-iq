@@ -23,6 +23,7 @@
   <a class="tab{{ ' is-active' if tab == 'edge' }}" href="/graph?tab=edge">
     Edges <span class="tab-count">{{ gv_edges | length }}</span>
   </a>
+  <a class="tab{{ ' is-active' if tab == 'graph' }}" href="/graph?tab=graph">Graph</a>
   <a class="tab{{ ' is-active' if tab == 'rule' }}" href="/graph?tab=rule">
     Edge rules <span class="tab-count">{{ gv_rules | length }}</span>
   </a>
@@ -237,6 +238,154 @@
       {% endfor %}
     </tbody>
   </table>
+
+{# ── Graph builder ─────────────────────────────────────────────────────── #}
+{% elif tab == 'graph' %}
+  {% if graph_live %}
+  <div class="table-toolbar">
+    <p class="table-desc">Drag two vertices onto the canvas &mdash; the builder proposes the
+      relationship kinds the governing rules allow for that pattern. Pick an edge kind,
+      name it, add annotations, then create.</p>
+  </div>
+  <div class="builder-wrap">
+    <aside class="builder-palette">
+      <h2>Vertices</h2>
+      {% for v in gv_vertices %}
+      <div class="palette-chip" draggable="true"
+           data-id="{{ v.id }}" data-kind="{{ v.kind }}"
+           data-label="{{ v.label }}" data-name="{{ v.name }}">
+        <strong>{{ v.label }}</strong><span>{{ v.kind }} &middot; {{ v.name }}</span>
+      </div>
+      {% endfor %}
+    </aside>
+
+    <div class="builder-canvas" id="builder-canvas">
+      <p class="cell-anno" id="canvas-hint">Drop vertices here &mdash; first drop is the
+        source, second the target.</p>
+    </div>
+
+    <form class="crud-form builder-form" id="edge-proposal" method="post"
+          action="/graph/edges/create" hidden>
+      <h2>Proposed relationship</h2>
+      <input type="hidden" name="source_vertex_id" value="">
+      <input type="hidden" name="target_vertex_id" value="">
+      <div class="form-grid">
+        <label>Source vertex
+          <output id="src-label" class="builder-vertex">&mdash;</output>
+        </label>
+        <label>Source kind
+          <output id="src-kind" class="builder-vertex">&mdash;</output>
+        </label>
+        <label>Edge kind
+          <select name="kind" id="proposal-kind"></select>
+        </label>
+        <label>Name<input name="name" placeholder="Has component" required></label>
+        <label>Attributes (key=value per line)
+          <textarea class="attr-input" name="attributes" rows="3"
+            placeholder="quantity=4&#10;unitOfMeasure=EA"></textarea>
+        </label>
+        <label>Target kind
+          <output id="tgt-kind" class="builder-vertex">&mdash;</output>
+        </label>
+        <label>Target vertex
+          <output id="tgt-label" class="builder-vertex">&mdash;</output>
+        </label>
+      </div>
+      <p class="cell-anno" id="proposal-hint"></p>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" type="submit">+ Create edge</button>
+        <a class="btn-mini" href="/graph?tab=graph">Reset canvas</a>
+      </div>
+    </form>
+  </div>
+  <script type="application/json" id="builder-rules">{{ builder_rules | tojson }}</script>
+  <script type="application/json" id="builder-kinds">{{ edge_kinds | tojson }}</script>
+  <script>
+    (function () {
+      var canvas = document.getElementById("builder-canvas");
+      if (!canvas) return;
+      var rules = [], kinds = [];
+      try { rules = JSON.parse(document.getElementById("builder-rules").textContent || "[]"); } catch (e) {}
+      try { kinds = JSON.parse(document.getElementById("builder-kinds").textContent || "[]"); } catch (e) {}
+      var placed = [];
+      var form = document.getElementById("edge-proposal");
+
+      function esc(s) {
+        return String(s).replace(/[&<>"]/g, function (c) {
+          return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c];
+        });
+      }
+      function q(sel) { return form.querySelector(sel); }
+
+      canvas.addEventListener("dragover", function (e) { e.preventDefault(); });
+      canvas.addEventListener("drop", function (e) {
+        e.preventDefault();
+        var p = null;
+        try { p = JSON.parse(e.dataTransfer.getData("text/plain")); } catch (err) { p = null; }
+        if (!p || !p.id || placed.length >= 2) return;
+        if (placed.some(function (x) { return x.id === p.id; })) return;
+        var rect = canvas.getBoundingClientRect();
+        var x = Math.max(4, Math.min(e.clientX - rect.left - 70, rect.width - 150));
+        var y = Math.max(4, Math.min(e.clientY - rect.top - 16, rect.height - 60));
+        var node = document.createElement("div");
+        node.className = "canvas-node" + (placed.length === 0 ? " is-source" : " is-target");
+        node.style.left = x + "px";
+        node.style.top = y + "px";
+        node.innerHTML = "<strong>" + esc(p.label) + "</strong><span>" +
+                         esc(p.kind) + " · " + esc(p.name) + "</span>";
+        canvas.appendChild(node);
+        placed.push(p);
+        var hint = document.getElementById("canvas-hint");
+        if (hint) hint.remove();
+        refresh();
+      });
+
+      function refresh() {
+        if (placed.length < 2) return;
+        var a = placed[0], b = placed[1];
+        q('input[name="source_vertex_id"]').value = a.id;
+        q('input[name="target_vertex_id"]').value = b.id;
+        q("#src-label").textContent = a.label;
+        q("#src-kind").textContent = a.kind;
+        q("#tgt-label").textContent = b.label;
+        q("#tgt-kind").textContent = b.kind;
+
+        var matches = rules.filter(function (r) {
+          return r.sk === a.kind && r.tk === b.kind;
+        });
+        var proposed = [];
+        matches.forEach(function (m) {
+          if (proposed.indexOf(m.kind) === -1) proposed.push(m.kind);
+        });
+        var ordered = proposed.slice();
+        kinds.forEach(function (k) {
+          if (ordered.indexOf(k) === -1) ordered.push(k);
+        });
+        var sel = q("#proposal-kind");
+        sel.innerHTML = "";
+        ordered.forEach(function (k) {
+          var o = document.createElement("option");
+          o.value = k;
+          o.textContent = k + (proposed.indexOf(k) !== -1 ? " — suggested" : "");
+          sel.appendChild(o);
+        });
+
+        var hintEl = q("#proposal-hint");
+        if (matches.length) {
+          hintEl.textContent = "Governing rule patterns: " + matches.map(function (m) {
+            return m.kind + " (" + m.scope + ")";
+          }).join(", ") + ".";
+        } else {
+          hintEl.textContent =
+            "No graph rule governs " + a.kind + " -> " + b.kind +
+            "; creation will be rejected by the rules engine.";
+        }
+      }
+    })();
+  </script>
+  {% else %}
+  <p class="cell-anno">Sign in to build relationships on your workspace graph.</p>
+  {% endif %}
 
 {# ── Edge rules ────────────────────────────────────────────────────────── #}
 {% else %}

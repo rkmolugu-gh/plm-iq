@@ -624,7 +624,8 @@ CREATE POLICY user_tenant_isolation ON iam_user
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
--- Global roles are readable by every tenant; tenants manage only their own.
+-- Global roles are readable and editable by every tenant; deleting a role
+-- stays restricted to own-tenant rows so shared bundles cannot vanish.
 CREATE POLICY role_read ON iam_role FOR SELECT
     USING (scope = 'global' OR tenant_id = current_tenant_id());
 
@@ -632,8 +633,8 @@ CREATE POLICY role_insert ON iam_role FOR INSERT
     WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
 
 CREATE POLICY role_update ON iam_role FOR UPDATE
-    USING      (scope = 'tenant' AND tenant_id = current_tenant_id())
-    WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
+    USING      ((scope = 'tenant' AND tenant_id = current_tenant_id()) OR scope = 'global')
+    WITH CHECK ((scope = 'tenant' AND tenant_id = current_tenant_id()) OR scope = 'global');
 
 CREATE POLICY role_delete ON iam_role FOR DELETE
     USING (scope = 'tenant' AND tenant_id = current_tenant_id());

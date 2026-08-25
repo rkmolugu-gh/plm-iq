@@ -70,7 +70,7 @@
   </div>
   <ul class="tree">
     <li class="tree-root">
-      <span class="tree-vertex">{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %} &middot; {{ view.meta.name }}</span>
+      <span class="tree-vertex">{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %} &middot; {{ view.meta.kind }} &middot; {{ view.meta.name }}</span>
       {% if view.tree %}
       <ul>
         {% for t in view.tree %}
@@ -78,7 +78,7 @@
           <span class="tree-edge">{% if t.direction == 'out' %}{{ t.edge.kind }} --&gt;{% else %}&lt;-- {{ t.edge.kind }}{% endif %}</span>
           <ul>
             <li>
-              <span class="tree-vertex">{{ t.other.number }}{% if t.other.revision %}/{{ t.other.revision }}{% endif %} &middot; {{ t.other.name }}</span>
+              <span class="tree-vertex">{{ t.other.number }}{% if t.other.revision %}/{{ t.other.revision }}{% endif %} &middot; {{ t.other.kind }} &middot; {{ t.other.name }}</span>
               <span class="pill lc-{{ t.other.lifecycle }}">{{ t.other.lifecycle.replace('_', ' ') }}</span>
             </li>
           </ul>
@@ -101,7 +101,7 @@
   </div>
   <table class="data-table">
     <thead>
-      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Effectivity</th><th>Annotation</th><th></th></tr>
+      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Annotation</th><th></th></tr>
     </thead>
     <tbody>
       {% for e in view.edges %}
@@ -111,10 +111,9 @@
         <td class="cell-mono">{{ e.source_label }}</td>
         <td class="cell-mono">{{ e.target_label }}</td>
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
-        <td>{{ e.effective }}</td>
         <td class="cell-anno">
           {% if e.annotation %}
-            {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{{ ' &middot; ' if not loop.last }}{% endfor %}
+            {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{% if not loop.last %} &middot; {% endif %}{% endfor %}
           {% else %}&mdash;{% endif %}
         </td>
         <td class="row-actions"></td>
