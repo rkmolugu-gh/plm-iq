@@ -4,64 +4,191 @@
 <section class="dash-head">
   <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
   <h1 class="hero-title dash-title">Graph explorer</h1>
-  <p class="hero-sub dash-note">Sample data &mdash; create, edit, and delete wire up to the service layer at the API milestone.</p>
+  {% if graph_live %}
+  <p class="hero-sub dash-note">Live workspace graph &mdash; create, edit, and delete write
+    through the service layer with optimistic locking.</p>
+  {% else %}
+  <p class="hero-sub dash-note">Sample data &mdash; sign in to create, edit, and delete
+    vertices, relationships, and their attributes.</p>
+  {% endif %}
 </section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
 
 <nav class="tabs" aria-label="Graph entities">
   <a class="tab{{ ' is-active' if tab == 'vertex' }}" href="/graph?tab=vertex">
-    Vertices <span class="tab-count">{{ graph.vertices | length }}</span>
+    Vertices <span class="tab-count">{{ gv_vertices | length }}</span>
   </a>
   <a class="tab{{ ' is-active' if tab == 'edge' }}" href="/graph?tab=edge">
-    Edges <span class="tab-count">{{ graph.edges | length }}</span>
+    Edges <span class="tab-count">{{ gv_edges | length }}</span>
   </a>
   <a class="tab{{ ' is-active' if tab == 'annotation' }}" href="/graph?tab=annotation">
-    Edge annotations <span class="tab-count">{{ graph.annotations | length }}</span>
+    Edge annotations <span class="tab-count">{{ gv_annotations | length }}</span>
   </a>
 </nav>
 
 <section class="module-card table-card">
-  {% if tab == 'vertex' %}
+
+{# ── Vertices ──────────────────────────────────────────────────────────── #}
+{% if tab == 'vertex' %}
+  {% if graph_live and editing_vertex %}
+  <form class="crud-form" method="post" action="/graph/vertices/{{ editing_vertex.id }}/update">
+    <h2>Edit vertex {{ editing_vertex.label }}</h2>
+    <input type="hidden" name="version" value="{{ editing_vertex.version }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/graph?tab=vertex">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Name<input name="name" value="{{ editing_vertex.name }}" required></label>
+      <label>Description<input name="description" value="{{ editing_vertex.description }}"></label>
+      <label>Lifecycle
+        <select name="lifecycle_state">
+          {% for s in lifecycle_states %}<option value="{{ s }}"{{ ' selected' if s == editing_vertex.lifecycle }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Release date<input name="release_on" type="date" value="{{ editing_vertex.release_on }}"></label>
+      <label>Revision<input name="revision" value="{{ editing_vertex.revision }}"></label>
+    </div>
+  </form>
+  {% elif graph_live %}
   <div class="table-toolbar">
     <p class="table-desc">Business objects of the workspace &mdash; items, documents, and
       engineering changes, each carrying revision, lifecycle state, and classification.</p>
-    <button class="btn btn-primary btn-sm" type="button" disabled
-            title="Create wires up to the service layer at the API milestone">+ New vertex</button>
   </div>
+  <form class="crud-form" method="post" action="/graph/vertices/create">
+    <h2>Create a vertex</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create vertex</button></div>
+    <div class="form-grid">
+      <label>Name<input name="name" required></label>
+      <label>Number<input name="number" placeholder="1001" required></label>
+      <label>Description<input name="description"></label>
+      <label>Kind
+        <select name="kind" required>{% for k in vertex_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Prefix<input name="prefix" value="V"></label>
+      <label>Release date<input name="release_on" type="date"></label>
+      <label>Revision<input name="revision" value="A"></label>
+    </div>
+  </form>
+  {% else %}
+  <div class="table-toolbar">
+    <p class="table-desc">Business objects of the workspace &mdash; items, documents, and
+      engineering changes, each carrying revision, lifecycle state, and classification.</p>
+    <a class="btn btn-primary btn-sm" href="/signin"
+       title="Sign in to create vertices">+ New vertex</a>
+  </div>
+  {% endif %}
   <table class="data-table">
     <thead>
       <tr><th>Number</th><th>Kind</th><th>Name</th><th>Rev</th><th>Lifecycle</th><th></th></tr>
     </thead>
     <tbody>
-      {% for v in graph.vertices %}
+      {% for v in gv_vertices %}
       <tr>
-        <td class="cell-mono">{{ v.number }}{% if v.revision %}/{{ v.revision }}{% endif %}</td>
+        <td class="cell-mono">{{ v.label }}</td>
         <td><span class="pill">{{ v.kind }}</span></td>
         <td>{{ v.name }}</td>
         <td>{{ v.revision }}</td>
         <td><span class="pill lc-{{ v.lifecycle }}">{{ v.lifecycle.replace('_', ' ') }}</span></td>
         <td class="row-actions">
           <a class="btn-mini" href="/graph/view/{{ v.number }}">GView</a>
-          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
-          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+          {% if graph_live %}
+          <a class="btn-mini" href="/graph?tab=vertex&amp;edit={{ v.id }}">Edit</a>
+          <form class="inline-form" method="post" action="/graph/vertices/{{ v.id }}/delete">
+            <input type="hidden" name="version" value="{{ v.version }}">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+          {% else %}
+          <button class="btn-mini" type="button" disabled title="Sign in to edit">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Sign in to delete">Delete</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  {% elif tab == 'edge' %}
+{# ── Edges ─────────────────────────────────────────────────────────────── #}
+{% elif tab == 'edge' %}
+  {% if graph_live and editing_edge %}
+  <form class="crud-form" method="post" action="/graph/edges/{{ editing_edge.id }}/update">
+    <h2>Edit edge {{ editing_edge.source_label }} -[{{ editing_edge.kind }}]-&gt; {{ editing_edge.target_label }}</h2>
+    <input type="hidden" name="version" value="{{ editing_edge.version }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/graph?tab=edge">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Name<input name="name" value="{{ editing_edge.name }}" required></label>
+      <label>Kind
+        <select name="kind" disabled>{% for k in edge_kinds %}<option value="{{ k }}"{{ ' selected' if k == editing_edge.kind }}>{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Attributes (key=value per line)
+        <textarea class="attr-input" name="attributes" rows="3"
+          placeholder="quantity=4&#10;unitOfMeasure=EA">{{ editing_edge.attributes_text }}</textarea>
+      </label>
+      <label>Effective from<input name="effective_from" type="date" value="{{ editing_edge.effective_from }}"></label>
+      <label>Effective to<input name="effective_to" type="date" value="{{ editing_edge.effective_to }}"></label>
+      <label>State
+        <select name="lifecycle_state">
+          {% for s in edge_states %}<option value="{{ s }}"{{ ' selected' if s == editing_edge.lifecycle_state }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+  </form>
+  {% elif graph_live %}
+  <div class="table-toolbar">
+    <p class="table-desc">Governed relationships between vertices &mdash; typed by kind,
+      labeled per business meaning, and valid only inside their effectivity window.
+      Every write is validated against the graph rules.</p>
+  </div>
+  <form class="crud-form" method="post" action="/graph/edges/create">
+    <h2>Create an edge</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create edge</button></div>
+    <div class="form-grid">
+      <label>Kind
+        <select name="kind" required>{% for k in edge_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Name<input name="name" placeholder="Has component" required></label>
+      <label>Source
+        <select name="source_vertex_id" required>
+          <option value="" disabled selected>pick a vertex&hellip;</option>
+          {% for v in gv_vertices %}<option value="{{ v.id }}">{{ v.label }} &middot; {{ v.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Target
+        <select name="target_vertex_id" required>
+          <option value="" disabled selected>pick a vertex&hellip;</option>
+          {% for v in gv_vertices %}<option value="{{ v.id }}">{{ v.label }} &middot; {{ v.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Attributes (key=value per line)
+        <textarea class="attr-input" name="attributes" rows="3"
+          placeholder="quantity=4&#10;unitOfMeasure=EA"></textarea>
+      </label>
+      <label>Effective from<input name="effective_from" type="date"></label>
+      <label>Effective to<input name="effective_to" type="date"></label>
+      <label>State
+        <select name="lifecycle_state">{% for s in edge_states %}<option value="{{ s }}"{{ ' selected' if s == 'pending_approval' }}>{{ s.replace('_', ' ') }}</option>{% endfor %}</select>
+      </label>
+    </div>
+  </form>
+  {% else %}
   <div class="table-toolbar">
     <p class="table-desc">Governed relationships between vertices &mdash; typed by kind,
       labeled per business meaning, and valid only inside their effectivity window.</p>
-    <button class="btn btn-primary btn-sm" type="button" disabled
-            title="Create wires up to the service layer at the API milestone">+ New edge</button>
+    <a class="btn btn-primary btn-sm" href="/signin"
+       title="Sign in to create edges">+ New edge</a>
   </div>
+  {% endif %}
   <table class="data-table">
     <thead>
       <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Effectivity</th><th></th></tr>
     </thead>
     <tbody>
-      {% for e in graph.edges %}
+      {% for e in gv_edges %}
       <tr>
         <td><span class="pill">{{ e.kind }}</span></td>
         <td>{{ e.name }}</td>
@@ -70,34 +197,91 @@
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
         <td>{{ e.effective }}</td>
         <td class="row-actions">
-          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
-          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+          {% if graph_live %}
+          <a class="btn-mini" href="/graph?tab=edge&amp;edit={{ e.id }}">Edit</a>
+          <form class="inline-form" method="post" action="/graph/edges/{{ e.id }}/delete">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+          {% else %}
+          <button class="btn-mini" type="button" disabled title="Sign in to edit">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Sign in to delete">Delete</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
+{# ── Edge annotations ──────────────────────────────────────────────────── #}
+{% else %}
+  {% if graph_live %}
+  <div class="table-toolbar">
+    <p class="table-desc">Inline attributes carried by a relationship &mdash; quantities,
+      find numbers, effectivity notes, and business categories. Each row writes through
+      the owning relationship's optimistic lock.</p>
+  </div>
+  {% if editing_attribute %}
+  {% if editing_attribute.exists %}
+  <form class="crud-form" method="post" action="/graph/edges/{{ editing_attribute.id }}/attributes/update">
+    <h2>Edit attribute on {{ editing_attribute.label }}</h2>
+    <input type="hidden" name="attribute" value="{{ editing_attribute.key }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/graph?tab=annotation">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Attribute<input name="key" value="{{ editing_attribute.key }}" required></label>
+      <label>Value<input name="value" value="{{ editing_attribute.value }}" required></label>
+    </div>
+  </form>
+  {% else %}
+  <div class="flash flash-err">Attribute '{{ editing_attribute.key }}' no longer exists on
+    {{ editing_attribute.label }}.</div>
+  {% endif %}
+  {% endif %}
+  <form class="crud-form" method="post" action="/graph/attributes/create">
+    <h2>Add a relationship attribute</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Add attribute</button></div>
+    <div class="form-grid">
+      <label>Attribute<input name="key" placeholder="quantity" required></label>
+      <label>Relationship
+        <select name="edge_id" required>
+          <option value="" disabled selected>pick a relationship&hellip;</option>
+          {% for e in gv_edges %}<option value="{{ e.id }}">{{ e.source_label }} -[{{ e.kind }}]-&gt; {{ e.target_label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Value<input name="value" placeholder="4" required></label>
+    </div>
+  </form>
   {% else %}
   <div class="table-toolbar">
     <p class="table-desc">Inline attributes carried by a relationship &mdash; quantities,
       find numbers, effectivity notes, and business categories.</p>
-    <button class="btn btn-primary btn-sm" type="button" disabled
-            title="Create wires up to the service layer at the API milestone">+ New attribute</button>
+    <a class="btn btn-primary btn-sm" href="/signin"
+       title="Sign in to create attributes">+ New attribute</a>
   </div>
+  {% endif %}
   <table class="data-table">
     <thead>
       <tr><th>Relationship</th><th>Attribute</th><th>Value</th><th></th></tr>
     </thead>
     <tbody>
-      {% for a in graph.annotations %}
+      {% for a in gv_annotations %}
       <tr>
         <td class="cell-mono">{{ a.label }}</td>
         <td><span class="pill">{{ a.attribute }}</span></td>
         <td>{{ a.value }}</td>
         <td class="row-actions">
-          <button class="btn-mini" type="button" disabled title="Coming with the API milestone">Edit</button>
-          <button class="btn-mini btn-danger" type="button" disabled title="Coming with the API milestone">Delete</button>
+          {% if graph_live %}
+          <a class="btn-mini" href="/graph?tab=annotation&amp;edit={{ a.edge_id }}&amp;key={{ a.attribute | urlencode }}">Edit</a>
+          <form class="inline-form" method="post" action="/graph/edges/{{ a.edge_id }}/attributes/delete">
+            <input type="hidden" name="key" value="{{ a.attribute }}">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+          {% else %}
+          <button class="btn-mini" type="button" disabled title="Sign in to edit">Edit</button>
+          <button class="btn-mini btn-danger" type="button" disabled title="Sign in to delete">Delete</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}

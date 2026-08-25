@@ -96,7 +96,7 @@ foundation_edge = Table(
     Column("annotation", JSONB, nullable=False),
 )
 
-# ── Identity & access (002_identity_access_schema.sql) ─────────────────────
+# ── Identity & access (database/schema/foundation_schema.sql) ───────────────
 
 iam_tenant = Table(
     "iam_tenant",

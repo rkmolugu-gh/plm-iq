@@ -13,6 +13,7 @@ Resolution order per request: active edition first, then common.
 from __future__ import annotations
 
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -22,9 +23,20 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
-from services import db, role_service, tenant_service, user_service
-from services.errors import ServiceError
-from services.schemas import RoleCreate, RoleUpdate, TenantCreate, TenantUpdate, UserCreate, UserUpdate
+from services import db, edge_service, enums, role_service, tenant_service, user_service, vertex_service
+from services.errors import Conflict, NotFound, ServiceError
+from services.schemas import (
+    EdgeCreate,
+    EdgeUpdate,
+    RoleCreate,
+    RoleUpdate,
+    TenantCreate,
+    TenantUpdate,
+    UserCreate,
+    UserUpdate,
+    VertexCreate,
+    VertexUpdate,
+)
 
 from .. import auth, dummy_data, resolver
 from ..resolver import EDITIONS
@@ -39,6 +51,7 @@ _COMMON_TEMPLATES_DIR = _GATEWAY_DIR / "templates"
 
 def _make_templates(base_dir: Path, overlay_dirs: tuple[Path, ...] = ()) -> Jinja2Templates:
     t = Jinja2Templates(directory=str(base_dir))
+    t.env.auto_reload = True
     loaders = [FileSystemLoader(str(d)) for d in overlay_dirs]
     if loaders:
         t.env.loader = ChoiceLoader([*loaders, t.env.loader])
@@ -162,16 +175,260 @@ def dashboard(request: Request) -> HTMLResponse:
 _GRAPH_TABS = ("vertex", "edge", "annotation")
 
 
+def _safe_uuid(raw: str) -> UUID | None:
+    try:
+        return UUID(raw)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _opt_date(raw: str) -> date | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise ServiceError(f"'{raw}' is not a valid date (expected YYYY-MM-DD)") from None
+
+
+def _parse_attributes(raw: str) -> dict[str, Any]:
+    """``key=value`` per line; integer values stay ints so quantity-like
+    attributes round-trip. Empty input means an empty annotation payload."""
+    attributes: dict[str, Any] = {}
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        key, sep, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not key:
+            raise ServiceError(
+                "edge attributes must be one 'key=value' pair per line "
+                f"(offending line: '{line}')"
+            )
+        attributes[key] = int(value) if value.lstrip("-").isdigit() else value
+    return attributes
+
+
+def _render_attributes(attributes: dict[str, Any]) -> str:
+    return "\n".join(f"{k}={v}" for k, v in (attributes or {}).items())
+
+
+def _vertex_label(v: dict) -> str:
+    number = f"{v['prefix']}-{v['number']}" if v.get("prefix") else str(v["number"])
+    revision = v.get("revision") or ""
+    return f"{number}/{revision}" if revision else number
+
+
+def _effective_label(e: dict) -> str:
+    start, end = e.get("effective_from"), e.get("effective_to")
+    if start and end:
+        return f"{start} to {end}"
+    if start:
+        return f"{start} onward"
+    return "-"
+
+
+def _readonly_graph_context(tab: str, msg: str, err: str) -> dict[str, Any]:
+    """Sample-data rendering for anonymous visitors: identical markup, no writes."""
+    vertices = []
+    for v in dummy_data.GRAPH["vertices"]:
+        vertices.append({
+            "number": v["number"],
+            "label": f"{v['number']}/{v['revision']}" if v["revision"] else v["number"],
+            "kind": v["kind"], "name": v["name"], "revision": v["revision"],
+            "lifecycle": v["lifecycle"],
+        })
+    edges = [
+        {
+            "kind": e["kind"], "name": e["name"],
+            "source_label": e["source_label"], "target_label": e["target_label"],
+            "state": e["state"], "effective": e["effective"],
+            "annotation": e.get("annotation", {}),
+        }
+        for e in dummy_data.GRAPH["edges"]
+    ]
+    annotations = [{"label": a["label"], "attribute": a["attribute"], "value": a["value"]}
+                   for a in dummy_data.GRAPH["annotations"]]
+    return {
+        "graph_live": False,
+        "gv_vertices": vertices,
+        "gv_edges": edges,
+        "gv_annotations": annotations,
+        "tab": tab,
+        "show_nav": True,
+        "flash_msg": msg,
+        "flash_err": err,
+    }
+
+
+def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: str) -> dict[str, Any]:
+    """Live explorer context for signed-in users: rows, edit targets, options."""
+    params = request.query_params
+    edit_raw = params.get("edit") or ""
+    attr_key = params.get("key") or ""
+
+    editing_vertex_row = editing_edge_row = editing_attr_edge_row = None
+    with db.tenant_session(tenant_id) as session:
+        vertices_page = vertex_service.list_vertices(session, tenant_id, limit=200)
+        edges_page = edge_service.list_edges(session, tenant_id, limit=200)
+        edit_id = _safe_uuid(edit_raw)
+        if edit_id is not None:
+            if tab == "vertex":
+                row = vertex_service.find_vertex(session, tenant_id, edit_id)
+                editing_vertex_row = dict(row._mapping) if row else None
+            elif tab == "edge":
+                row = edge_service.find_edge(session, tenant_id, edit_id)
+                editing_edge_row = dict(row._mapping) if row else None
+            elif tab == "annotation":
+                row = edge_service.find_edge(session, tenant_id, edit_id)
+                editing_attr_edge_row = dict(row._mapping) if row else None
+
+    by_id = {str(v.id): v for v in vertices_page.items}
+
+    def label_of(vertex_id: str) -> str:
+        v = by_id.get(str(vertex_id))
+        return _vertex_label(v.model_dump()) if v else str(vertex_id)
+
+    gv_vertices = []
+    for v in vertices_page.items:
+        row = v.model_dump(mode="json")
+        gv_vertices.append({
+            "id": row["id"], "prefix": row["prefix"], "number": row["number"],
+            "label": _vertex_label(row), "kind": row["kind"], "name": row["name"],
+            "revision": row["revision"], "lifecycle": row["lifecycle_state"],
+            "description": row["description"], "release_on": row["release_on"] or "",
+            "version": row["version"], "marked_for_deletion": row["marked_for_deletion"],
+        })
+
+    gv_edges = []
+    attribute_rows = []
+    for e in edges_page.items:
+        row = e.model_dump(mode="json")
+        source_label, target_label = label_of(row["source_vertex_id"]), label_of(row["target_vertex_id"])
+        gv_edges.append({
+            "id": row["id"], "kind": row["kind"], "name": row["name"],
+            "source_label": source_label, "target_label": target_label,
+            "state": row["lifecycle_state"], "effective": _effective_label(row),
+            "annotation": row["annotation"], "version": row["version"],
+            "attributes_text": _render_attributes(row["annotation"]),
+        })
+        relation_label = f"{source_label} -[{row['kind']}]-> {target_label}"
+        for key, value in (row["annotation"] or {}).items():
+            attribute_rows.append({
+                "edge_id": row["id"], "attribute": key, "value": value,
+                "label": relation_label,
+            })
+
+    context: dict[str, Any] = {
+        "graph_live": True,
+        "gv_vertices": gv_vertices,
+        "gv_edges": gv_edges,
+        "gv_annotations": attribute_rows,
+        "tab": tab,
+        "show_nav": True,
+        "flash_msg": params.get("msg") or "",
+        "flash_err": params.get("err") or "",
+        "edition_id": edition_id,
+        "vertex_kinds": [k.value for k in enums.VertexKind],
+        "lifecycle_states": [s.value for s in enums.LifecycleState],
+        "edge_kinds": [k.value for k in enums.EdgeKind],
+        "edge_states": [s.value for s in enums.EdgeState],
+    }
+
+    def vertex_out(row) -> dict:
+        out = dict(row)
+        out["label"] = _vertex_label(out)
+        out["release_on"] = out["release_on"].isoformat() if out.get("release_on") else ""
+        return out
+
+    def edge_view(row) -> dict:
+        return {
+            "id": str(row["id"]), "kind": getattr(row["kind"], "value", row["kind"]),
+            "name": row["name"],
+            "source_vertex_id": str(row["source_vertex_id"]),
+            "source_vertex_kind": getattr(row["source_vertex_kind"], "value", row["source_vertex_kind"]),
+            "target_vertex_id": str(row["target_vertex_id"]),
+            "target_vertex_kind": getattr(row["target_vertex_kind"], "value", row["target_vertex_kind"]),
+            "lifecycle_state": getattr(row["lifecycle_state"], "value", row["lifecycle_state"]),
+            "effective_from": row["effective_from"].isoformat() if row["effective_from"] else "",
+            "effective_to": row["effective_to"].isoformat() if row["effective_to"] else "",
+            "annotation": row["annotation"] or {},
+            "version": row["version"],
+            "attributes_text": _render_attributes(row["annotation"] or {}),
+        }
+
+    if editing_vertex_row is not None:
+        context["editing_vertex"] = vertex_out(editing_vertex_row)
+    if editing_edge_row is not None:
+        view = edge_view(editing_edge_row)
+        context["editing_edge"] = view
+        view["source_label"] = label_of(view["source_vertex_id"])
+        view["target_label"] = label_of(view["target_vertex_id"])
+    if editing_attr_edge_row is not None:
+        view = edge_view(editing_attr_edge_row)
+        view["label"] = (
+            f'{view["source_label"]} -[{view["kind"]}]-> {view["target_label"]}'
+        )
+        context["editing_attribute"] = {
+            **view,
+            "key": attr_key,
+            "value": str((view["annotation"] or {}).get(attr_key, "")),
+            "exists": attr_key in (view["annotation"] or {}),
+        }
+    return context
+
+
+def _live_graph_view(tenant_id: UUID, number: str, source: str, relation: str, target: str) -> dict | None:
+    with db.tenant_session(tenant_id) as session:
+        vertices_page = vertex_service.list_vertices(session, tenant_id, limit=200)
+        edges_page = edge_service.list_edges(session, tenant_id, limit=200)
+
+    meta_by_number: dict[str, dict] = {}
+    for v in vertices_page.items:
+        meta_by_number[v.number] = {
+            "number": v.number, "kind": v.kind.value if hasattr(v.kind, "value") else v.kind,
+            "name": v.name, "revision": v.revision,
+            "lifecycle": v.lifecycle_state.value if hasattr(v.lifecycle_state, "value") else v.lifecycle_state,
+        }
+
+    graph_edges = []
+    for e in edges_page.items:
+        source_v = next((v for v in vertices_page.items if str(v.id) == str(e.source_vertex_id)), None)
+        target_v = next((v for v in vertices_page.items if str(v.id) == str(e.target_vertex_id)), None)
+        if source_v is None or target_v is None:
+            continue
+        state = e.lifecycle_state.value if hasattr(e.lifecycle_state, "value") else e.lifecycle_state
+        graph_edges.append({
+            "kind": e.kind.value if hasattr(e.kind, "value") else e.kind,
+            "name": e.name,
+            "source": source_v.number, "target": target_v.number,
+            "state": state,
+            "effective": _effective_label({
+                "effective_from": e.effective_from, "effective_to": e.effective_to,
+            }),
+            "annotation": e.annotation or {},
+        })
+
+    return dummy_data.build_graph_view(
+        number, source=source, relation=relation, target=target,
+        graph={"vertices": list(meta_by_number.values()), "edges": graph_edges},
+    )
+
+
 @router.get("/graph", response_class=HTMLResponse)
 def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
-        context.update(
-            graph=dummy_data.GRAPH,
-            tab=tab if tab in _GRAPH_TABS else "vertex",
-            show_nav=True,
-        )
+        tab = tab if tab in _GRAPH_TABS else "vertex"
+        identity = context.get("identity")
+        if identity is not None:
+            context.update(_graph_workspace(UUID(identity.tenant_id), identity.edition_id, request, tab))
+        else:
+            context.update(_readonly_graph_context(tab, request.query_params.get("msg") or "",
+                                                   request.query_params.get("err") or ""))
         return _templates_for(ctx).TemplateResponse(request, "graph.html", context)
     if not ctx.matched_pattern:
         return _render_default(request)
@@ -189,7 +446,11 @@ def graph_view(
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
-        view = dummy_data.build_graph_view(number, source=source, relation=relation, target=target)
+        identity = context.get("identity")
+        if identity is not None:
+            view = _live_graph_view(UUID(identity.tenant_id), number, source, relation, target)
+        else:
+            view = dummy_data.build_graph_view(number, source=source, relation=relation, target=target)
         if view is not None:
             context.update(view=view, show_nav=True)
             return _templates_for(ctx).TemplateResponse(request, "g_view.html", context)
@@ -199,9 +460,287 @@ def graph_view(
     return _render_not_found(request, path=f"/graph/view/{number}")
 
 
+def _graph_redirect(tab: str, *, msg: str = "", err: str = "", edit: str = "", key: str = "") -> RedirectResponse:
+    target = f"/graph?tab={tab}"
+    if edit:
+        target += f"&edit={edit}"
+    if key:
+        target += f"&key={quote(key)}"
+    if msg:
+        target += f"&msg={quote(msg)}"
+    if err:
+        target += f"&err={quote(err)}"
+    return RedirectResponse(target, status_code=303)
+
+
+@router.post("/graph/vertices/create")
+def graph_vertex_create(
+    request: Request,
+    kind: str = Form(...),
+    number: str = Form(...),
+    name: str = Form(...),
+    prefix: str = Form("V"),
+    revision: str = Form("A"),
+    description: str = Form(""),
+    release_on: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        data = VertexCreate(
+            edition_id=enums.EditionId(ident.edition_id),
+            kind=enums.VertexKind(kind),
+            prefix=prefix.strip() or "V",
+            number=number.strip(),
+            name=name.strip(),
+            revision=revision.strip() or "A",
+            description=description.strip(),
+            release_on=_opt_date(release_on),
+        )
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            created = vertex_service.create_vertex(session, UUID(ident.tenant_id), data, actor=_actor(request))
+        return _graph_redirect("vertex", msg=f"vertex {created.prefix}-{created.number}/{created.revision} created")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("vertex", err=str(exc))
+
+
+@router.post("/graph/vertices/{vertex_id}/update")
+def graph_vertex_update(
+    request: Request,
+    vertex_id: UUID,
+    version: int = Form(...),
+    name: str = Form(""),
+    description: str = Form(""),
+    revision: str = Form(""),
+    lifecycle_state: str = Form(""),
+    release_on: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        changes: dict[str, Any] = {"version": version}
+        with db.tenant_session(tid) as session:
+            current = vertex_service.get_vertex(session, tid, vertex_id)
+            if name and name != current["name"]:
+                changes["name"] = name.strip()
+            if description and description != current["description"]:
+                changes["description"] = description
+            if revision and revision != current["revision"]:
+                changes["revision"] = revision.strip()
+            if lifecycle_state and lifecycle_state != getattr(current["lifecycle_state"], "value", current["lifecycle_state"]):
+                changes["lifecycle_state"] = enums.LifecycleState(lifecycle_state)
+            new_release = _opt_date(release_on)
+            if new_release and new_release != current["release_on"]:
+                changes["release_on"] = new_release
+            vertex_service.update_vertex(
+                session, tid, vertex_id, VertexUpdate(**changes), actor=_actor(request)
+            )
+        return _graph_redirect("vertex", msg="vertex saved")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("vertex", err=str(exc), edit=str(vertex_id))
+
+
+@router.post("/graph/vertices/{vertex_id}/delete")
+def graph_vertex_delete(request: Request, vertex_id: UUID, version: int = Form(...)) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            vertex_service.soft_delete_vertex(session, tid, vertex_id, version=version, actor=_actor(request))
+        return _graph_redirect("vertex", msg="vertex marked for deletion")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("vertex", err=str(exc))
+
+
+@router.post("/graph/edges/create")
+def graph_edge_create(
+    request: Request,
+    kind: str = Form(...),
+    name: str = Form(...),
+    source_vertex_id: str = Form(...),
+    target_vertex_id: str = Form(...),
+    lifecycle_state: str = Form(enums.EdgeState.PENDING_APPROVAL.value),
+    effective_from: str = Form(""),
+    effective_to: str = Form(""),
+    attributes: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    source_id, target_id = _safe_uuid(source_vertex_id), _safe_uuid(target_vertex_id)
+    if source_id is None or target_id is None:
+        return _graph_redirect("edge", err="pick both a source and a target vertex")
+    try:
+        annotation = _parse_attributes(attributes)
+        with db.tenant_session(tid) as session:
+            source = vertex_service.get_vertex(session, tid, source_id)
+            target = vertex_service.get_vertex(session, tid, target_id)
+            data = EdgeCreate(
+                edition_id=enums.EditionId(ident.edition_id),
+                kind=enums.EdgeKind(kind),
+                name=name.strip(),
+                source_vertex_id=source_id,
+                source_vertex_kind=source["kind"],
+                target_vertex_id=target_id,
+                target_vertex_kind=target["kind"],
+                lifecycle_state=enums.EdgeState(lifecycle_state),
+                effective_from=_opt_date(effective_from),
+                effective_to=_opt_date(effective_to),
+                annotation=annotation,
+            )
+            created = edge_service.create_edge(session, tid, data, actor=_actor(request))
+        return _graph_redirect("edge", msg=f"edge '{created.name}' created")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("edge", err=str(exc))
+
+
+@router.post("/graph/edges/{edge_id}/update")
+def graph_edge_update(
+    request: Request,
+    edge_id: UUID,
+    version: int = Form(...),
+    name: str = Form(""),
+    lifecycle_state: str = Form(""),
+    effective_from: str = Form(""),
+    effective_to: str = Form(""),
+    attributes: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        annotation = _parse_attributes(attributes)
+        changes: dict[str, Any] = {"version": version}
+        with db.tenant_session(tid) as session:
+            current = edge_service.get_edge(session, tid, edge_id)
+            if name and name != current["name"]:
+                changes["name"] = name.strip()
+            if lifecycle_state and lifecycle_state != getattr(current["lifecycle_state"], "value", current["lifecycle_state"]):
+                changes["lifecycle_state"] = enums.EdgeState(lifecycle_state)
+            new_from, new_to = _opt_date(effective_from), _opt_date(effective_to)
+            if new_from and new_from != current["effective_from"]:
+                changes["effective_from"] = new_from
+            if new_to and new_to != current["effective_to"]:
+                changes["effective_to"] = new_to
+            changes["annotation"] = annotation
+            edge_service.update_edge(session, tid, edge_id, EdgeUpdate(**changes), actor=_actor(request))
+        return _graph_redirect("edge", msg="edge saved")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("edge", err=str(exc), edit=str(edge_id))
+
+
+@router.post("/graph/edges/{edge_id}/delete")
+def graph_edge_delete(request: Request, edge_id: UUID) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            edge_service.delete_edge(session, UUID(ident.tenant_id), edge_id, actor=_actor(request))
+        return _graph_redirect("edge", msg="edge deleted")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("edge", err=str(exc))
+
+
+@router.post("/graph/attributes/create")
+def graph_attribute_create(
+    request: Request,
+    edge_id: str = Form(...),
+    key: str = Form(...),
+    value: str = Form(...),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    eid = _safe_uuid(edge_id)
+    if eid is None:
+        return _graph_redirect("annotation", err="pick a relationship first")
+    key = key.strip()
+    if not key:
+        return _graph_redirect("annotation", err="attribute name must not be empty")
+    try:
+        with db.tenant_session(tid) as session:
+            current = edge_service.get_edge(session, tid, eid)
+            annotation = dict(current["annotation"] or {})
+            if key in annotation:
+                raise Conflict(f"attribute '{key}' already exists on this relationship; edit it instead")
+            annotation[key] = value.strip()
+            edge_service.update_edge(
+                session, tid, eid,
+                EdgeUpdate(version=current["version"], annotation=annotation),
+                actor=_actor(request),
+            )
+        return _graph_redirect("annotation", msg=f"attribute {key} added")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("annotation", err=str(exc))
+
+
+@router.post("/graph/edges/{edge_id}/attributes/update")
+def graph_attribute_update(
+    request: Request,
+    edge_id: UUID,
+    attribute: str = Form(...),
+    key: str = Form(...),
+    value: str = Form(...),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    original, renamed = attribute, key.strip()
+    if not renamed:
+        return _graph_redirect("annotation", err="attribute name must not be empty",
+                               edit=str(edge_id), key=original)
+    try:
+        with db.tenant_session(tid) as session:
+            current = edge_service.get_edge(session, tid, edge_id)
+            annotation = dict(current["annotation"] or {})
+            if original not in annotation:
+                raise NotFound(f"attribute '{original}' no longer exists on this relationship")
+            stored = annotation.pop(original)
+            annotation[renamed] = value.strip() if value.strip() else stored
+            edge_service.update_edge(
+                session, tid, edge_id,
+                EdgeUpdate(version=current["version"], annotation=annotation),
+                actor=_actor(request),
+            )
+        return _graph_redirect("annotation", msg=f"attribute {renamed} saved")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("annotation", err=str(exc), edit=str(edge_id), key=original)
+
+
+@router.post("/graph/edges/{edge_id}/attributes/delete")
+def graph_attribute_delete(request: Request, edge_id: UUID, key: str = Form(...)) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            current = edge_service.get_edge(session, tid, edge_id)
+            annotation = dict(current["annotation"] or {})
+            if key not in annotation:
+                raise NotFound(f"attribute '{key}' no longer exists on this relationship")
+            annotation.pop(key)
+            edge_service.update_edge(
+                session, tid, edge_id,
+                EdgeUpdate(version=current["version"], annotation=annotation),
+                actor=_actor(request),
+            )
+        return _graph_redirect("annotation", msg=f"attribute {key} removed")
+    except (ServiceError, ValueError) as exc:
+        return _graph_redirect("annotation", err=str(exc))
+
+
 _TENANT_TABS = ("tenants", "users", "roles")
-
-
 def _require_identity(request: Request) -> auth.Identity | RedirectResponse:
     ctx, identity = _identity_ctx(request)
     if identity is None:

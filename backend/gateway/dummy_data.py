@@ -90,6 +90,8 @@ def build_graph_view(
     source: str = "",
     relation: str = "",
     target: str = "",
+    *,
+    graph: dict | None = None,
 ) -> dict | None:
     """Graph view semantics:
 
@@ -98,10 +100,16 @@ def build_graph_view(
       workspace matching the pattern is shown, regardless of focus or depth -
       e.g. All/BOM/All renders the full BOM connectivity.
 
+    ``graph`` defaults to the sample GRAPH; live callers pass
+    ``{"vertices": [...], "edges": [...]}`` in the same shape.
+
     Diagram reads left-to-right: source nodes on the left, relationship labels
     mid-arrow, target nodes on the right.
     """
-    vmap = {v["number"]: v for v in GRAPH["vertices"]}
+    data = graph or GRAPH
+    vertices = data["vertices"]
+    edges = data["edges"]
+    vmap = {v["number"]: v for v in vertices}
     if number not in vmap:
         return None
 
@@ -122,7 +130,7 @@ def build_graph_view(
         depth = 0
         while frontier and depth < max_depth:
             next_frontier = set()
-            for edge in GRAPH["edges"]:
+            for edge in edges:
                 pair = (edge["source"], edge["target"])
                 if not predicate(edge):
                     continue
@@ -138,7 +146,7 @@ def build_graph_view(
         return order, found
 
     if filters_active:
-        drawn_list = [e for e in GRAPH["edges"] if matches(e)]
+        drawn_list = [e for e in edges if matches(e)]
         node_set = {e["source"] for e in drawn_list} | {e["target"] for e in drawn_list}
         node_set.add(number)  # focus always visible for context
         found_map = {(e["source"], e["target"], e["kind"]): e for e in drawn_list}

@@ -1,0 +1,11 @@
+
+schema updates. add below new tables that inherit from Vertex. 
+
+Item
+Document
+Change
+Release
+
+These should by default inherit all columns from Vertext.
+
+

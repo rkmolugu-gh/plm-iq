@@ -1048,7 +1048,8 @@ pre.mermaid {
 }
 
 .form-grid input,
-.form-grid select {
+.form-grid select,
+.form-grid textarea {
   font: inherit;
   font-weight: 400;
   padding: 0.4rem 0.6rem;
@@ -1058,6 +1059,12 @@ pre.mermaid {
   color: var(--ink);
 }
 
+.form-grid textarea.attr-input {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
 .form-grid label.check {
   flex-direction: row;
   align-items: center;
@@ -1065,7 +1072,16 @@ pre.mermaid {
   font-size: 0.82rem;
 }
 
-.form-actions { display: flex; align-items: center; gap: 0.6rem; }
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.form-grid { margin-top: 0; }
 
 .inline-form { display: inline; }
 

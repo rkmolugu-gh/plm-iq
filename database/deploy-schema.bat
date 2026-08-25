@@ -138,8 +138,8 @@ echo   deploy-schema.bat -schema              deploy schema to dev
 echo   deploy-schema.bat -seed                seed only, dev stack
 echo   deploy-schema.bat -schema -seed        schema then seed, dev stack
 echo   deploy-schema.bat -schema -seed prod   schema then seed, prod stack
-echo   deploy-schema.bat --prefix^=002 -schema -seed ^[dev^|prod^]
-echo                                          install stage-002 files only
+echo   deploy-schema.bat --prefix^=found -schema -seed ^[dev^|prod^]
+echo                                          install matching files only
 echo   set PLMIQ_DROP_SCHEMA=1                unattended drop-and-redeploy:
 echo   deploy-schema.bat -schema              run this afterwards
 exit /b 0

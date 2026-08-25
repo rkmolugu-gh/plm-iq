@@ -6,7 +6,7 @@ from datetime import date
 from datetime import datetime as dt
 from uuid import UUID
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -200,6 +200,21 @@ def update_edge(
         raise Conflict(f"concurrent modification on edge {edge_id}; refresh and retry")
     logger.info("edge.updated", extra={"tenant": str(tenant_id), "edge": str(edge_id), "actor": actor})
     return from_row(EdgeOut, row)
+
+
+def delete_edge(session: Session, tenant_id: UUID, edge_id: UUID, *, actor: str) -> None:
+    """Remove the relationship row; annotations travel with it (inline JSONB)."""
+    edge = get_edge(session, tenant_id, edge_id)
+    result = session.execute(
+        delete(tables.foundation_edge).where(
+            tables.foundation_edge.c.id == edge_id,
+            tables.foundation_edge.c.tenant_id == tenant_id,
+            tables.foundation_edge.c.version == edge["version"],
+        )
+    )
+    if result.rowcount != 1:
+        raise Conflict(f"concurrent modification on edge {edge_id}; refresh and retry")
+    logger.info("edge.deleted", extra={"tenant": str(tenant_id), "edge": str(edge_id), "actor": actor})
 
 
 def _require_vertex(session: Session, tenant_id: UUID, vertex_id: UUID, role: str) -> dict:
