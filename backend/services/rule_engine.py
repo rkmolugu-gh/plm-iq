@@ -60,7 +60,8 @@ def resolve_rule(
 
 def check_required_attributes(rule: Mapping, payload: Mapping[str, Any]) -> list[str]:
     """Names in required_edge_attributes missing from the edge payload maps."""
-    return [attr for attr in rule["required_edge_attributes"] if attr not in payload or payload[attr] is None]
+    required = rule.get("required_edge_attributes") or []
+    return [attr for attr in required if attr not in payload or payload[attr] is None]
 
 
 def validate_against_rule(
@@ -72,8 +73,9 @@ def validate_against_rule(
     tenant_attributes: Mapping[str, Any],
 ) -> list[str]:
     violations: list[str] = []
-    allowed_source = set(rule["source_lifecycle_states"])
-    allowed_target = set(rule["target_lifecycle_states"])
+    # NULL arrays mean "no restriction"
+    allowed_source = set(rule.get("source_lifecycle_states") or [])
+    allowed_target = set(rule.get("target_lifecycle_states") or [])
     if allowed_source and source_lifecycle_state not in allowed_source:
         violations.append(
             f"source lifecycle state '{source_lifecycle_state.value}' not permitted by rule "

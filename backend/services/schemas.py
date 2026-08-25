@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from . import enums
@@ -150,6 +150,15 @@ class GraphRuleBase(CamelModel):
     target_lifecycle_states: list[enums.LifecycleState] = []
     required_edge_attributes: list[str] = []
     allow_tenant_extension: bool = True
+
+    @field_validator(
+        "source_lifecycle_states", "target_lifecycle_states", "required_edge_attributes",
+        mode="before",
+    )
+    @classmethod
+    def _null_arrays_mean_empty(cls, value: Any) -> Any:
+        """The DB columns are nullable; treat SQL NULL as an empty list."""
+        return [] if value is None else value
 
     @model_validator(mode="after")
     def _scope_fields_match(self) -> GraphRuleBase:

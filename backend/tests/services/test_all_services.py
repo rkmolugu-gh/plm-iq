@@ -790,27 +790,35 @@ def suite_role_service(tid):
         again = op(tenant_id, lambda s: grant_role_permissions(s, tenant_id, role.id, ["vertex:read"], ACTOR))
         assert len(again) == 2  # idempotent re-grant
 
+        # a user holds exactly one role; assignment replaces any previous one
         assigned = op(
-            tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [role.id, engineer.id], ACTOR)
+            tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [engineer.id], ACTOR)
         )
-        assert {r.code for r in assigned} == {"engineer", f"approver-{sfx}"}
-
-        # The seed's mappings for global roles belong to the demo tenant and
-        # stay invisible here; each tenant provisions its own bundle.
-        eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
-        assert eff == ["edge:read", "vertex:read"], eff
+        assert [r.code for r in assigned] == ["engineer"]
+        expect_error(
+            "a second role must be refused",
+            ValidationFailed,
+            lambda: op(tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [role.id, engineer.id], ACTOR)),
+        )
 
         op(tenant_id, lambda s: grant_role_permissions(s, tenant_id, engineer.id, ["graph:view"], ACTOR))
         eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
-        assert eff == ["edge:read", "graph:view", "vertex:read"], eff
+        assert eff == ["graph:view"], eff
+
+        replaced = op(
+            tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [role.id], ACTOR)
+        )
+        assert [r.code for r in replaced] == [f"approver-{sfx}"]
+        eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
+        assert sorted(eff) == ["edge:read", "vertex:read"], eff
 
         remaining = op(tenant_id, lambda s: revoke_role_permissions(s, tenant_id, role.id, ["edge:read"], ACTOR))
         assert sorted(p.code for p in remaining) == ["vertex:read"]
 
-        left = op(tenant_id, lambda s: unassign_roles_from_user(s, tenant_id, user.id, [engineer.id], ACTOR))
-        assert [r.code for r in left] == [f"approver-{sfx}"]
+        left = op(tenant_id, lambda s: unassign_roles_from_user(s, tenant_id, user.id, [role.id], ACTOR))
+        assert left == []
         eff = op(tenant_id, lambda s: effective_permissions(s, tenant_id, user.id))
-        assert eff == ["vertex:read"], eff
+        assert eff == []
 
         op(tenant_id, lambda s: list_user_roles(s, tenant_id, user.id))
 

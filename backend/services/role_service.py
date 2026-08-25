@@ -287,28 +287,34 @@ def list_role_permissions(session: Session, tenant_id: UUID, role_id: UUID) -> l
 def assign_roles_to_user(
     session: Session, tenant_id: UUID, user_id: UUID, role_ids: list[UUID], assigned_by: str
 ) -> list[RoleOut]:
-    """Grant roles to a user; every role must be visible to the tenant."""
+    """Set THE role of a user — a user holds exactly one role.
+
+    Passing more than one role id is rejected. The call replaces any existing
+    assignment (delete-then-insert), so re-assignment stays atomic.
+    """
     get_user(session, tenant_id, user_id)
-    roles = [get_role(session, rid, tenant_id=tenant_id) for rid in role_ids]
-    if roles:
-        session.execute(
-            pg_insert(tables.iam_user_role)
-            .values(
-                [
-                    {
-                        "user_id": user_id,
-                        "role_id": role["id"],
-                        "tenant_id": tenant_id,
-                        "assigned_by": assigned_by,
-                    }
-                    for role in roles
-                ]
-            )
-            .on_conflict_do_nothing(index_elements=["user_id", "role_id"])
+    if len(role_ids) != 1:
+        raise ValidationFailed("a user can hold only one role; pass exactly one role id")
+    role = get_role(session, role_ids[0], tenant_id=tenant_id)
+    session.execute(
+        delete(tables.iam_user_role).where(
+            tables.iam_user_role.c.user_id == user_id,
+            tables.iam_user_role.c.tenant_id == tenant_id,
         )
+    )
+    session.execute(
+        insert(tables.iam_user_role).values(
+            {
+                "user_id": user_id,
+                "role_id": role["id"],
+                "tenant_id": tenant_id,
+                "assigned_by": assigned_by,
+            }
+        )
+    )
     logger.info(
-        "iam_user.roles_assigned",
-        extra={"tenant": str(tenant_id), "user": str(user_id), "roles": [str(r["id"]) for r in roles]},
+        "iam_user.role_assigned",
+        extra={"tenant": str(tenant_id), "user": str(user_id), "roles": [str(role["id"])]},
     )
     return list_user_roles(session, tenant_id, user_id)
 

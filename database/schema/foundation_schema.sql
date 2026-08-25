@@ -124,9 +124,9 @@ CREATE TABLE foundation_graph_rule (
     source_participation      participation NOT NULL DEFAULT 'optional',
     target_participation      participation NOT NULL DEFAULT 'optional',
     duplicate_edges_allowed   boolean NOT NULL DEFAULT false,
-    source_lifecycle_states   lifecycle_state[] NOT NULL DEFAULT '{}',
-    target_lifecycle_states   lifecycle_state[] NOT NULL DEFAULT '{}',
-    required_edge_attributes  text[] NOT NULL DEFAULT '{}',
+    source_lifecycle_states   lifecycle_state[] NULL DEFAULT '{}',
+    target_lifecycle_states   lifecycle_state[] NULL DEFAULT '{}',
+    required_edge_attributes  text[] NULL DEFAULT '{}',
     allow_tenant_extension    boolean NOT NULL DEFAULT true,
     version                   bigint GENERATED ALWAYS AS IDENTITY,
     created_by                text NOT NULL,
@@ -600,7 +600,8 @@ CREATE TABLE iam_user_role (
     assigned_by  text NOT NULL,
     assigned_on  timestamptz NOT NULL DEFAULT now(),
 
-    PRIMARY KEY (user_id, role_id)
+    -- a user holds exactly one role; re-assignment replaces the row
+    PRIMARY KEY (user_id)
 );
 
 CREATE INDEX ix_user_role_role   ON iam_user_role (role_id);
