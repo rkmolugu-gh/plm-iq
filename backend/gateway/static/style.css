@@ -1070,6 +1070,34 @@ pre.mermaid {
   font-size: 0.85rem;
 }
 
+/* icon-only generate button inside an input row */
+.input-gen {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.input-gen input { flex: 1; }
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.btn-icon:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+.btn-icon svg { width: 14px; height: 14px; }
+
 .form-grid label.check {
   flex-direction: row;
   align-items: center;

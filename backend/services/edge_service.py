@@ -86,9 +86,17 @@ def list_edges(
     )
 
 
+def _vertex_ref(vertex: dict) -> str:
+    number = f"{vertex['prefix']}-{vertex['number']}" if vertex.get("prefix") else str(vertex.get("number", ""))
+    revision = vertex.get("revision") or ""
+    return f"{number}/{revision}" if revision else number
+
+
 def create_edge(session: Session, tenant_id: UUID, data: EdgeCreate, actor: str) -> EdgeOut:
     if data.source_vertex_id == data.target_vertex_id:
-        raise ValidationFailed("edge source and target must differ")
+        raise ValidationFailed(
+            f"edge '{data.name}' ({data.kind.value}) rejected: source and target must differ"
+        )
     _check_effectivity(data.effective_from, data.effective_to)
     source = _require_vertex(session, tenant_id, data.source_vertex_id, "source")
     target = _require_vertex(session, tenant_id, data.target_vertex_id, "target")
@@ -106,7 +114,11 @@ def create_edge(session: Session, tenant_id: UUID, data: EdgeCreate, actor: str)
         tenant_attributes=data.tenant_attributes,
     )
     if violations:
-        raise ValidationFailed("edge rejected by graph rules", details=violations)
+        raise ValidationFailed(
+            f"edge '{data.name}' ({data.kind.value}: "
+            f"{_vertex_ref(source)} -> {_vertex_ref(target)}) rejected by graph rules",
+            details=violations,
+        )
     resolved = resolved or {}
     if not resolved.get("duplicate_edges_allowed", False):
         _reject_duplicate(

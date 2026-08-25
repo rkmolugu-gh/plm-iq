@@ -18,7 +18,7 @@
       arrows, targets on the right. The focus vertex is highlighted when part of the
       result.</p>
     {% else %}
-    <p class="table-desc">Traversal around <strong>{{ view.focus }}</strong> up to two hops.
+    <p class="table-desc">Traversal around <strong>{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %}</strong> up to two hops.
       Apply a source, relation, or target filter to see every matching relationship
       across the workspace instead. Sources render left, relationships mid-arrow,
       targets right.</p>

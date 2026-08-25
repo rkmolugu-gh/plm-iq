@@ -20,6 +20,9 @@
   <a class="tab{{ ' is-active' if tab == 'roles' }}" href="/admin/tenant?tab=roles">
     Roles <span class="tab-count">{{ roles | length }}</span>
   </a>
+  <a class="tab{{ ' is-active' if tab == 'permissions' }}" href="/admin/tenant?tab=permissions">
+    Permissions <span class="tab-count">{{ permissions | length }}</span>
+  </a>
 </nav>
 
 <section class="module-card table-card">
@@ -142,19 +145,26 @@
       <label>Email or login id<input name="email" required></label>
       <label>Full name<input name="full_name" required></label>
       <label>Password <input name="password" type="password"></label>
+      <label>Role
+        <select name="role">
+          <option value="">(none)</option>
+          {% for r in roles %}<option value="{{ r.code }}">{{ r.code }} &middot; {{ r.name }}</option>{% endfor %}
+        </select>
+      </label>
       <label class="check"><input type="checkbox" name="is_tenant_admin"> Tenant admin</label>
     </div>
   </form>
   {% endif %}
 
   <table class="data-table">
-    <thead><tr><th>Email / login</th><th>Full name</th><th>Status</th><th>Admin</th><th>MFA</th><th>Last login</th><th></th></tr></thead>
+    <thead><tr><th>Email / login</th><th>Full name</th><th>Status</th><th>Role</th><th>Admin</th><th>MFA</th><th>Last login</th><th></th></tr></thead>
     <tbody>
       {% for u in users %}
       <tr>
         <td class="cell-mono">{{ u.email }}</td>
         <td>{{ u.full_name }}</td>
         <td><span class="pill lc-{{ u.status }}">{{ u.status }}</span></td>
+        <td>{% if user_roles.get(u.id | string) %}{% for c in user_roles.get(u.id | string) %}<span class="pill">{{ c }}</span> {% endfor %}{% else %}<span class="cell-anno">&mdash;</span>{% endif %}</td>
         <td>{{ 'yes' if u.is_tenant_admin else '-' }}</td>
         <td>{{ 'yes' if u.mfa_enabled else '-' }}</td>
         <td>{{ u.last_login_on.strftime('%Y-%m-%d %H:%M') if u.last_login_on else 'never' }}</td>
@@ -163,6 +173,32 @@
       {% endfor %}
     </tbody>
   </table>
+
+{# ── Permissions ───────────────────────────────────────────────────────── #}
+{% elif tab == 'permissions' %}
+  <div class="table-toolbar">
+    <p class="table-desc">Platform capability catalog &mdash; what each permission grants and
+      which of this tenant's roles hold it. Grant or revoke through the roles;
+      the catalog itself is platform-managed.</p>
+  </div>
+  {% if permissions %}
+  <table class="data-table">
+    <thead><tr><th>Permission</th><th>Resource</th><th>Action</th><th>Description</th><th>Held by roles</th></tr></thead>
+    <tbody>
+      {% for p in permissions %}
+      <tr>
+        <td class="cell-mono">{{ p.code }}</td>
+        <td><span class="pill">{{ p.resource }}</span></td>
+        <td>{{ p.action }}</td>
+        <td>{{ p.description }}</td>
+        <td class="cell-anno">{{ p.roles }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cell-anno">No permissions are visible for this workspace yet.</p>
+  {% endif %}
 
 {# ── Roles ─────────────────────────────────────────────────────────────── #}
 {% else %}

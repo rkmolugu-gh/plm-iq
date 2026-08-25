@@ -26,7 +26,7 @@ SET LOCAL search_path = plmiqdb;
 
 -- ── Enums ───────────────────────────────────────────────────────────────────
 
-CREATE TYPE vertex_kind AS ENUM ('Node', 'Document', 'EC');
+CREATE TYPE vertex_kind AS ENUM ('Item', 'Document', 'EC');
 
 CREATE TYPE edition_id AS ENUM ('foundation', 'discrete', 'process', 'food');
 

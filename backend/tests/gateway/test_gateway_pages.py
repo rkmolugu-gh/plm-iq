@@ -158,6 +158,11 @@ def suite_gateway_tenant_admin(tid=None):
     for marker in ("Create a tenant role", "tenant-admin", "read-only"):
         assert marker in ro.text, f"missing on roles tab: {marker}"
 
+    pm = get("/admin/tenant?tab=permissions", "plm-iq.foundation.localhost.com")
+    assert pm.status_code == 200
+    for marker in ("Permission", "graph:view", "vertex:create", "Held by roles"):
+        assert marker in pm.text, f"missing on permissions tab: {marker}"
+
     bad = get("/admin/tenant?tab=bogus", "plm-iq.foundation.localhost.com")
     assert bad.status_code == 200 and "Provision a new tenant" in bad.text, "invalid tab must fall back to tenants"
 
@@ -243,12 +248,17 @@ def suite_gateway_tenant_admin(tid=None):
     mover = f"smoke-{_uuid.uuid4().hex[:6]}@plm-iq.site"
     mkuser = client.post(
         "/admin/tenant/users/create",
-        data={"email": mover, "full_name": "Smoke Mover", "password": "19691969"},
+        data={"email": mover, "full_name": "Smoke Mover", "password": "19691969",
+              "role": "viewer"},
         headers={"host": "plm-iq.foundation.localhost.com"},
         follow_redirects=False,
     )
-    assert mkuser.status_code == 303 and "users&msg=user%20created" in mkuser.headers["location"], \
+    assert mkuser.status_code == 303 and "with%20role%20viewer" in mkuser.headers["location"], \
         f"user create failed: {mkuser.headers.get('location')}"
+
+    ulist = get("/admin/tenant?tab=users", "plm-iq.foundation.localhost.com")
+    assert _re.search(rf'{mover}</td>.*?<span class="pill">viewer</span>', ulist.text, _re.S), \
+        "assigned role missing from the users tab"
 
     # candidates for the dropdown come from outside the edited tenant only
     pick = get(f"/admin/tenant?tab=tenants&edit={tid}", "plm-iq.foundation.localhost.com")
@@ -345,17 +355,30 @@ def suite_gateway_graph(tid=None):
 
     e = get("/graph?tab=edge", "plm-iq.foundation.localhost.com")
     assert e.status_code == 200
-    for marker in ("Edges", "REFDOCS", "pending approval", "+ New edge"):
+    for marker in ("Edges", "REFDOCS", "+ New edge"):
         assert marker in e.text, f"missing on edge tab: {marker}"
+    assert ">State<" not in e.text, "state column was removed from the edge table"
     assert "ASM-1000/B" in e.text and ">PRT-1001/A</td>" in e.text, \
         "edge endpoints missing revision identifiers"
 
+    # the standalone annotations tab is gone; unknown tabs fall back to vertex
     a = get("/graph?tab=annotation", "plm-iq.foundation.localhost.com")
-    assert a.status_code == 200
-    for marker in ("findNumber", "referenceCategory"):
-        assert marker in a.text, f"missing on annotation tab: {marker}"
-    assert "ASM-1000/B -[BOM]-&gt; PRT-1001/A" in a.text, \
-        "annotation relationship label missing revisions"
+    assert a.status_code == 200 and "New vertex" in a.text and "+ New edge" not in a.text
+
+    rl = get("/graph?tab=rule", "plm-iq.foundation.localhost.com")
+    assert rl.status_code == 200 and "Governance rules" in rl.text
+    assert "Sign in to see the governing rules" in rl.text, \
+        "anonymous visitors must not see rule rows"
+
+    # rule CRUD requires sign-in
+    denied = client.post(
+        "/graph/rules/create",
+        data={"edge_kind": "BOM", "source_vertex_kind": "Node", "target_vertex_kind": "Node"},
+        headers={"host": "plm-iq.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert denied.status_code == 303 and "error=session" in denied.headers["location"], \
+        "anonymous rule creation must redirect to sign-in"
 
     bad = get("/graph?tab=bogus", "plm-iq.foundation.localhost.com")
     assert bad.status_code == 200, bad.status_code

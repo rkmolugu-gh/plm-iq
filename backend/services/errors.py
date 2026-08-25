@@ -11,6 +11,11 @@ class ServiceError(Exception):
         self.message = message
         self.details = details or []
 
+    def __str__(self) -> str:
+        if self.details:
+            return "; ".join([self.message, *self.details])
+        return self.message
+
 
 class NotFound(ServiceError):  # noqa: N818
     status_code = 404

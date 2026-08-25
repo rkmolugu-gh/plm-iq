@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 _COOKIE_NAME = "plmiq_session"
 _MAX_AGE_SECONDS = 12 * 60 * 60  # half a work day; sign-in again after that
+_REMEMBER_MAX_AGE_SECONDS = 30 * 24 * 60 * 60  # 'Keep me signed in': 30 days
 
 
 def _serializer() -> URLSafeSerializer:
@@ -96,12 +97,16 @@ def load_identity(session_cookie: str | None) -> Identity | None:
     label = ", ".join(role_names) if role_names else (
         "Tenant Administrator" if user["is_tenant_admin"] else "User"
     )
+    # DB rows hand back enum members; keep the canonical value string
+    # ('foundation') instead of str() noise like 'EditionId.FOUNDATION'.
+    raw_edition = tenant["edition_id"]
+    edition_id = getattr(raw_edition, "value", raw_edition)
     return Identity(
         tenant_id=tenant_id,
         tenant_name=tenant["name"],
         subdomain=tenant["subdomain"],
-        edition_id=str(tenant["edition_id"]),
-        edition_label_=edition_label(str(tenant["edition_id"])),
+        edition_id=edition_id,
+        edition_label_=edition_label(edition_id),
         tenant_status=tenant["status"],
         user_id=user_id,
         email=user["email"],

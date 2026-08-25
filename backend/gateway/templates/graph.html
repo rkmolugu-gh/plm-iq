@@ -23,8 +23,8 @@
   <a class="tab{{ ' is-active' if tab == 'edge' }}" href="/graph?tab=edge">
     Edges <span class="tab-count">{{ gv_edges | length }}</span>
   </a>
-  <a class="tab{{ ' is-active' if tab == 'annotation' }}" href="/graph?tab=annotation">
-    Edge annotations <span class="tab-count">{{ gv_annotations | length }}</span>
+  <a class="tab{{ ' is-active' if tab == 'rule' }}" href="/graph?tab=rule">
+    Edge rules <span class="tab-count">{{ gv_rules | length }}</span>
   </a>
 </nav>
 
@@ -62,7 +62,14 @@
     <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create vertex</button></div>
     <div class="form-grid">
       <label>Name<input name="name" required></label>
-      <label>Number<input name="number" placeholder="1001" required></label>
+      <label>Number
+        <span class="input-gen">
+          <input name="number" placeholder="1001" required>
+          <button class="btn-icon" type="button" id="gen-number" title="Generate number" aria-label="Generate number">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+        </span>
+      </label>
       <label>Description<input name="description"></label>
       <label>Kind
         <select name="kind" required>{% for k in vertex_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
@@ -72,6 +79,27 @@
       <label>Revision<input name="revision" value="A"></label>
     </div>
   </form>
+  <script type="application/json" id="vertex-numbers">{{ vertex_numbers | tojson }}</script>
+  <script>
+    (function () {
+      var btn = document.getElementById("gen-number");
+      if (!btn) return;
+      var pool = {};
+      try { pool = JSON.parse(document.getElementById("vertex-numbers").textContent || "{}"); }
+      catch (err) { pool = {}; }
+      btn.addEventListener("click", function () {
+        var prefix = (document.querySelector('#gen-number').closest('form').querySelector('input[name="prefix"]').value || "").trim();
+        var raw = (pool[prefix] || []).map(Number).filter(function (n) { return !isNaN(n); });
+        var width = 4;
+        if (raw.length) {
+          width = Math.max(4, String(Math.max.apply(null, raw)).length);
+        }
+        var next = raw.length ? Math.max.apply(null, raw) + 1 : 1001;
+        document.querySelector('#gen-number').closest('form').querySelector('input[name="number"]').value =
+          String(next).padStart(width, "0");
+      });
+    })();
+  </script>
   {% else %}
   <div class="table-toolbar">
     <p class="table-desc">Business objects of the workspace &mdash; items, documents, and
@@ -82,7 +110,7 @@
   {% endif %}
   <table class="data-table">
     <thead>
-      <tr><th>Number</th><th>Kind</th><th>Name</th><th>Rev</th><th>Lifecycle</th><th></th></tr>
+      <tr><th>Number</th><th>Kind</th><th>Name</th><th>Rev</th><th></th></tr>
     </thead>
     <tbody>
       {% for v in gv_vertices %}
@@ -91,7 +119,6 @@
         <td><span class="pill">{{ v.kind }}</span></td>
         <td>{{ v.name }}</td>
         <td>{{ v.revision }}</td>
-        <td><span class="pill lc-{{ v.lifecycle }}">{{ v.lifecycle.replace('_', ' ') }}</span></td>
         <td class="row-actions">
           <a class="btn-mini" href="/graph/view/{{ v.number }}">GView</a>
           {% if graph_live %}
@@ -185,7 +212,7 @@
   {% endif %}
   <table class="data-table">
     <thead>
-      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Effectivity</th><th></th></tr>
+      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>Effectivity</th><th></th></tr>
     </thead>
     <tbody>
       {% for e in gv_edges %}
@@ -194,7 +221,6 @@
         <td>{{ e.name }}</td>
         <td class="cell-mono">{{ e.source_label }}</td>
         <td class="cell-mono">{{ e.target_label }}</td>
-        <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
         <td>{{ e.effective }}</td>
         <td class="row-actions">
           {% if graph_live %}
@@ -212,81 +238,129 @@
     </tbody>
   </table>
 
-{# ── Edge annotations ──────────────────────────────────────────────────── #}
+{# ── Edge rules ────────────────────────────────────────────────────────── #}
 {% else %}
-  {% if graph_live %}
   <div class="table-toolbar">
-    <p class="table-desc">Inline attributes carried by a relationship &mdash; quantities,
-      find numbers, effectivity notes, and business categories. Each row writes through
-      the owning relationship's optimistic lock.</p>
+    <p class="table-desc">Governance rules for relationships &mdash; the single rule whose
+      pattern matches an edge governs it; when several scopes match, the most
+      specific wins (tenant &gt; edition &gt; platform). Tenants author only
+      tenant-scoped rules.</p>
   </div>
-  {% if editing_attribute %}
-  {% if editing_attribute.exists %}
-  <form class="crud-form" method="post" action="/graph/edges/{{ editing_attribute.id }}/attributes/update">
-    <h2>Edit attribute on {{ editing_attribute.label }}</h2>
-    <input type="hidden" name="attribute" value="{{ editing_attribute.key }}">
+  {% if graph_live and editing_rule %}
+    {% if editing_rule.editable %}
+  <form class="crud-form" method="post" action="/graph/rules/{{ editing_rule.id }}/update">
+    <h2>Edit rule {{ editing_rule.kind }}: {{ editing_rule.source_kind }} --&gt; {{ editing_rule.target_kind }}</h2>
+    <input type="hidden" name="version" value="{{ editing_rule.version }}">
     <div class="form-actions">
       <button class="btn btn-primary btn-sm" type="submit">Save</button>
-      <a class="btn-mini" href="/graph?tab=annotation">Cancel</a>
+      <a class="btn-mini" href="/graph?tab=rule">Cancel</a>
     </div>
     <div class="form-grid">
-      <label>Attribute<input name="key" value="{{ editing_attribute.key }}" required></label>
-      <label>Value<input name="value" value="{{ editing_attribute.value }}" required></label>
-    </div>
-  </form>
-  {% else %}
-  <div class="flash flash-err">Attribute '{{ editing_attribute.key }}' no longer exists on
-    {{ editing_attribute.label }}.</div>
-  {% endif %}
-  {% endif %}
-  <form class="crud-form" method="post" action="/graph/attributes/create">
-    <h2>Add a relationship attribute</h2>
-    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Add attribute</button></div>
-    <div class="form-grid">
-      <label>Attribute<input name="key" placeholder="quantity" required></label>
-      <label>Relationship
-        <select name="edge_id" required>
-          <option value="" disabled selected>pick a relationship&hellip;</option>
-          {% for e in gv_edges %}<option value="{{ e.id }}">{{ e.source_label }} -[{{ e.kind }}]-&gt; {{ e.target_label }}</option>{% endfor %}
+      <label>Source cardinality
+        <select name="source_cardinality">{% for c in cardinalities %}<option value="{{ c }}"{{ ' selected' if c == editing_rule.source_cardinality }}>{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label>Target cardinality
+        <select name="target_cardinality">{% for c in cardinalities %}<option value="{{ c }}"{{ ' selected' if c == editing_rule.target_cardinality }}>{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label>Source participation
+        <select name="source_participation">{% for p in participations %}<option value="{{ p }}"{{ ' selected' if p == editing_rule.source_participation }}>{{ p.replace('_', ' ') }}</option>{% endfor %}</select>
+      </label>
+      <label>Target participation
+        <select name="target_participation">{% for p in participations %}<option value="{{ p }}"{{ ' selected' if p == editing_rule.target_participation }}>{{ p.replace('_', ' ') }}</option>{% endfor %}</select>
+      </label>
+      <label>Source lifecycle states
+        <select name="source_states" multiple size="6">
+          {% for s in lifecycle_states %}<option value="{{ s }}"{{ ' selected' if s in editing_rule.source_states }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
         </select>
       </label>
-      <label>Value<input name="value" placeholder="4" required></label>
+      <label>Target lifecycle states
+        <select name="target_states" multiple size="6">
+          {% for s in lifecycle_states %}<option value="{{ s }}"{{ ' selected' if s in editing_rule.target_states }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Required attributes<input name="required_edge_attributes" placeholder="quantity, unitOfMeasure" value="{{ editing_rule.required_text }}"></label>
+      <label class="check"><input type="checkbox" name="duplicate_edges_allowed"{{ ' checked' if editing_rule.duplicate_edges_allowed }}> Duplicate edges allowed</label>
+      <label class="check"><input type="checkbox" name="allow_tenant_extension"{{ ' checked' if editing_rule.allow_tenant_extension }}> Allow tenant extension</label>
     </div>
   </form>
-  {% else %}
-  <div class="table-toolbar">
-    <p class="table-desc">Inline attributes carried by a relationship &mdash; quantities,
-      find numbers, effectivity notes, and business categories.</p>
-    <a class="btn btn-primary btn-sm" href="/signin"
-       title="Sign in to create attributes">+ New attribute</a>
-  </div>
+    {% else %}
+  <div class="flash flash-err">{{ editing_rule.scope | capitalize }}-scoped rules are read-only.</div>
+    {% endif %}
+  {% elif graph_live %}
+  <form class="crud-form" method="post" action="/graph/rules/create">
+    <h2>Create a rule</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create rule</button></div>
+    <div class="form-grid">
+      <label>Edge kind
+        <select name="edge_kind" required>{% for k in edge_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Source vertex kind
+        <select name="source_vertex_kind" required>{% for k in vertex_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Target vertex kind
+        <select name="target_vertex_kind" required>{% for k in vertex_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
+      </label>
+      <label>Source cardinality
+        <select name="source_cardinality">{% for c in cardinalities %}<option value="{{ c }}"{{ ' selected' if c == '0..N' }}>{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label>Target cardinality
+        <select name="target_cardinality">{% for c in cardinalities %}<option value="{{ c }}"{{ ' selected' if c == '0..N' }}>{{ c }}</option>{% endfor %}</select>
+      </label>
+      <label>Source participation
+        <select name="source_participation">{% for p in participations %}<option value="{{ p }}">{{ p.replace('_', ' ') }}</option>{% endfor %}</select>
+      </label>
+      <label>Target participation
+        <select name="target_participation">{% for p in participations %}<option value="{{ p }}">{{ p.replace('_', ' ') }}</option>{% endfor %}</select>
+      </label>
+      <label>Source lifecycle states
+        <select name="source_states" multiple size="6">
+          {% for s in lifecycle_states %}<option value="{{ s }}">{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Target lifecycle states
+        <select name="target_states" multiple size="6">
+          {% for s in lifecycle_states %}<option value="{{ s }}">{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Required attributes<input name="required_edge_attributes" placeholder="quantity, unitOfMeasure"></label>
+      <label class="check"><input type="checkbox" name="duplicate_edges_allowed"> Duplicate edges allowed</label>
+      <label class="check"><input type="checkbox" name="allow_tenant_extension" checked> Allow tenant extension</label>
+    </div>
+  </form>
   {% endif %}
+  {% if gv_rules %}
   <table class="data-table">
     <thead>
-      <tr><th>Relationship</th><th>Attribute</th><th>Value</th><th></th></tr>
+      <tr><th>Scope</th><th>Edge kind</th><th>Pattern</th><th>Cardinality</th><th>Source states</th><th>Target states</th><th>Required attributes</th><th>Duplicates</th><th></th></tr>
     </thead>
     <tbody>
-      {% for a in gv_annotations %}
+      {% for r in gv_rules %}
       <tr>
-        <td class="cell-mono">{{ a.label }}</td>
-        <td><span class="pill">{{ a.attribute }}</span></td>
-        <td>{{ a.value }}</td>
+        <td><span class="pill">{{ r.scope }}</span>{% if r.qualifier %} <span class="cell-anno">{{ r.qualifier }}</span>{% endif %}</td>
+        <td>{{ r.kind }}</td>
+        <td class="cell-mono">{{ r.source_kind }} --&gt; {{ r.target_kind }}</td>
+        <td>{{ r.cardinality }}</td>
+        <td class="cell-anno">{{ r.source_states }}</td>
+        <td class="cell-anno">{{ r.target_states }}</td>
+        <td>{% if r.required %}{% for a in r.required %}<span class="pill">{{ a }}</span> {% endfor %}{% else %}&mdash;{% endif %}</td>
+        <td>{{ 'yes' if r.duplicates else 'no' }}</td>
         <td class="row-actions">
-          {% if graph_live %}
-          <a class="btn-mini" href="/graph?tab=annotation&amp;edit={{ a.edge_id }}&amp;key={{ a.attribute | urlencode }}">Edit</a>
-          <form class="inline-form" method="post" action="/graph/edges/{{ a.edge_id }}/attributes/delete">
-            <input type="hidden" name="key" value="{{ a.attribute }}">
+          {% if graph_live and r.editable %}
+          <a class="btn-mini" href="/graph?tab=rule&amp;edit={{ r.id }}">Edit</a>
+          <form class="inline-form" method="post" action="/graph/rules/{{ r.id }}/delete">
             <button class="btn-mini btn-danger" type="submit">Delete</button>
           </form>
           {% else %}
-          <button class="btn-mini" type="button" disabled title="Sign in to edit">Edit</button>
-          <button class="btn-mini btn-danger" type="button" disabled title="Sign in to delete">Delete</button>
+          <span class="cell-anno">read-only</span>
           {% endif %}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <p class="cell-anno">Sign in to see the governing rules of your workspace.</p>
+  {% endif %}
   {% endif %}
 </section>
 {% endblock %}

@@ -343,6 +343,19 @@ def list_user_roles(session: Session, tenant_id: UUID, user_id: UUID) -> list[Ro
     return [from_row(RoleOut, r) for r in rows]
 
 
+def roles_by_user(session: Session, tenant_id: UUID) -> dict[str, list[str]]:
+    """Map user id (str) to the sorted codes of roles assigned in this tenant."""
+    rows = session.execute(
+        select(tables.iam_user_role.c.user_id, tables.iam_role.c.code)
+        .join(tables.iam_role, tables.iam_role.c.id == tables.iam_user_role.c.role_id)
+        .where(tables.iam_user_role.c.tenant_id == tenant_id)
+    ).all()
+    result: dict[str, list[str]] = {}
+    for user_id, code in rows:
+        result.setdefault(str(user_id), []).append(code)
+    return {key: sorted(codes) for key, codes in result.items()}
+
+
 def effective_permissions(session: Session, tenant_id: UUID, user_id: UUID) -> list[str]:
     """Distinct permission codes reachable through the user's role assignments.
 

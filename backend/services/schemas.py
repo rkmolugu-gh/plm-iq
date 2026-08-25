@@ -227,6 +227,7 @@ class UserCreate(CamelModel):
     is_tenant_admin: bool = False
     password_hash: str | None = None
     mfa_enabled: bool = False
+    role: str | None = None
 
 
 class UserUpdate(CamelModel):

@@ -12,7 +12,7 @@ import re
 from datetime import datetime as dt
 from uuid import UUID
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -117,7 +117,7 @@ def create_user(session: Session, tenant_id: UUID, data: UserCreate, actor: str)
         raise ValidationFailed(
             f"invalid login id '{data.email}': must be an email address or match {LOGIN_ID_RE.pattern}"
         )
-    values = data.model_dump(exclude_unset=True)
+    values = data.model_dump(exclude_unset=True, exclude={"role"})
     values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
     try:
         row = session.execute(insert(tables.iam_user).values(**values).returning(*tables.iam_user.c)).one()
@@ -127,8 +127,38 @@ def create_user(session: Session, tenant_id: UUID, data: UserCreate, actor: str)
         if "tenant" in constraint:
             raise Conflict(f"tenant {tenant_id} does not exist") from exc
         raise Conflict(f"a user with email '{data.email}' already exists") from exc
+    role_code = (data.role or "").strip()
+    if role_code:
+        _assign_role_at_creation(session, tenant_id, row.id, role_code, actor=actor)
     logger.info("user.created", extra={"tenant": str(tenant_id), "user": str(row.id), "actor": actor})
     return _to_out(row)
+
+
+def _assign_role_at_creation(
+    session: Session, tenant_id: UUID, user_id: UUID, code: str, *, actor: str
+) -> dict:
+    """Attach a visible role (global or own-tenant) to a freshly created user."""
+    row = session.execute(
+        select(tables.iam_role).where(
+            tables.iam_role.c.code == code,
+            or_(
+                tables.iam_role.c.scope == enums.RoleScope.GLOBAL,
+                tables.iam_role.c.tenant_id == tenant_id,
+            ),
+        )
+    ).one_or_none()
+    if row is None:
+        raise ValidationFailed(f"unknown role '{code}' for this tenant")
+    session.execute(
+        insert(tables.iam_user_role).values(
+            user_id=user_id, role_id=row.id, tenant_id=tenant_id, assigned_by=actor
+        )
+    )
+    logger.info(
+        "user.role_assigned",
+        extra={"tenant": str(tenant_id), "user": str(user_id), "role": code, "actor": actor},
+    )
+    return dict(row._mapping)
 
 
 def update_user(session: Session, tenant_id: UUID, user_id: UUID, data: UserUpdate, actor: str) -> UserOut:
