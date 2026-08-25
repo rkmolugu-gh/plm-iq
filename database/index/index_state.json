@@ -1,0 +1,18 @@
+{
+  "tenants": {
+    "11111111-1111-1111-1111-111111111111": {
+      "tenant_id": "11111111-1111-1111-1111-111111111111",
+      "subdomain": "plm-iq",
+      "mode": "incremental",
+      "previous_watermark": "2026-08-25T22:12:04.563165+05:30",
+      "vertices": 0,
+      "edges": 0,
+      "documents": 0,
+      "file": null,
+      "started_at": "2026-08-25T22:20:49.288546+05:30",
+      "note": "nothing new to index since the last run",
+      "last_indexed_on": "2026-08-25T22:20:49.288546+05:30",
+      "slug": "plm-iq"
+    }
+  }
+}

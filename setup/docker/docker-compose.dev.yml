@@ -22,8 +22,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
+      elasticsearch-init:
+        condition: service_completed_successfully
       gitea:
         condition: service_healthy
       smtp:
@@ -81,7 +81,7 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "true"
       xpack.security.http.ssl.enabled: "false"
-      ELASTIC_PASSWORD: "${ES_PASSWORD:-elastic}"
+      ELASTIC_PASSWORD: "${ES_PASSWORD:-19691969}"
       ES_JAVA_OPTS: "${ES_JAVA_OPTS:--Xms512m -Xmx512m}"
     ports:
       - "${ELASTICSEARCH_HTTP_PORT:-9200}:9200"
@@ -93,6 +93,38 @@ services:
       timeout: 10s
       retries: 15
       start_period: 60s
+
+  # Elasticsearch bootstraps only its built-in 'elastic' user, so provision
+  # the .env ES_USER as a second superuser here; api waits for this to finish.
+  # Idempotent: re-runs just refresh the password. Free _security API only.
+  elasticsearch-init:
+    image: curlimages/curl:${CURL_VERSION:-8.10.1}
+    restart: "no"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ES_URL: http://elasticsearch:9200
+      ES_BOOTSTRAP_USER: elastic
+      ES_BOOTSTRAP_PASSWORD: "${ES_PASSWORD:-19691969}"
+      ES_USER: "${ES_USER:-elastic}"
+      ES_PASSWORD: "${ES_PASSWORD:-19691969}"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ "$$ES_USER" = "$$ES_BOOTSTRAP_USER" ]; then
+          echo "elasticsearch user '$$ES_USER' is the built-in superuser; nothing to create"
+          exit 0
+        fi
+        echo "provisioning elasticsearch user '$$ES_USER'"
+        curl -fsS -u "$$ES_BOOTSTRAP_USER:$$ES_BOOTSTRAP_PASSWORD" \
+          -H 'Content-Type: application/json' \
+          -X PUT "$$ES_URL/_security/user/$$ES_USER?refresh=true" \
+          -d '{"password":"'"$$ES_PASSWORD"'","roles":["superuser"],"full_name":"PLM-IQ platform admin"}'
+        echo
+        curl -fsS -u "$$ES_USER:$$ES_PASSWORD" "$$ES_URL/" >/dev/null && echo "login verified for '$$ES_USER'"
 
   smtp:
     image: axllent/mailpit:${MAILPIT_VERSION:-latest}

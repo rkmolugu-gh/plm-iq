@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from datetime import datetime as dt
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -23,7 +24,19 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
-from services import db, edge_service, enums, graph_rule_service, role_service, tenant_service, user_service, vertex_service
+from services import (
+    db,
+    edge_service,
+    enums,
+    es_ingest_service,
+    graph_rule_service,
+    index_service,
+    jobs,
+    role_service,
+    tenant_service,
+    user_service,
+    vertex_service,
+)
 from services.errors import ServiceError
 from services.schemas import (
     EdgeCreate,
@@ -1209,6 +1222,176 @@ def permission_delete_action(request: Request, permission_id: UUID) -> RedirectR
         return RedirectResponse("/admin/tenant?tab=permissions&msg=permission deleted", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=permissions&err={quote(str(exc))}", status_code=303)
+
+
+def _format_stamp(value: Any) -> str:
+    if hasattr(value, "isoformat"):
+        return value.isoformat(timespec="seconds")
+    if isinstance(value, (int, float)) and value > 0:
+        return dt.fromtimestamp(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    return "-"
+
+
+def _watermark_view(entry: dict | None) -> dict | None:
+    if not entry:
+        return None
+    return {
+        "when": str(entry.get("last_indexed_on") or "").replace("T", " ")[:19],
+        "mode": entry.get("mode"),
+        "vertices": entry.get("vertices"),
+        "edges": entry.get("edges"),
+        "file": entry.get("file") or entry.get("note") or "",
+    }
+
+
+def _job_view(record: dict) -> dict:
+    started, finished = record.get("started_at"), record.get("finished_at")
+    duration = f"{finished - started:.1f}s" if started and finished else ("running…" if started else "queued")
+    result = record.get("result")
+    note = record.get("error")
+    pill = {"queued": "lc-draft", "running": "lc-in_review", "done": "lc-released", "failed": "lc-obsolete"}.get(
+        record["status"], ""
+    )
+    if result and record["status"] == "done":
+        if "vertices" in result and "edges" in result:
+            file_part = f" -> {result['file']}" if result.get("file") else (f" ({result['note']})" if result.get("note") else "")
+            note = f"{result['documents']} docs ({result['vertices']} vertices / {result['edges']} edges){file_part}"
+        else:
+            note = (
+                f"{result['documents']} docs ingested for {', '.join(result.get('tenants') or [])}"
+                + ("" if result.get("indices") else " (no new indices)")
+            )
+    elif record["status"] == "done":
+        note = "ok"
+    return {
+        "id": record["id"],
+        "name": record["name"],
+        "status": record["status"],
+        "pill": pill,
+        "started_at": _format_stamp(started) if started else "-",
+        "duration": duration,
+        "note": note or "",
+    }
+
+
+@router.get("/admin/index", response_class=HTMLResponse, response_model=None)
+def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+
+    es = es_ingest_service.cluster_status()
+    cat_rows = {row["index"]: row for row in es_ingest_service.indices_status()} if es["online"] else {}
+
+    tenants_view = []
+    with db.admin_session() as session:
+        tenants_page = tenant_service.list_tenants(session, limit=500)
+    for t in tenants_page.items:
+        slug = index_service.slug_for(t.subdomain)
+        vertex_row = cat_rows.get(index_service.vertex_index_name(slug))
+        edge_row = cat_rows.get(index_service.edge_index_name(slug))
+        latest = index_service.latest_file_for_slug(slug)
+        tenants_view.append({
+            "id": str(t.id),
+            "name": t.name,
+            "subdomain": t.subdomain,
+            "slug": slug,
+            "watermark": _watermark_view(index_service.get_watermark(t.id)),
+            "vertex_docs": vertex_row["docs_count"] if vertex_row else None,
+            "edge_docs": edge_row["docs_count"] if edge_row else None,
+            "latest_file": latest["name"] if latest else None,
+        })
+
+    files_view = [
+        {**f, "size_kb": round(f["size_bytes"] / 1024, 1), "modified_short": f["modified_on"].replace("T", " ")[:19]}
+        for f in index_service.list_index_files()
+    ]
+
+    context.update(
+        show_nav=True,
+        es=es,
+        es_indices=cat_rows.values(),
+        tenants_index=tenants_view,
+        files=files_view,
+        jobs=[_job_view(j) for j in jobs.list_jobs()],
+        active_jobs=jobs.any_active(),
+        current_tenant_id=str(ident.tenant_id),
+        can_nuke=bool(ident.is_tenant_admin),
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _COMMON.TemplateResponse(request, "admin_index.html", context)
+
+
+@router.post("/admin/index/run")
+def index_run_action(
+    request: Request,
+    tenant_id: str = Form(...),
+    full: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = _safe_uuid(tenant_id)
+    if tid is None:
+        return RedirectResponse(f"/admin/index?err={quote('pick a tenant to index')}", status_code=303)
+    try:
+        with db.admin_session() as session:
+            tenant = tenant_service.get_tenant(session, tid)
+        job_id = index_service.start_index_job(tid, full=bool(full))
+    except ServiceError as exc:
+        return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
+    mode = "full rebuild" if full else "incremental"
+    msg = f"{mode} indexing of '{tenant['subdomain']}' started (job {job_id})"
+    return RedirectResponse(f"/admin/index?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/admin/index/ingest")
+def index_ingest_action(request: Request, file: str = Form("")) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        if not es_ingest_service.ping():
+            raise ServiceError(f"elasticsearch is not reachable at {es_ingest_service._es_url()}")
+        name = (file or "").strip()
+        path = index_service.resolve_index_file(name) if name else _latest_index_path()
+        if path is None:
+            raise ServiceError("no index files exist yet; run an indexing job first")
+        job_id = es_ingest_service.start_ingest_job(path)
+    except ServiceError as exc:
+        return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
+    msg = f"ingest of '{path.name}' started (job {job_id})"
+    return RedirectResponse(f"/admin/index?msg={quote(msg)}", status_code=303)
+
+
+def _latest_index_path():
+    files = index_service.list_index_files()
+    return index_service.resolve_index_file(files[0]["name"]) if files else None
+
+
+@router.post("/admin/index/nuke/{tenant_id}")
+def index_nuke_action(request: Request, tenant_id: UUID) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse(
+            f"/admin/index?err={quote('only tenant administrators may nuke Elasticsearch data')}",
+            status_code=303,
+        )
+    try:
+        summary = es_ingest_service.nuke_tenant(tenant_id)
+    except ServiceError as exc:
+        return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
+    removed = summary["documents_removed"]
+    msg = (
+        f"nuked {len(summary['deleted_indices'])} indices ({removed} documents) for "
+        f"'{summary['tenant']}'; watermark cleared so the next run is a full re-index"
+    )
+    return RedirectResponse(f"/admin/index?msg={quote(msg)}", status_code=303)
 
 
 def _actor(request: Request) -> str:

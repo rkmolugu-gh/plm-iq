@@ -105,10 +105,11 @@ def suite_gateway_dashboard(tid=None):
         assert marker in dash.text, f"missing widget: {marker}"
     # signed-in identity overrides the host-derived tenant everywhere
     assert "plm-iq" in dash.text, "logged-in tenant missing on dashboard"
-    assert 'class="sidenav"' in dash.text, "left nav missing on dashboard"
+    assert 'class="nav-menu"' in dash.text, "nav dropdown missing on dashboard"
+    assert ">Domain <" in dash.text, "Domain dropdown missing"
+    assert ">Admin <" in dash.text, "Admin dropdown missing"
     assert ">Tenant<" in dash.text and 'href="/admin/tenant"' in dash.text, "Tenant admin nav item missing"
-    for section in ("Domain", "Admin", "Settings"):
-        assert f'side-section">{section}<' in dash.text, f"sidebar section missing: {section}"
+    assert 'href="/settings"' in dash.text, "Settings nav item missing under Admin"
 
     # profile dropdown shows the real signed-in user and assigned role
     assert 'class="profile"' in dash.text, "profile dropdown missing"

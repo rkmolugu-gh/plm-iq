@@ -101,7 +101,7 @@
   </div>
   <table class="data-table">
     <thead>
-      <tr><th>Kind</th><th>Name</th><th>Source</th><th>Target</th><th>State</th><th>Annotation</th><th></th></tr>
+      <tr><th>Kind</th><th>Name</th><th style="width:18%">Source</th><th style="width:18%">Target</th><th>State</th><th style="width:13%">Annotation</th><th></th></tr>
     </thead>
     <tbody>
       {% for e in view.edges %}
@@ -113,7 +113,7 @@
         <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
         <td class="cell-anno">
           {% if e.annotation %}
-            {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{% if not loop.last %} &middot; {% endif %}{% endfor %}
+            {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{% if not loop.last %}<br>{% endif %}{% endfor %}
           {% else %}&mdash;{% endif %}
         </td>
         <td class="row-actions"></td>

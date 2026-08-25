@@ -23,7 +23,7 @@
   <a class="tab{{ ' is-active' if tab == 'edge' }}" href="/graph?tab=edge">
     Edges <span class="tab-count">{{ gv_edges | length }}</span>
   </a>
-  <a class="tab{{ ' is-active' if tab == 'graph' }}" href="/graph?tab=graph">Graph</a>
+  <a class="tab{{ ' is-active' if tab == 'graph' }}" href="/graph?tab=graph">Graph Author</a>
   <a class="tab{{ ' is-active' if tab == 'rule' }}" href="/graph?tab=rule">
     Edge rules <span class="tab-count">{{ gv_rules | length }}</span>
   </a>
@@ -317,7 +317,26 @@
       }
       function q(sel) { return form.querySelector(sel); }
 
-      canvas.addEventListener("dragover", function (e) { e.preventDefault(); });
+      // the payload must be set on dragstart, otherwise getData() is empty
+      // and every drop is discarded
+      document.querySelectorAll(".palette-chip").forEach(function (chip) {
+        chip.addEventListener("dragstart", function (e) {
+          var payload = {
+            id: chip.dataset.id,
+            kind: chip.dataset.kind,
+            label: chip.dataset.label,
+            name: chip.dataset.name
+          };
+          e.dataTransfer.setData("text/plain", JSON.stringify(payload));
+          e.dataTransfer.effectAllowed = "copy";
+        });
+      });
+
+      canvas.addEventListener("dragenter", function (e) { e.preventDefault(); });
+      canvas.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      });
       canvas.addEventListener("drop", function (e) {
         e.preventDefault();
         var p = null;
@@ -342,6 +361,7 @@
 
       function refresh() {
         if (placed.length < 2) return;
+        form.hidden = false;
         var a = placed[0], b = placed[1];
         q('input[name="source_vertex_id"]').value = a.id;
         q('input[name="target_vertex_id"]').value = b.id;

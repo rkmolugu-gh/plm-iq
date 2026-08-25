@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Index · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ identity.tenant_name }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Search index</h1>
+  <p class="hero-sub dash-note">Export the graph to an Elasticsearch-ready file, ingest it, and manage
+    per-tenant index partitions &mdash; runs execute in the background.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+
+  <form class="crud-form" method="post" action="/admin/index/run">
+    <h2>Build index file</h2>
+    <p class="cell-anno">Incremental by default: only entities created after the last successful run are exported.
+      Every document gets a deterministic embedding for future semantic search.</p>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Start indexing</button></div>
+    <div class="form-grid">
+      <label>Tenant
+        <select name="tenant_id">
+          {% for t in tenants_index %}
+          <option value="{{ t.id }}"{{ ' selected' if t.id == current_tenant_id }}>{{ t.subdomain }} · {{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="full"> Full rebuild (ignore last-index watermark)</label>
+    </div>
+  </form>
+
+  {% if jobs %}
+  <table class="data-table">
+    <thead><tr><th>Job</th><th>Status</th><th>Started</th><th>Duration</th><th>Result</th></tr></thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td class="cell-mono">{{ j.name }}</td>
+        <td><span class="pill {{ j.pill }}">{{ j.status }}</span></td>
+        <td>{{ j.started_at }}</td>
+        <td>{{ j.duration }}</td>
+        <td class="cell-anno">{{ j.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cell-anno">No background jobs yet.</p>
+  {% endif %}
+
+</section>
+
+<section class="module-card table-card">
+  <h2>Elasticsearch</h2>
+  <p>
+    <span class="pill {{ 'lc-released' if es.online else 'lc-obsolete' }}">{{ 'online' if es.online else 'offline' }}</span>
+    <span class="cell-mono">{{ es.url }}</span>
+    {% if es.version %}<span class="cell-anno">v{{ es.version }}</span>{% endif %}
+  </p>
+  {% if not es.online %}
+  <p class="cell-anno">{{ es.error }}</p>
+  {% endif %}
+
+  <table class="data-table">
+    <thead><tr><th>Tenant</th><th>Vertices indexed</th><th>Edges indexed</th><th>Last index run</th><th>Latest file</th><th></th></tr></thead>
+    <tbody>
+      {% for t in tenants_index %}
+      <tr>
+        <td><span class="cell-mono">{{ t.subdomain }}</span> <span class="cell-anno">{{ t.name }}</span></td>
+        <td>{{ t.vertex_docs if t.vertex_docs is not none else '&ndash;' }}</td>
+        <td>{{ t.edge_docs if t.edge_docs is not none else '&ndash;' }}</td>
+        <td>
+          {% if t.watermark %}
+            {{ t.watermark.when }} UTC
+            <span class="cell-anno">({{ t.watermark.mode }}, {{ t.watermark.vertices }}v/{{ t.watermark.edges }}e)</span>
+          {% else %}<span class="cell-anno">never</span>{% endif %}
+        </td>
+        <td class="cell-mono cell-anno">{{ t.latest_file or '&ndash;' }}</td>
+        <td class="row-actions">
+          {% if can_nuke %}
+          <form class="inline-form" method="post" action="/admin/index/nuke/{{ t.id }}"
+                onsubmit="return confirm('Nuke ALL Elasticsearch indices for {{ t.subdomain }} ({{ t.vertex_docs or 0 }} vertices / {{ t.edge_docs or 0 }} edges)?')">
+            <button class="btn-mini btn-danger" type="submit">Nuke ES data</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not can_nuke %}
+  <p class="cell-anno">Nuking Elasticsearch data is a platform-admin action (tenant administrators only).</p>
+  {% endif %}
+</section>
+
+<section class="module-card table-card">
+  <h2>Ingest into Elasticsearch</h2>
+  <p class="cell-anno">Validates that every document targets its own tenant partition before writing,
+    creates missing tenant indices, then posts the file through the bulk API.</p>
+  <form class="crud-form" method="post" action="/admin/index/ingest">
+    <div class="form-grid">
+      <label>Index file
+        <select name="file">
+          {% for f in files %}
+          <option value="{{ f.name }}">{{ f.name }} ({{ f.size_kb }} KB)</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit"{{ ' disabled' if not files }}>Ingest</button>
+    </div>
+  </form>
+
+  {% if files %}
+  <table class="data-table">
+    <thead><tr><th>File</th><th>Tenant slug</th><th>Size</th><th>Modified</th><th></th></tr></thead>
+    <tbody>
+      {% for f in files %}
+      <tr>
+        <td class="cell-mono">{{ f.name }}</td>
+        <td>{{ f.slug or '&ndash;' }}</td>
+        <td>{{ f.size_kb }} KB</td>
+        <td>{{ f.modified_short }}</td>
+        <td class="row-actions">
+          <form class="inline-form" method="post" action="/admin/index/ingest">
+            <input type="hidden" name="file" value="{{ f.name }}">
+            <button class="btn-mini" type="submit">Ingest</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cell-anno">No index files under database/index yet.</p>
+  {% endif %}
+</section>
+
+<script>
+document.querySelectorAll('table.data-table').forEach(function (table) {
+  var headers = table.querySelectorAll('thead th');
+  headers.forEach(function (th, i) {
+    th.classList.add('sortable');
+    th.addEventListener('click', function () {
+      var tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      var dir = th.dataset.dir === 'asc' ? -1 : 1;
+      headers.forEach(function (h) { delete h.dataset.dir; });
+      th.dataset.dir = dir === 1 ? 'asc' : 'desc';
+      rows.sort(function (a, b) {
+        var av = a.children[i].innerText.trim(), bv = b.children[i].innerText.trim();
+        var an = parseFloat(av.replace(/[,\s]/g, '')), bn = parseFloat(bv.replace(/[,\s]/g, ''));
+        var cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : av.localeCompare(bv);
+        return cmp * dir;
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    });
+  });
+});
+{% if active_jobs %}
+setTimeout(function () { location.reload(); }, 3000);
+{% endif %}
+</script>
+{% endblock %}

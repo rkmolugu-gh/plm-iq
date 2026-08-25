@@ -13,65 +13,69 @@
 <body class="edition-{{ ctx.edition if ctx.valid else 'none' }}">
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="{{ l_brand }}">
-        <span class="brand-mark">PLM-IQ</span>
+      <div class="topbar-left">
+        <a class="brand" href="{{ l_brand }}">
+          <span class="brand-mark">PLM-IQ The intelligent PLM</span>
+          {% if ctx.valid %}
+          <span class="edition-badge">{{ ctx.edition_label }}</span>
+          {% endif %}
+        </a>
         {% if ctx.valid %}
-        <span class="edition-badge">{{ ctx.edition_label }}</span>
+        <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
         {% endif %}
-      </a>
-      {% if ctx.valid %}
-      <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
-      {% endif %}
-      <nav class="topnav" aria-label="Primary">
+
+
+      </div>
+
+      <div class="topbar-search">
         <input class="topnav-search" type="search" placeholder="Search&hellip;" aria-label="Search">
-      </nav>
+      </div>
+
       {% if user %}
-      <details class="profile">
-        <summary class="profile-btn" title="Account">
-          <span class="avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
-          </span>
-          <span class="profile-name">{{ user.name }}</span>
-          <span class="chev">&#9662;</span>
-        </summary>
-        <div class="profile-menu">
-          <p class="pm-tenant">{{ ctx.tenant }}</p>
-          <p class="pm-user">{{ user.name }}</p>
-          <p class="pm-role">{{ user.role }}</p>
-          <hr class="pm-sep">
-          <a class="pm-item" href="/help">Help</a>
-          <a class="pm-item pm-signout" href="/signout">Sign out</a>
-        </div>
-      </details>
+      <div class="topbar-right">
+        <details class="profile">
+          <summary class="profile-btn" title="Account">
+            <span class="avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
+            </span>
+            <span class="profile-name">{{ user.name }}</span>
+            <span class="chev">&#9662;</span>
+          </summary>
+          <div class="profile-menu">
+            <p class="pm-tenant">{{ ctx.tenant }}</p>
+            <p class="pm-user">{{ user.name }}</p>
+            <p class="pm-role">{{ user.role }}</p>
+            <hr class="pm-sep">
+            <a class="pm-item" href="/help">Help</a>
+            <a class="pm-item pm-signout" href="/signout">Sign out</a>
+          </div>
+        </details>
+      </div>
       {% endif %}
     </div>
   </header>
 
-  <div class="shell{% if not show_nav %} no-nav{% endif %}">
-    {% if show_nav %}
+  <div class="shell">
     <aside class="sidenav">
       <nav aria-label="Workspace">
-        <a class="side-link{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">
-          Dashboard
-        </a>
-
-        <p class="side-section">Domain</p>
-        <span class="side-link is-disabled">Items<span class="side-soon">soon</span></span>
-        <span class="side-link is-disabled">Documents<span class="side-soon">soon</span></span>
-        <span class="side-link is-disabled">Changes<span class="side-soon">soon</span></span>
-
-        <p class="side-section">Admin</p>
-        <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">
-          Graph
-        </a>
-        <a class="side-link{{ ' is-active' if request.url.path.startswith('/admin/tenant') }}" href="/admin/tenant">Tenant</a>
-        <span class="side-link is-disabled">Audit trail<span class="side-soon">soon</span></span>
-
-        <p class="side-section">Settings</p>
-        <span class="side-link is-disabled">Preferences<span class="side-soon">soon</span></span>
+        <details class="nav-menu">
+          <summary class="nav-menu-btn">Domain <span class="chev">&#9662;</span></summary>
+          <div class="nav-menu-list">
+            <a class="nav-item{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
+            <a class="nav-item{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">Graph</a>
+          </div>
+        </details>
+        <details class="nav-menu">
+          <summary class="nav-menu-btn">Admin <span class="chev">&#9662;</span></summary>
+          <div class="nav-menu-list">
+            <a class="nav-item{{ ' is-active' if request.url.path == '/admin/index' }}" href="/admin/index">Index</a>
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/admin/tenant') }}" href="/admin/tenant">Tenant</a>
+            <span class="nav-item is-disabled">Audit Trail <span class="nav-soon">soon</span></span>
+            <a class="nav-item{{ ' is-active' if request.url.path == '/settings' }}" href="/settings">Settings</a>
+          </div>
+        </details>
       </nav>
     </aside>
-    {% endif %}
     <main class="page">{% block content %}{% endblock %}</main>
   </div>
 
