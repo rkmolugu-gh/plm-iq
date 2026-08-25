@@ -218,6 +218,83 @@ def suite_gateway_tenant_admin(tid=None):
         )
         assert "err=" in denied.headers["location"], "system role deletion must be refused"
 
+    # tenant edit page: add-existing-user facility + lifecycle round-trip
+    sub = "smoke-" + _uuid.uuid4().hex[:8]
+    prov = client.post(
+        "/admin/tenant/tenants/create",
+        data={"subdomain": sub, "name": f"Smoke {sub}", "contact_email": "smoke@plm-iq.site",
+              "secret": "smoke-secret", "edition_id": "foundation"},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert prov.status_code == 303 and "msg=" in prov.headers["location"], \
+        f"tenant provision failed: {prov.headers.get('location')}"
+
+    tlist = get("/admin/tenant?tab=tenants", "acme.foundation.localhost.com")
+    trow = _re.search(rf'<td class="cell-mono">{sub}</td>.*?edit=([0-9a-f-]+)', tlist.text, _re.S)
+    assert trow, "provisioned tenant missing from list or edit link missing"
+    tid = trow.group(1)
+
+    tedit = get(f"/admin/tenant?tab=tenants&edit={tid}", "acme.foundation.localhost.com")
+    assert tedit.status_code == 200
+    assert "Add existing user" in tedit.text, "add-user facility missing on edit-tenant form"
+    assert "No users belong to this tenant yet" in tedit.text
+
+    mover = f"smoke-{_uuid.uuid4().hex[:6]}@plm-iq.site"
+    mkuser = client.post(
+        "/admin/tenant/users/create",
+        data={"email": mover, "full_name": "Smoke Mover", "password": "19691969"},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert mkuser.status_code == 303 and "users&msg=user%20created" in mkuser.headers["location"], \
+        f"user create failed: {mkuser.headers.get('location')}"
+
+    add = client.post(
+        f"/admin/tenant/tenants/{tid}/add-user",
+        data={"login_id": mover},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert add.status_code == 303 and "msg=user%20" in add.headers["location"], \
+        f"add-user failed: {add.headers.get('location')}"
+
+    tedit2 = get(f"/admin/tenant?tab=tenants&edit={tid}", "acme.foundation.localhost.com")
+    assert mover in tedit2.text, "moved user not listed under target tenant"
+
+    dup = client.post(
+        f"/admin/tenant/tenants/{tid}/add-user",
+        data={"login_id": mover},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert "err=" in dup.headers["location"], "duplicate add-user must be refused"
+
+    back = client.post(
+        "/admin/tenant/tenants/11111111-1111-1111-1111-111111111111/add-user",
+        data={"login_id": mover},
+        headers={"host": "acme.foundation.localhost.com"},
+        follow_redirects=False,
+    )
+    assert back.status_code == 303 and "msg=user%20" in back.headers["location"], \
+        f"moving user back failed: {back.headers.get('location')}"
+
+    # walk the status transitions provisioning -> active -> suspended -> archived
+    for new_status in ("active", "suspended", "archived"):
+        page = get(f"/admin/tenant?tab=tenants&edit={tid}", "acme.foundation.localhost.com")
+        ver = _re.search(r'name="version" value="(\d+)"', page.text)
+        assert ver, "version field missing on edit-tenant form"
+        step = client.post(
+            f"/admin/tenant/tenants/{tid}/update",
+            data={"version": ver.group(1), "status": new_status},
+            headers={"host": "acme.foundation.localhost.com"},
+            follow_redirects=False,
+        )
+        assert step.status_code == 303 and "msg=saved" in step.headers["location"], \
+            f"status transition to {new_status} failed: {step.headers.get('location')}"
+    gone = get(f"/admin/tenant?tab=tenants&edit={tid}", "acme.foundation.localhost.com")
+    assert 'value="archived" selected' in gone.text, "tenant not archived"
+
     client.get("/signout", headers={"host": "acme.foundation.localhost.com"})
 
 

@@ -235,6 +235,10 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
             eid = _safe_id(edit_id)
             if eid:
                 editing_tenant = tenant_service.get_tenant(session, eid)
+    tenant_users = []
+    if editing_tenant is not None:
+        with db.tenant_session(editing_tenant["id"]) as session:
+            tenant_users = user_service.list_users(session, editing_tenant["id"], limit=200).items
     with db.tenant_session(tid) as session:
         users_page = user_service.list_users(session, tid, limit=200)
         roles_page = role_service.list_roles(session, tenant_id=tid, limit=200)
@@ -257,6 +261,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
         editing_tenant=editing_tenant,
         editing_user=editing_user,
         editing_role=editing_role,
+        tenant_users=tenant_users,
         flash_msg=msg,
         flash_err=err,
     )
@@ -320,6 +325,29 @@ def tenant_update_action(
         return RedirectResponse("/admin/tenant?tab=tenants&msg=saved", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=tenants&err={quote(str(exc))}&edit={tenant_id}", status_code=303)
+
+
+@router.post("/admin/tenant/tenants/{tenant_id}/add-user")
+def tenant_add_user_action(
+    request: Request,
+    tenant_id: UUID,
+    login_id: str = Form(...),
+) -> RedirectResponse:
+    """Attach an existing account (by email / login id) to the tenant."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        with db.admin_session() as session:
+            user_service.assign_user_to_tenant(session, tenant_id, login_id, actor=_actor(request))
+        return RedirectResponse(
+            f"/admin/tenant?tab=tenants&edit={tenant_id}&msg={quote(f'user {login_id} added')}",
+            status_code=303,
+        )
+    except ServiceError as exc:
+        return RedirectResponse(
+            f"/admin/tenant?tab=tenants&edit={tenant_id}&err={quote(str(exc))}", status_code=303
+        )
 
 
 @router.post("/admin/tenant/users/create")

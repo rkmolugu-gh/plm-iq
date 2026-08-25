@@ -157,6 +157,33 @@ def update_user(session: Session, tenant_id: UUID, user_id: UUID, data: UserUpda
     return _to_out(updated)
 
 
+def assign_user_to_tenant(session: Session, target_tenant_id: UUID, login_id: str, actor: str) -> UserOut:
+    """Move an existing account into the target tenant.
+
+    Platform-level operation (cross-tenant): run via ``db.admin_session()``.
+    The account keeps its id, credentials, and role-assignment rows; only
+    its tenant membership changes. Version bumps via the identity trigger.
+    """
+    row = session.execute(
+        select(tables.iam_user).where(func.lower(tables.iam_user.c.email) == login_id.strip().lower())
+    ).one_or_none()
+    if row is None:
+        raise NotFound(f"user '{login_id}' not found")
+    if row.tenant_id == target_tenant_id:
+        raise ValidationFailed(f"user '{login_id}' already belongs to this tenant")
+    updated = session.execute(
+        update(tables.iam_user)
+        .where(tables.iam_user.c.id == row.id)
+        .values(tenant_id=target_tenant_id, modified_by=actor, modified_on=dt.now())
+        .returning(*tables.iam_user.c)
+    ).one()
+    logger.info(
+        "user.tenant_assigned",
+        extra={"tenant": str(target_tenant_id), "user": str(row.id), "actor": actor},
+    )
+    return _to_out(updated)
+
+
 def record_login(session: Session, tenant_id: UUID, user_id: UUID, *, actor: str | None = None) -> UserOut:
     """Stamp last_login_on after a successful authentication.
 

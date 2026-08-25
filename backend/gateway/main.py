@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .routers.pages import router as pages_router
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 

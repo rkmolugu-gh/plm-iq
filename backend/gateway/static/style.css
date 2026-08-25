@@ -1068,3 +1068,29 @@ pre.mermaid {
 .form-actions { display: flex; align-items: center; gap: 0.6rem; }
 
 .inline-form { display: inline; }
+
+/* mandatory-input markers */
+.req {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.form-note {
+  margin: -0.4rem 0 0.8rem;
+  font-size: 0.74rem;
+  color: var(--ink-faint);
+}
+
+.form-grid input[required],
+.form-grid select[required] {
+  border-left: 3px solid var(--accent);
+}
+
+.form-grid input:user-invalid {
+  border-color: var(--danger);
+  outline-color: var(--danger);
+}
+
+.add-user-row { margin-top: 0.9rem; }
+
+.user-picker-table { margin-bottom: 0.4rem; }
