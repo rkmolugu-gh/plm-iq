@@ -1,11 +1,17 @@
 
-schema updates. add below new tables that inherit from Vertex. 
+schema updates. add below new tables that inherit from Vertex. These should by default inherit all columns from Vertext. and then add additonal columns specified below.
 
-Item
-Document
-Change
-Release
+Item -> future_attribute_1
+Document -> 
+Change ->
+Release >
+File ->
 
-These should by default inherit all columns from Vertext.
+Additonal Item Attributes
+user_attirbute_1
+
+
+
+
 
 

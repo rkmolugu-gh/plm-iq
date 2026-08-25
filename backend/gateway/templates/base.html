@@ -23,10 +23,7 @@
       <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
       {% endif %}
       <nav class="topnav" aria-label="Primary">
-        <span class="topnav-item is-disabled">Items</span>
-        <span class="topnav-item is-disabled">Documents</span>
-        <span class="topnav-item is-disabled">Changes</span>
-        <span class="topnav-item is-disabled">Search</span>
+        <input class="topnav-search" type="search" placeholder="Search&hellip;" aria-label="Search">
       </nav>
       {% if user %}
       <details class="profile">
@@ -62,7 +59,6 @@
         <span class="side-link is-disabled">Items<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Documents<span class="side-soon">soon</span></span>
         <span class="side-link is-disabled">Changes<span class="side-soon">soon</span></span>
-        <span class="side-link is-disabled">Search<span class="side-soon">soon</span></span>
 
         <p class="side-section">Admin</p>
         <a class="side-link{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">

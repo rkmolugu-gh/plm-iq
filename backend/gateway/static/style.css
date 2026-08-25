@@ -97,10 +97,15 @@ code {
   gap: 1.1rem;
 }
 
-.topnav-item {
-  color: var(--ink-faint);
+.topnav-search {
+  font: inherit;
   font-size: 0.9rem;
-  cursor: not-allowed;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 13rem;
 }
 
 .tenant-chip {
@@ -1085,14 +1090,21 @@ pre.mermaid {
 
 .inline-form { display: inline; }
 
-/* mandatory inputs: light red background instead of asterisks */
+/* mandatory inputs: light red while unfilled, green once satisfied */
 .form-grid input[required],
 .form-grid select[required] {
   background: #fdefed;
   border-left: 3px solid #e8a49c;
 }
 
-.form-grid input:user-invalid {
+.form-grid input[required]:user-valid,
+.form-grid select[required]:user-valid {
+  background: #e9f5ec;
+  border-left-color: #86c298;
+}
+
+.form-grid input:user-invalid,
+.form-grid select[required]:user-invalid {
   border-color: var(--danger);
   outline-color: var(--danger);
 }

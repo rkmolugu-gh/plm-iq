@@ -256,6 +256,184 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_ap
 GRANT ALL ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_migrator;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
 
+-- ── Vertex subtypes (declarative inheritance) ───────────────────────────────
+-- Item, Document, Change, Release, File inherit every column of
+-- foundation_vertex and each adds one extension column. Queries against
+-- foundation_vertex automatically include subtype rows; writes go through
+-- the subtype table so its extra columns and constraints apply.
+-- NOTE: constraints, indexes, triggers and RLS policies do NOT inherit -
+-- each subtype re-declares them below.
+
+ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Item';
+ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Change';
+ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Release';
+ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'File';
+
+CREATE TABLE foundation_item (
+    future_attribute_1 text NOT NULL DEFAULT '',
+    PRIMARY KEY (id),
+    CONSTRAINT uq_item_number UNIQUE (tenant_id, prefix, number, revision)
+) INHERITS (foundation_vertex);
+
+CREATE TABLE foundation_document (
+    future_attribute_1 text NOT NULL DEFAULT '',
+    PRIMARY KEY (id),
+    CONSTRAINT uq_document_number UNIQUE (tenant_id, prefix, number, revision)
+) INHERITS (foundation_vertex);
+
+CREATE TABLE foundation_change (
+    future_attribute_1 text NOT NULL DEFAULT '',
+    PRIMARY KEY (id),
+    CONSTRAINT uq_change_number UNIQUE (tenant_id, prefix, number, revision)
+) INHERITS (foundation_vertex);
+
+CREATE TABLE foundation_release (
+    future_attribute_1 text NOT NULL DEFAULT '',
+    PRIMARY KEY (id),
+    CONSTRAINT uq_release_number UNIQUE (tenant_id, prefix, number, revision)
+) INHERITS (foundation_vertex);
+
+CREATE TABLE foundation_file (
+    future_attribute_1 text NOT NULL DEFAULT '',
+    PRIMARY KEY (id),
+    CONSTRAINT uq_file_number UNIQUE (tenant_id, prefix, number, revision)
+) INHERITS (foundation_vertex);
+
+-- GENERATED ALWAYS AS IDENTITY columns do not inherit; give each subtype
+-- its own version sequence so inserts into the child satisfy NOT NULL and
+-- bump_version() can increment it.
+ALTER TABLE foundation_item     ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
+ALTER TABLE foundation_document ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
+ALTER TABLE foundation_change   ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
+ALTER TABLE foundation_release  ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
+ALTER TABLE foundation_file     ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
+
+COMMENT ON TABLE foundation_item     IS 'Item vertices (vertex subtype)';
+COMMENT ON TABLE foundation_document IS 'Document vertices (vertex subtype)';
+COMMENT ON TABLE foundation_change   IS 'Change vertices (vertex subtype)';
+COMMENT ON TABLE foundation_release  IS 'Release vertices (vertex subtype)';
+COMMENT ON TABLE foundation_file     IS 'File vertices (vertex subtype)';
+COMMENT ON COLUMN foundation_item.future_attribute_1     IS 'Reserved for future item-specific attributes';
+COMMENT ON COLUMN foundation_document.future_attribute_1 IS 'Reserved for future document-specific attributes';
+COMMENT ON COLUMN foundation_change.future_attribute_1   IS 'Reserved for future change-specific attributes';
+COMMENT ON COLUMN foundation_release.future_attribute_1  IS 'Reserved for future release-specific attributes';
+COMMENT ON COLUMN foundation_file.future_attribute_1     IS 'Reserved for future file-specific attributes';
+
+CREATE TRIGGER trg_item_bump_version     BEFORE UPDATE ON foundation_item     FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_document_bump_version BEFORE UPDATE ON foundation_document FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_change_bump_version   BEFORE UPDATE ON foundation_change   FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_release_bump_version  BEFORE UPDATE ON foundation_release  FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_file_bump_version     BEFORE UPDATE ON foundation_file     FOR EACH ROW EXECUTE FUNCTION bump_version();
+
+CREATE INDEX idx_item_tenant_kind      ON foundation_item (tenant_id, kind);
+CREATE INDEX idx_document_tenant_kind  ON foundation_document (tenant_id, kind);
+CREATE INDEX idx_change_tenant_kind    ON foundation_change (tenant_id, kind);
+CREATE INDEX idx_release_tenant_kind   ON foundation_release (tenant_id, kind);
+CREATE INDEX idx_file_tenant_kind      ON foundation_file (tenant_id, kind);
+
+ALTER TABLE foundation_item     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_item     FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_document ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_document FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_change   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_change   FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_release  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_release  FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_file     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_file     FORCE  ROW LEVEL SECURITY;
+
+CREATE POLICY item_tenant_isolation ON foundation_item
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY document_tenant_isolation ON foundation_document
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY change_tenant_isolation ON foundation_change
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY release_tenant_isolation ON foundation_release
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY file_tenant_isolation ON foundation_file
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_item, foundation_document,
+    foundation_change, foundation_release, foundation_file TO plmiq_app;
+GRANT ALL ON foundation_item, foundation_document, foundation_change,
+    foundation_release, foundation_file TO plmiq_migrator;
+
+-- ── Setting ─────────────────────────────────────────────────────────────────
+-- .env-style configuration resolved at three scopes. Effective value for a
+-- context = most specific row that defines the key:
+--   platform < tenant < user
+-- Keys are dotted lowercase namespaces ('mail.from', 'ui.locale',
+-- 'search.page_size'). Values are JSONB so booleans/numbers/objects survive
+-- without parsing conventions.
+
+CREATE TYPE setting_level AS ENUM ('platform', 'tenant', 'user');
+
+CREATE TABLE setting (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    level        setting_level NOT NULL,
+    tenant_id    uuid,                       -- set for tenant | user rows
+    user_id      uuid,                       -- set for user rows only
+    key          text NOT NULL,
+    value        jsonb NOT NULL DEFAULT 'null'::jsonb,
+    value_type   text NOT NULL DEFAULT 'string',  -- string | number | boolean | json
+    description  text NOT NULL DEFAULT '',
+    is_secret    boolean NOT NULL DEFAULT false,  -- never render the value back to non-admin UIs
+    version      bigint GENERATED ALWAYS AS IDENTITY,
+    created_by   text NOT NULL,
+    created_on   timestamptz NOT NULL DEFAULT now(),
+    modified_by  text NOT NULL,
+    modified_on  timestamptz NOT NULL DEFAULT now(),
+
+    CONSTRAINT ck_setting_tenant CHECK (
+        level <> 'tenant' OR tenant_id IS NOT NULL
+    ),
+    CONSTRAINT ck_setting_user CHECK (
+        (level <> 'user' OR (tenant_id IS NOT NULL AND user_id IS NOT NULL))
+        AND (level <> 'tenant' OR user_id IS NULL)
+        AND (level <> 'platform' OR (tenant_id IS NULL AND user_id IS NULL))
+    ),
+    CONSTRAINT ck_setting_value_type CHECK (
+        value_type IN ('string', 'number', 'boolean', 'json')
+    )
+);
+
+-- one row per key within each scope (partial indexes sidestep NULL semantics)
+CREATE UNIQUE INDEX uq_setting_platform ON setting (key)              WHERE level = 'platform';
+CREATE UNIQUE INDEX uq_setting_tenant   ON setting (tenant_id, key)   WHERE level = 'tenant';
+CREATE UNIQUE INDEX uq_setting_user     ON setting (tenant_id, user_id, key) WHERE level = 'user';
+
+CREATE INDEX idx_setting_tenant ON setting (tenant_id);
+CREATE INDEX idx_setting_user   ON setting (user_id) WHERE user_id IS NOT NULL;
+
+COMMENT ON TABLE  setting             IS 'Hierarchical runtime settings: platform defaults overridden by tenant, then by user';
+COMMENT ON COLUMN setting.level       IS 'Resolution scope of this row';
+COMMENT ON COLUMN setting.key         IS 'Dotted lowercase namespace, e.g. mail.from, ui.locale, search.page_size';
+COMMENT ON COLUMN setting.value       IS 'JSONB payload - scalars or nested objects';
+COMMENT ON COLUMN setting.value_type  IS 'Coercion hint for consumers';
+COMMENT ON COLUMN setting.is_secret   IS 'True for credentials/tokens; UIs must not echo the value';
+COMMENT ON COLUMN setting.version     IS 'DB-autoincremented optimistic-lock token';
+
+CREATE TRIGGER trg_setting_bump_version
+    BEFORE UPDATE ON setting
+    FOR EACH ROW EXECUTE FUNCTION bump_version();
+
+ALTER TABLE setting ENABLE ROW LEVEL SECURITY;
+ALTER TABLE setting FORCE  ROW LEVEL SECURITY;
+
+-- platform rows are shared read-only context for every tenant;
+-- tenant/user rows are fully isolated to their owning tenant.
+CREATE POLICY setting_tenant_isolation ON setting
+    USING      (level = 'platform' OR tenant_id = current_tenant_id())
+    WITH CHECK (level <> 'platform' AND tenant_id = current_tenant_id());
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON setting TO plmiq_app;
+GRANT ALL ON setting TO plmiq_migrator;
+
 -- ══ Stage 2: identity & access ══════════════════════════════════════════════
 
 
