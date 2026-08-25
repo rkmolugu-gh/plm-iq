@@ -264,9 +264,11 @@
         source, second the target.</p>
     </div>
 
-    <form class="crud-form builder-form" id="edge-proposal" method="post"
-          action="/graph/edges/create" hidden>
+    <form class="crud-form builder-form is-pending" id="edge-proposal" method="post"
+          action="/graph/edges/create">
       <h2>Proposed relationship</h2>
+      <p class="builder-empty" id="proposal-empty">No vertices yet &mdash; drag two from
+        the palette onto the canvas. First drop is the source, second the target.</p>
       <input type="hidden" name="source_vertex_id" value="">
       <input type="hidden" name="target_vertex_id" value="">
       <div class="form-grid">
@@ -309,6 +311,22 @@
       try { kinds = JSON.parse(document.getElementById("builder-kinds").textContent || "[]"); } catch (e) {}
       var placed = [];
       var form = document.getElementById("edge-proposal");
+      var emptyEl = document.getElementById("proposal-empty");
+      var submitBtn = form.querySelector('button[type="submit"]');
+
+      function setReady(ready) {
+        form.classList.toggle("is-pending", !ready);
+        if (emptyEl) {
+          emptyEl.hidden = ready;
+          if (!ready) {
+            emptyEl.textContent = placed.length === 0
+              ? "No vertices yet — drag two from the palette onto the canvas."
+              : "1 of 2 vertices placed — drop one more.";
+          }
+        }
+        if (submitBtn) submitBtn.disabled = !ready;
+      }
+      setReady(false);
 
       function esc(s) {
         return String(s).replace(/[&<>"]/g, function (c) {
@@ -360,8 +378,8 @@
       });
 
       function refresh() {
-        if (placed.length < 2) return;
-        form.hidden = false;
+        if (placed.length < 2) { setReady(false); return; }
+        setReady(true);
         var a = placed[0], b = placed[1];
         q('input[name="source_vertex_id"]').value = a.id;
         q('input[name="target_vertex_id"]').value = b.id;

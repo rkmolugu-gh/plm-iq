@@ -28,18 +28,22 @@
       </div>
 
       <div class="topbar-search">
-        <input class="topnav-search" type="search" placeholder="Search&hellip;" aria-label="Search">
+        {% if user %}
+        <form class="topbar-search-form" action="/search" method="get" role="search">
+          <input class="topnav-search" type="search" name="q" value="{{ search_q or '' }}" placeholder="Search&hellip;" aria-label="Search" minlength="2" required>
+        </form>
+        {% else %}
+        <input class="topnav-search" type="search" placeholder="Search&hellip;" aria-label="Search" disabled title="Sign in to search">
+        {% endif %}
       </div>
 
       {% if user %}
       <div class="topbar-right">
         <details class="profile">
-          <summary class="profile-btn" title="Account">
+          <summary class="profile-btn" title="{{ user.name }}">
             <span class="avatar" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/></svg>
             </span>
-            <span class="profile-name">{{ user.name }}</span>
-            <span class="chev">&#9662;</span>
           </summary>
           <div class="profile-menu">
             <p class="pm-tenant">{{ ctx.tenant }}</p>
@@ -58,14 +62,14 @@
   <div class="shell">
     <aside class="sidenav">
       <nav aria-label="Workspace">
-        <details class="nav-menu">
+        <details class="nav-menu" open>
           <summary class="nav-menu-btn">Domain <span class="chev">&#9662;</span></summary>
           <div class="nav-menu-list">
             <a class="nav-item{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
             <a class="nav-item{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">Graph</a>
           </div>
         </details>
-        <details class="nav-menu">
+        <details class="nav-menu" open>
           <summary class="nav-menu-btn">Admin <span class="chev">&#9662;</span></summary>
           <div class="nav-menu-list">
             <a class="nav-item{{ ' is-active' if request.url.path == '/admin/index' }}" href="/admin/index">Index</a>

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Search · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ identity.tenant_name }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Search</h1>
+  <p class="hero-sub dash-note">BM25 keyword search across this tenant's items, documents, changes and graph relations.</p>
+</section>
+
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+  {% if not q %}
+  <p class="cell-anno">Type at least two characters in the search bar above &mdash; results rank items,
+    documents and relations by relevance.</p>
+  {% elif total %}
+  <div class="table-toolbar">
+    <p class="table-desc">{{ total }} result{{ 's' if total != 1 }} for &ldquo;{{ q }}&rdquo;
+      &mdash; {{ vertex_count }} entit{{ 'y' if vertex_count == 1 else 'ies' }}, {{ edge_count }} relation{{ 's' if edge_count != 1 }}</p>
+  </div>
+  <ul class="search-result-list">
+    {% for r in results %}
+    <li>
+      <span class="pill">{{ r.kind or r.entity_type }}</span>
+      <a href="{{ r.url }}"><strong>{{ r.title }}</strong></a>
+      {% if r.highlight_html %}
+      <span class="cell-anno">{{ r.highlight_html | safe }}</span>
+      {% endif %}
+      <span class="pill lc-{{ r.lifecycle_state }}">{{ r.lifecycle_state }}</span>
+      <span class="search-result-score">score {{ r.score }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="cell-anno">No matches for &ldquo;{{ q }}&rdquo;. New data becomes searchable after an index run
+    (Admin &rarr; Index) followed by ingest.</p>
+  {% endif %}
+</section>
+{% endblock %}

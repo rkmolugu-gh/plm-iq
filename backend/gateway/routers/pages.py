@@ -33,6 +33,7 @@ from services import (
     index_service,
     jobs,
     role_service,
+    search_service,
     tenant_service,
     user_service,
     vertex_service,
@@ -547,6 +548,43 @@ def graph_view(
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path=f"/graph/view/{number}")
+
+
+@router.get("/search", response_class=HTMLResponse, response_model=None)
+def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectResponse:
+    """BM25 search over the signed-in tenant's Elasticsearch indices."""
+    context = _base_context(request)
+    ctx = context["ctx"]
+    if not ctx.valid or context.get("identity") is None:
+        if ctx.valid:
+            return RedirectResponse("/signin?error=session", status_code=303)
+        if not ctx.matched_pattern:
+            return _render_default(request)
+        return _render_not_found(request, path="/search")
+
+    query = (q or "").strip()
+    context.update(
+        show_nav=True,
+        search_q=query,
+        q=query,
+        results=[],
+        total=None,
+        vertex_count=None,
+        edge_count=None,
+        flash_err=request.query_params.get("err") or "",
+    )
+    if query:
+        try:
+            outcome = search_service.search(UUID(context["identity"].tenant_id), query)
+            context.update(
+                results=outcome["rows"],
+                total=outcome["total"],
+                vertex_count=outcome["vertices"],
+                edge_count=outcome["edges"],
+            )
+        except ServiceError as exc:
+            context["flash_err"] = str(exc)
+    return _templates_for(ctx).TemplateResponse(request, "search.html", context)
 
 
 def _graph_redirect(tab: str, *, msg: str = "", err: str = "", edit: str = "", key: str = "") -> RedirectResponse:
