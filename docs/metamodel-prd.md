@@ -3640,7 +3640,7 @@ profiles/
     discrete/
     pharma/
     customers/
-        acme/
+        plm-iq/
 ```
 
 rather than modifying generated Python or Jinja files.

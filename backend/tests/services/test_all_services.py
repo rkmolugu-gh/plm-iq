@@ -184,7 +184,7 @@ def op_admin(fn):
 def mk_tenant(subdomain, **kw):
     payload = {
         "subdomain": subdomain,
-        "name": f"Acme {subdomain}",
+        "name": f"plm-iq {subdomain}",
         "contact_email": f"admin@{subdomain}.example.com",
         "secret": "initial-secret",
     }
@@ -540,13 +540,13 @@ def suite_tenant_service(tid):
         return t
 
     try:
-        t1 = tracked(f"acme-{sfx}")
+        t1 = tracked(f"plm-iq-{sfx}")
         assert t1.status == enums.TenantStatus.PROVISIONING and t1.version >= 1
 
-        found = op_admin(lambda s: find_tenant_by_subdomain(s, f"acme-{sfx}"))
+        found = op_admin(lambda s: find_tenant_by_subdomain(s, f"plm-iq-{sfx}"))
         assert found["id"] == t1.id
 
-        expect_error("duplicate subdomain must Conflict", Conflict, lambda: tracked(f"acme-{sfx}"))
+        expect_error("duplicate subdomain must Conflict", Conflict, lambda: tracked(f"plm-iq-{sfx}"))
         expect_error(
             "uppercase subdomain must be ValidationFailed",
             ValidationFailed,
@@ -555,13 +555,13 @@ def suite_tenant_service(tid):
         expect_error(
             "contact without @ must be ValidationFailed",
             ValidationFailed,
-            lambda: mk_tenant(f"acme2-{sfx}", contact_email="no-at"),
+            lambda: mk_tenant(f"plm-iq2-{sfx}", contact_email="no-at"),
         )
 
         renamed = op_admin(
-            lambda s: update_tenant(s, t1.id, TenantUpdate(version=t1.version, name="Acme Renamed"), ACTOR)
+            lambda s: update_tenant(s, t1.id, TenantUpdate(version=t1.version, name="plm-iq Renamed"), ACTOR)
         )
-        assert renamed.version == t1.version + 1 and renamed.name == "Acme Renamed"
+        assert renamed.version == t1.version + 1 and renamed.name == "plm-iq Renamed"
 
         expect_error(
             "stale version on tenant update must Conflict",
@@ -603,7 +603,7 @@ def suite_tenant_service(tid):
             ),
         )
 
-        page = op_admin(lambda s: list_tenants(s, statuses=[enums.TenantStatus.ARCHIVED], name_like="Acme"))
+        page = op_admin(lambda s: list_tenants(s, statuses=[enums.TenantStatus.ARCHIVED], name_like="plm-iq"))
         assert any(item.id == t1.id for item in page.items)
 
         expect_error("unknown tenant must NotFound", NotFound, lambda: op_admin(lambda s: get_tenant(s, uuidlib.uuid4())))
@@ -625,7 +625,7 @@ def suite_user_service(tid):
         admin = op(
             tid2,
             lambda s: create_user(
-                s, tid2, UserCreate(email=f"dane-{sfx}@acme.io", full_name="Dane", is_tenant_admin=True), ACTOR
+                s, tid2, UserCreate(email=f"dane-{sfx}@plm-iq.io", full_name="Dane", is_tenant_admin=True), ACTOR
             ),
         )
         assert admin.status == enums.UserStatus.ACTIVE and admin.is_tenant_admin
@@ -635,7 +635,7 @@ def suite_user_service(tid):
             Conflict,
             lambda: op(
                 tid2,
-                lambda s: create_user(s, tid2, UserCreate(email=f"DANE-{sfx}@ACME.io", full_name="Dup"), ACTOR),
+                lambda s: create_user(s, tid2, UserCreate(email=f"DANE-{sfx}@PLM-IQ.io", full_name="Dup"), ACTOR),
             ),
         )
         expect_error(
@@ -655,11 +655,11 @@ def suite_user_service(tid):
             Conflict,
             lambda: op(
                 uuidlib.uuid4(),
-                lambda s: create_user(s, uuidlib.uuid4(), UserCreate(email=f"x-{sfx}@acme.io", full_name="X"), ACTOR),
+                lambda s: create_user(s, uuidlib.uuid4(), UserCreate(email=f"x-{sfx}@plm-iq.io", full_name="X"), ACTOR),
             ),
         )
 
-        nick = op(tid2, lambda s: create_user(s, tid2, UserCreate(email=f"nick-{sfx}@acme.io", full_name="Nick"), ACTOR))
+        nick = op(tid2, lambda s: create_user(s, tid2, UserCreate(email=f"nick-{sfx}@plm-iq.io", full_name="Nick"), ACTOR))
         renamed = op(
             tid2,
             lambda s: update_user(s, tid2, nick.id, UserUpdate(version=nick.version, full_name="Nick N."), ACTOR),
@@ -718,7 +718,7 @@ def suite_role_service(tid):
         tenant_id = mk_tenant(f"rol-{sfx}").id
         user = op(
             tenant_id,
-            lambda s: create_user(s, tenant_id, UserCreate(email=f"user-{sfx}@acme.io", full_name="U"), ACTOR),
+            lambda s: create_user(s, tenant_id, UserCreate(email=f"user-{sfx}@plm-iq.io", full_name="U"), ACTOR),
         )
 
         perms_page = op(tenant_id, lambda s: list_permissions(s, resources=["vertex"]))

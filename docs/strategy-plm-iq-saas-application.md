@@ -187,7 +187,7 @@ Each customer tenant is accessed through an edition-aware subdomain.
 ```text
 tesla.discrete.plm-iq.com
 gucci.foundation.plm-iq.com
-acme.process.plm-iq.com
+plm-iq.process.plm-iq.com
 freshfoods.food.plm-iq.com
 ```
 
