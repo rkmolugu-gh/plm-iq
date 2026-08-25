@@ -1208,6 +1208,11 @@ pre.mermaid {
   background: var(--bg);
 }
 
+.builder-canvas.is-dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .canvas-node {
   position: absolute;
   width: 140px;
@@ -1219,6 +1224,7 @@ pre.mermaid {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  user-select: none;
 }
 
 .canvas-node strong { font-size: 0.82rem; }

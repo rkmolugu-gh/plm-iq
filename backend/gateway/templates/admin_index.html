@@ -72,7 +72,7 @@
         <td>{{ t.edge_docs if t.edge_docs is not none else '&ndash;' }}</td>
         <td>
           {% if t.watermark %}
-            {{ t.watermark.when }} UTC
+            {{ t.watermark.when }}
             <span class="cell-anno">({{ t.watermark.mode }}, {{ t.watermark.vertices }}v/{{ t.watermark.edges }}e)</span>
           {% else %}<span class="cell-anno">never</span>{% endif %}
         </td>

@@ -1,18 +1,14 @@
 {
   "tenants": {
     "11111111-1111-1111-1111-111111111111": {
-      "tenant_id": "11111111-1111-1111-1111-111111111111",
-      "subdomain": "plm-iq",
-      "mode": "incremental",
-      "previous_watermark": "2026-08-25T22:20:49.288546+05:30",
-      "vertices": 0,
-      "edges": 0,
-      "documents": 0,
-      "file": null,
-      "started_at": "2026-08-25T22:47:49.509174+05:30",
-      "note": "nothing new to index since the last run",
-      "last_indexed_on": "2026-08-25T22:47:49.509174+05:30",
-      "slug": "plm-iq"
+      "last_indexed_on": "2026-08-25T23:07:53.512512+05:30",
+      "slug": "plm-iq",
+      "data_as_of": "2026-08-25T23:07:53.106060+05:30",
+      "mode": "full",
+      "vertices": 5,
+      "edges": 6,
+      "file": "plm-iq-graph-index-20260825T230753Z.ndjson",
+      "note": "nothing new to index since the last run"
     }
   }
 }

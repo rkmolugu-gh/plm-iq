@@ -13,7 +13,7 @@ Resolution order per request: active edition first, then common.
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timezone
 from datetime import datetime as dt
 from pathlib import Path
 from typing import Any
@@ -563,6 +563,8 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         return _render_not_found(request, path="/search")
 
     query = (q or "").strip()
+    es = es_ingest_service.cluster_status()
+    watermark = _watermark_view(index_service.get_watermark(UUID(context["identity"].tenant_id)))
     context.update(
         show_nav=True,
         search_q=query,
@@ -571,9 +573,14 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         total=None,
         vertex_count=None,
         edge_count=None,
+        es_online=bool(es["online"]),
+        es_version=es["version"],
+        watermark=watermark,
         flash_err=request.query_params.get("err") or "",
     )
-    if query:
+    if query and not context["es_online"]:
+        context["flash_err"] = ""
+    elif query:
         try:
             outcome = search_service.search(UUID(context["identity"].tenant_id), query)
             context.update(
@@ -1273,8 +1280,14 @@ def _format_stamp(value: Any) -> str:
 def _watermark_view(entry: dict | None) -> dict | None:
     if not entry:
         return None
+    when = str(entry.get("data_as_of") or entry.get("last_indexed_on") or "")
+    try:
+        moment = dt.fromisoformat(when)
+        when = moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        pass
     return {
-        "when": str(entry.get("last_indexed_on") or "").replace("T", " ")[:19],
+        "when": when,
         "mode": entry.get("mode"),
         "vertices": entry.get("vertices"),
         "edges": entry.get("edges"),

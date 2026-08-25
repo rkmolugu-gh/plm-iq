@@ -314,14 +314,15 @@
       var emptyEl = document.getElementById("proposal-empty");
       var submitBtn = form.querySelector('button[type="submit"]');
 
-      function setReady(ready) {
+      function setReady(ready, msg) {
         form.classList.toggle("is-pending", !ready);
         if (emptyEl) {
           emptyEl.hidden = ready;
           if (!ready) {
-            emptyEl.textContent = placed.length === 0
+            emptyEl.textContent = msg || (placed.length === 0
               ? "No vertices yet — drag two from the palette onto the canvas."
-              : "1 of 2 vertices placed — drop one more.";
+              : "1 of 2 vertices placed — " + placed[0].label +
+                " is the source; drop one more.");
           }
         }
         if (submitBtn) submitBtn.disabled = !ready;
@@ -350,17 +351,29 @@
         });
       });
 
-      canvas.addEventListener("dragenter", function (e) { e.preventDefault(); });
+      canvas.addEventListener("dragenter", function (e) {
+        e.preventDefault();
+        canvas.classList.add("is-dragover");
+      });
       canvas.addEventListener("dragover", function (e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
+        canvas.classList.add("is-dragover");
+      });
+      canvas.addEventListener("dragleave", function (e) {
+        if (e.target === canvas) canvas.classList.remove("is-dragover");
       });
       canvas.addEventListener("drop", function (e) {
         e.preventDefault();
+        canvas.classList.remove("is-dragover");
         var p = null;
         try { p = JSON.parse(e.dataTransfer.getData("text/plain")); } catch (err) { p = null; }
-        if (!p || !p.id || placed.length >= 2) return;
-        if (placed.some(function (x) { return x.id === p.id; })) return;
+        if (!p || !p.id) return;
+        if (placed.some(function (x) { return x.id === p.id; })) {
+          setReady(false, p.label + " is already on the canvas — pick two different vertices.");
+          return;
+        }
+        if (placed.length >= 2) return;
         var rect = canvas.getBoundingClientRect();
         var x = Math.max(4, Math.min(e.clientX - rect.left - 70, rect.width - 150));
         var y = Math.max(4, Math.min(e.clientY - rect.top - 16, rect.height - 60));

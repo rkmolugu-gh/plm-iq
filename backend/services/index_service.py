@@ -209,10 +209,29 @@ def build_index_file(tenant_id: UUID, *, full: bool = False) -> dict:
         summary["file"] = None
         summary["note"] = "nothing new to index since the last run"
 
-    _record_run(
-        tenant_id,
-        {**summary, "last_indexed_on": started_at.isoformat(), "slug": slug},
-    )
+    # The incremental cursor (last_indexed_on) always advances, but the
+    # user-facing "data as of" facts only change when a run actually
+    # exported documents - a no-op run must not clobber them.
+    previous = get_watermark(tenant_id) or {}
+    productive = bool(pairs) or full or not previous.get("data_as_of")
+    entry: dict = {"last_indexed_on": started_at.isoformat(), "slug": slug}
+    if productive:
+        entry.update({
+            "data_as_of": started_at.isoformat(),
+            "mode": summary["mode"],
+            "vertices": summary["vertices"],
+            "edges": summary["edges"],
+            "file": summary["file"],
+            "note": summary.get("note"),
+        })
+    else:
+        for key in ("data_as_of", "mode", "vertices", "edges", "file", "note"):
+            if key in previous:
+                entry[key] = previous[key]
+        entry.setdefault("data_as_of", previous.get("last_indexed_on"))
+        entry["note"] = previous.get("note") or summary.get("note")
+
+    _record_run(tenant_id, entry)
     logger.info(
         "index.export.done",
         extra={"tenant": str(tenant_id), "mode": summary["mode"], "docs": len(pairs)},

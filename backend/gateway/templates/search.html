@@ -10,6 +10,25 @@
 {% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
 
 <section class="module-card table-card">
+  <div class="search-status">
+    {% if es_online %}
+    <span class="pill lc-released">search online</span>
+    <span class="cell-anno">Elasticsearch{% if es_version %} v{{ es_version }}{% endif %}</span>
+    <span class="cell-anno">&middot;</span>
+    {% if watermark %}
+    <span class="cell-anno">results are based on index data from <strong>{{ watermark.when }}</strong>
+      ({{ watermark.mode }} run, {{ watermark.vertices }} items / {{ watermark.edges }} relations)</span>
+    {% else %}
+    <span class="cell-anno">this tenant has never been indexed &mdash; run an index job under Admin &rarr; Index</span>
+    {% endif %}
+    {% else %}
+    <span class="pill lc-obsolete">search offline</span>
+    <span class="cell-anno">Elasticsearch is currently unavailable, so no results can be shown.
+      Please check with your administrator.</span>
+    {% endif %}
+  </div>
+
+  {% if es_online %}
   {% if not q %}
   <p class="cell-anno">Type at least two characters in the search bar above &mdash; results rank items,
     documents and relations by relevance.</p>
@@ -34,6 +53,7 @@
   {% else %}
   <p class="cell-anno">No matches for &ldquo;{{ q }}&rdquo;. New data becomes searchable after an index run
     (Admin &rarr; Index) followed by ingest.</p>
+  {% endif %}
   {% endif %}
 </section>
 {% endblock %}
