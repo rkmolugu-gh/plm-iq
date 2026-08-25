@@ -295,8 +295,18 @@ CREATE TABLE foundation_release (
 
 CREATE TABLE foundation_file (
     future_attribute_1 text NOT NULL DEFAULT '',
+    -- OS-file-like attributes
+    is_directory      boolean NOT NULL DEFAULT false,
+    file_name         text NOT NULL DEFAULT '',   -- name with extension; for a directory, the folder name
+    parent_id         uuid REFERENCES foundation_file (id) ON DELETE CASCADE,  -- containing folder; NULL = root
+    full_path         text NOT NULL DEFAULT '',   -- materialized slash-path from the workspace root
+    size_bytes        bigint NOT NULL DEFAULT 0,
+    mime_type         text NOT NULL DEFAULT '',   -- e.g. application/pdf, text/plain
+    checksum_sha256   text NOT NULL DEFAULT '',   -- content hash; empty until content is stored
     PRIMARY KEY (id),
-    CONSTRAINT uq_file_number UNIQUE (tenant_id, prefix, number, revision)
+    CONSTRAINT uq_file_number UNIQUE (tenant_id, prefix, number, revision),
+    CONSTRAINT uq_file_path UNIQUE (tenant_id, parent_id, file_name),
+    CONSTRAINT ck_file_size CHECK (size_bytes >= 0)
 ) INHERITS (foundation_vertex);
 
 -- GENERATED ALWAYS AS IDENTITY columns do not inherit; give each subtype
@@ -312,7 +322,14 @@ COMMENT ON TABLE foundation_item     IS 'Item vertices (vertex subtype)';
 COMMENT ON TABLE foundation_document IS 'Document vertices (vertex subtype)';
 COMMENT ON TABLE foundation_change   IS 'Change vertices (vertex subtype)';
 COMMENT ON TABLE foundation_release  IS 'Release vertices (vertex subtype)';
-COMMENT ON TABLE foundation_file     IS 'File vertices (vertex subtype)';
+COMMENT ON TABLE foundation_file     IS 'File vertices (vertex subtype); OS-file-like content entries';
+COMMENT ON COLUMN foundation_file.is_directory    IS 'True for folder entries, false for file entries';
+COMMENT ON COLUMN foundation_file.file_name       IS 'Name with extension; the folder name for directories';
+COMMENT ON COLUMN foundation_file.parent_id       IS 'Containing folder; NULL places the entry at the workspace root';
+COMMENT ON COLUMN foundation_file.full_path       IS 'Materialized slash-path from the workspace root, kept in sync by the service layer';
+COMMENT ON COLUMN foundation_file.size_bytes      IS 'Content size in bytes; always 0 for directories';
+COMMENT ON COLUMN foundation_file.mime_type       IS 'IANA media type of the content';
+COMMENT ON COLUMN foundation_file.checksum_sha256 IS 'SHA-256 of the content; empty until content is stored';
 COMMENT ON COLUMN foundation_item.future_attribute_1     IS 'Reserved for future item-specific attributes';
 COMMENT ON COLUMN foundation_document.future_attribute_1 IS 'Reserved for future document-specific attributes';
 COMMENT ON COLUMN foundation_change.future_attribute_1   IS 'Reserved for future change-specific attributes';
@@ -330,6 +347,7 @@ CREATE INDEX idx_document_tenant_kind  ON foundation_document (tenant_id, kind);
 CREATE INDEX idx_change_tenant_kind    ON foundation_change (tenant_id, kind);
 CREATE INDEX idx_release_tenant_kind   ON foundation_release (tenant_id, kind);
 CREATE INDEX idx_file_tenant_kind      ON foundation_file (tenant_id, kind);
+CREATE INDEX idx_file_parent           ON foundation_file (parent_id) WHERE parent_id IS NOT NULL;
 
 ALTER TABLE foundation_item     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE foundation_item     FORCE  ROW LEVEL SECURITY;

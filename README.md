@@ -27,7 +27,7 @@ build-static-site.bat                      :: setup\public_html(.tar.gz)
 ```
 
 Tenant URLs follow `{tenant}.{edition}.localhost[:8080]`, e.g.
-`http://acme.foundation.localhost:8080/dashboard`.
+`http://plm-iq.foundation.localhost:8080/dashboard`.
 
 ## Documentation
 

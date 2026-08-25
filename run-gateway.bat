@@ -20,7 +20,7 @@ if %errorlevel%==0 (
     set "RUNNER="
 )
 
-echo Gateway starting on http://acme.foundation.localhost.com:8080/
-echo ^(add hosts entry 127.0.0.1 acme.foundation.localhost.com first^)
+echo Gateway starting on http://plm-iq.foundation.localhost.com:8080/
+echo ^(add hosts entry 127.0.0.1 plm-iq.foundation.localhost.com first^)
 %RUNNER% uvicorn gateway.main:app --reload --host 127.0.0.1 --port 8080
 endlocal & exit /b %ERRORLEVEL%
