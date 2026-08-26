@@ -5,6 +5,7 @@ from enum import Enum
 
 
 class VertexKind(str, Enum):
+    VERTEX = "Vertex"
     NODE = "Item"
     DOCUMENT = "Document"
     EC = "EC"

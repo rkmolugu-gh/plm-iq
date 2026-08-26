@@ -26,7 +26,7 @@ SET LOCAL search_path = plmiqdb;
 
 -- ── Enums ───────────────────────────────────────────────────────────────────
 
-CREATE TYPE vertex_kind AS ENUM ('Item', 'Document', 'EC');
+CREATE TYPE vertex_kind AS ENUM ('Vertex', 'Item', 'Document', 'EC');
 
 CREATE TYPE edition_id AS ENUM ('foundation', 'discrete', 'process', 'food');
 
@@ -258,19 +258,17 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
 
 -- ── Vertex subtypes (declarative inheritance) ───────────────────────────────
 -- Item, Document, Change, Release inherit every column of
--- foundation_vertex and each adds one extension column. Queries against
+-- foundation_vertex and each adds extension columns. Queries against
 -- foundation_vertex automatically include subtype rows; writes go through
 -- the subtype table so its extra columns and constraints apply.
--- OS-file-like entries are Documents with kind = 'File': their attributes
--- live directly on foundation_document (the former foundation_file subtype
--- was merged into it).
+-- OS-file-like entries are plain Documents carrying the file_* attribute
+-- columns below; there is no separate File subtype or File kind.
 -- NOTE: constraints, indexes, triggers and RLS policies do NOT inherit -
 -- each subtype re-declares them below.
 
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Item';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Change';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Release';
-ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'File';
 
 CREATE TABLE foundation_item (
     future_attribute_1 text NOT NULL DEFAULT '',
@@ -280,7 +278,6 @@ CREATE TABLE foundation_item (
 
 CREATE TABLE foundation_document (
     future_attribute_1 text NOT NULL DEFAULT '',
-    -- OS-file-like attributes; populated when kind = 'File'
     file_is_directory      boolean NOT NULL DEFAULT false,
     file_name              text NOT NULL DEFAULT '',   -- name with extension; for a directory, the folder name
     file_parent_id         uuid REFERENCES foundation_document (id) ON DELETE CASCADE,  -- containing folder; NULL = root
@@ -314,10 +311,10 @@ ALTER TABLE foundation_change   ALTER COLUMN version ADD GENERATED ALWAYS AS IDE
 ALTER TABLE foundation_release  ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
 
 COMMENT ON TABLE foundation_item     IS 'Item vertices (vertex subtype)';
-COMMENT ON TABLE foundation_document IS 'Document vertices (vertex subtype); also stores File entries (kind = File) with their OS-file-like attributes';
+COMMENT ON TABLE foundation_document IS 'Document vertices (vertex subtype); carries optional OS-file attributes in its file_* columns';
 COMMENT ON TABLE foundation_change   IS 'Change vertices (vertex subtype)';
 COMMENT ON TABLE foundation_release  IS 'Release vertices (vertex subtype)';
-COMMENT ON COLUMN foundation_document.file_is_directory    IS 'True for folder entries, false for file entries';
+COMMENT ON COLUMN foundation_document.file_is_directory    IS 'True for os-folder entries, false for os-file entries';
 COMMENT ON COLUMN foundation_document.file_name            IS 'Name with extension; the folder name for directories';
 COMMENT ON COLUMN foundation_document.file_parent_id       IS 'Containing folder; NULL places the entry at the workspace root';
 COMMENT ON COLUMN foundation_document.file_full_path       IS 'Materialized slash-path from the workspace root, kept in sync by the service layer';
@@ -339,11 +336,6 @@ CREATE INDEX idx_document_tenant_kind  ON foundation_document (tenant_id, kind);
 CREATE INDEX idx_change_tenant_kind    ON foundation_change (tenant_id, kind);
 CREATE INDEX idx_release_tenant_kind   ON foundation_release (tenant_id, kind);
 CREATE INDEX idx_document_file_parent  ON foundation_document (file_parent_id) WHERE file_parent_id IS NOT NULL;
-
--- File entries are Documents (kind = 'File'); path uniqueness applies to
--- those rows only. NULL file_parent_id rows count as distinct in PG.
-CREATE UNIQUE INDEX uq_document_file_path ON foundation_document (tenant_id, file_parent_id, file_name)
-    WHERE kind = 'File';
 
 ALTER TABLE foundation_item     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE foundation_item     FORCE  ROW LEVEL SECURITY;

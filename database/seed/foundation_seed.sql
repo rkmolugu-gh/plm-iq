@@ -32,7 +32,7 @@ INSERT INTO foundation_vertex (
     solution_attributes, tenant_attributes
 ) VALUES
 ('00000000-0000-4000-8000-000000000001',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000999',
  'V', '1001', 'Motor Housing',
  'Machined aluminum housing for the electric drive unit motor', 'A',
@@ -42,7 +42,7 @@ INSERT INTO foundation_vertex (
  '{"customerPartCode": "TES-MTR-HSG-001", "internalProgram": "EV Platform X"}'),
 
 ('00000000-0000-4000-8000-000000000002',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000999',
  'V', '1000', 'Electric Drive Unit',
  'Complete drive unit assembly integrating motor, housing and inverter interface', 'B',
@@ -52,7 +52,7 @@ INSERT INTO foundation_vertex (
  '{"customerPartCode": "TES-EDU-ASM-1000", "internalProgram": "EV Platform X"}'),
 
 ('00000000-0000-4000-8000-000000000003',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000998',
  'V', '3010', 'Aluminum 6061 Material Specification',
  'Current material specification covering composition, temper and finish for Aluminum 6061', 'B',
@@ -62,7 +62,7 @@ INSERT INTO foundation_vertex (
  '{"documentOwner": "materials-eng", "reviewCycleMonths": 12}'),
 
 ('00000000-0000-4000-8000-000000000004',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000998',
  'V', '3009', 'Aluminum 6061 Material Specification (Rev A)',
  'Withdrawn predecessor of DOC-3010; retained for traceability only', 'A',
@@ -72,9 +72,9 @@ INSERT INTO foundation_vertex (
  '{"documentOwner": "materials-eng", "reviewCycleMonths": 12, "withdrawnReason": "Superseded by DOC-3010"}'),
 
 ('00000000-0000-4000-8000-000000000005',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000997',
- 'EC', '0042', 'Aluminum Supplier Swap',
+ 'Vertex', '0042', 'Aluminum Supplier Swap',
  'Change aluminum bar stock supplier for motor housing due to cost and lead time', 'A',
  'in_review', NULL, false,
  'seed', '2026-02-20 14:00:00+00', 'seed', '2026-02-25 17:40:00+00',
@@ -95,7 +95,7 @@ INSERT INTO foundation_graph_rule (
 ) VALUES
 ('00000000-0000-4000-8000-000000000101',
  'platform', NULL, NULL,
- 'REFDOCS', 'Item', 'Document', 'source_to_target',
+ 'REFDOCS', 'Vertex', 'Vertex', 'source_to_target',
  '0..N', '0..N', 'optional', 'optional',
  false,
  ARRAY['draft', 'in_review', 'released']::lifecycle_state[],
@@ -106,7 +106,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000102',
  'platform', NULL, NULL,
- 'BOM', 'Item', 'Item', 'source_to_target',
+ 'BOM', 'Vertex', 'Vertex', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['in_review', 'approved', 'released']::lifecycle_state[],
@@ -117,7 +117,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000103',
  'edition', NULL, 'foundation',
- 'AFFECTS', 'EC', 'Item', 'source_to_target',
+ 'AFFECTS', 'Vertex', 'Vertex', 'source_to_target',
  '1..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['draft', 'in_review']::lifecycle_state[],
@@ -128,7 +128,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000104',
  'tenant', '11111111-1111-1111-1111-111111111111', NULL,
- 'REFDOCS', 'Item', 'Document', 'source_to_target',
+ 'REFDOCS', 'Vertex', 'Vertex', 'source_to_target',
  '0..N', '0..N', 'required_for_release', 'optional',
  false,
  ARRAY['approved', 'released']::lifecycle_state[],
@@ -139,7 +139,7 @@ INSERT INTO foundation_graph_rule (
 
 ('00000000-0000-4000-8000-000000000105',
  'platform', NULL, NULL,
- 'SUPERSEDES', 'Document', 'Document', 'source_to_target',
+ 'SUPERSEDES', 'Vertex', 'Vertex', 'source_to_target',
  '0..1', '0..1', 'optional', 'optional',
  true,
  ARRAY['released', 'superseded', 'obsolete']::lifecycle_state[],
@@ -161,8 +161,8 @@ INSERT INTO foundation_edge (
 ) VALUES
 ('00000000-0000-4000-9000-000000000001',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000001', 'Item',
- '00000000-0000-4000-8000-000000000003', 'Document',
+ '00000000-0000-4000-8000-000000000001', 'Vertex',
+ '00000000-0000-4000-8000-000000000003', 'Vertex',
  'active', '2026-01-01', '2027-01-01',
  '00000000-0000-4000-8000-000000000104', 'E',
  'seed', '2025-12-16 09:00:00+00', 'seed', '2025-12-16 09:00:00+00',
@@ -171,8 +171,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000002',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
- '00000000-0000-4000-8000-000000000002', 'Item',
- '00000000-0000-4000-8000-000000000003', 'Document',
+ '00000000-0000-4000-8000-000000000002', 'Vertex',
+ '00000000-0000-4000-8000-000000000003', 'Vertex',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000101', 'E',
  'seed', '2025-12-18 10:10:00+00', 'seed', '2025-12-18 10:10:00+00',
@@ -181,8 +181,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000003',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'BOM', 'Includes component',
- '00000000-0000-4000-8000-000000000002', 'Item',
- '00000000-0000-4000-8000-000000000001', 'Item',
+ '00000000-0000-4000-8000-000000000002', 'Vertex',
+ '00000000-0000-4000-8000-000000000001', 'Vertex',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000102', 'E',
  'seed', '2025-12-18 10:20:00+00', 'seed', '2025-12-18 10:20:00+00',
@@ -190,9 +190,9 @@ INSERT INTO foundation_edge (
  '{"quantity": 1, "unitOfMeasure": "EA", "findNumber": "010", "usageType": "Required", "referenceDesignator": "M1", "variantCondition": null}'),
 
 ('00000000-0000-4000-9000-000000000004',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Affects Item',
- '00000000-0000-4000-8000-000000000005', 'EC',
- '00000000-0000-4000-8000-000000000001', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Affects Vertex',
+ '00000000-0000-4000-8000-000000000005', 'Vertex',
+ '00000000-0000-4000-8000-000000000001', 'Vertex',
  'active', '2026-03-01', NULL,
  '00000000-0000-4000-8000-000000000103', 'E',
  'seed', '2026-02-25 17:45:00+00', 'seed', '2026-02-25 17:45:00+00',
@@ -200,9 +200,9 @@ INSERT INTO foundation_edge (
  '{"note": "Supplier swap changes incoming inspection requirements for the housing", "impactLevel": "Major"}'),
 
  ('00000000-0000-4000-9000-000000000005',
-  '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Supersedes document',
-  '00000000-0000-4000-8000-000000000003', 'Document',
-  '00000000-0000-4000-8000-000000000004', 'Document',
+  '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Supersedes Vertex',
+  '00000000-0000-4000-8000-000000000003', 'Vertex',
+  '00000000-0000-4000-8000-000000000004', 'Vertex',
   'active', '2026-01-01', NULL,
   '00000000-0000-4000-8000-000000000105', 'E',
   'seed', '2025-12-20 09:20:00+00', 'seed', '2025-12-20 09:20:00+00',
@@ -210,9 +210,9 @@ INSERT INTO foundation_edge (
   '{"note": "Revision B supersedes Revision A of the Aluminum 6061 material specification"}');
 
 -- ── Migrated sample dataset (from backend/gateway/graph_view.py) ─────────────
--- The gateway's placeholder GRAPH sample (PRT/ASM/DOC/MAT/EC numbering)
+-- The gateway's placeholder GRAPH sample (PRT/ASM/DOC/MAT/Vertex numbering)
 -- migrated into the live seed. Dummy kind 'Node' maps to the schema-valid
--- vertex_kind 'Item'; empty revisions stay '' so displays omit /rev.
+-- vertex_kind 'Vertex'; empty revisions stay '' so displays omit /rev.
 
 INSERT INTO foundation_vertex (
     id, tenant_id, edition_id, kind, classification_id,
@@ -222,7 +222,7 @@ INSERT INTO foundation_vertex (
     solution_attributes, tenant_attributes
 ) VALUES
 ('00000000-0000-4000-8000-000000000006',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000999',
  'PRT', '1001', 'Motor Housing, Machined',
  'Machined aluminum housing enclosing the drive unit motor', 'A',
@@ -232,7 +232,7 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000007',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000999',
  'ASM', '1000', 'Electric Drive Unit',
  'Complete electric drive unit assembly integrating motor, housing and inverter interface', 'B',
@@ -242,7 +242,7 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000008',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000998',
  'DOC', '3010', 'Aluminum 6061 Material Specification',
  'Current material specification covering composition, temper and finish for Aluminum 6061', 'A',
@@ -252,7 +252,7 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000009',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000998',
  'DOC', '3009', 'Aluminum 6061 Material Specification (superseded)',
  'Superseded predecessor of DOC-3010; retained for traceability only', 'A',
@@ -262,7 +262,7 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000010',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000999',
  'MAT', '4001', 'Aluminum 6061 Raw Stock',
  'Aluminum 6061 bar stock consumed by the drive unit assembly', '',
@@ -272,9 +272,9 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000011',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Vertex',
  '00000000-0000-4000-8000-000000000997',
- 'EC', '0007', 'Supplier swap proposal',
+ 'Vertex', '0007', 'Supplier swap proposal',
  'Proposal to swap the aluminum bar stock supplier for the motor housing', '',
  'draft', NULL, false,
  'seed', '2026-02-18 13:00:00+00', 'seed', '2026-02-24 11:30:00+00',
@@ -294,7 +294,7 @@ INSERT INTO foundation_graph_rule (
 ) VALUES
 ('00000000-0000-4000-8000-000000000106',
  'platform', NULL, NULL,
- 'USES', 'Item', 'Item', 'source_to_target',
+ 'USES', 'Vertex', 'Vertex', 'source_to_target',
  '0..N', '0..N', 'optional', 'optional',
  false,
  ARRAY['draft', 'in_review', 'approved', 'released']::lifecycle_state[],
@@ -314,8 +314,8 @@ INSERT INTO foundation_edge (
 ) VALUES
 ('00000000-0000-4000-9000-000000000006',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'BOM', 'Has component',
-  '00000000-0000-4000-8000-000000000007', 'Item',
-  '00000000-0000-4000-8000-000000000006', 'Item',
+  '00000000-0000-4000-8000-000000000007', 'Vertex',
+  '00000000-0000-4000-8000-000000000006', 'Vertex',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000102', 'E',
  'seed', '2025-12-14 16:20:00+00', 'seed', '2025-12-14 16:20:00+00',
@@ -324,8 +324,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000007',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
-  '00000000-0000-4000-8000-000000000006', 'Item',
-  '00000000-0000-4000-8000-000000000008', 'Document',
+  '00000000-0000-4000-8000-000000000006', 'Vertex',
+  '00000000-0000-4000-8000-000000000008', 'Vertex',
  'active', '2026-01-01', '2027-01-01',
  '00000000-0000-4000-8000-000000000104', 'E',
  'seed', '2025-12-14 16:25:00+00', 'seed', '2025-12-14 16:25:00+00',
@@ -334,8 +334,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000008',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'USES', 'Consumes material',
-  '00000000-0000-4000-8000-000000000007', 'Item',
-  '00000000-0000-4000-8000-000000000010', 'Item',
+  '00000000-0000-4000-8000-000000000007', 'Vertex',
+  '00000000-0000-4000-8000-000000000010', 'Vertex',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000106', 'E',
  'seed', '2025-12-14 16:30:00+00', 'seed', '2025-12-14 16:30:00+00',
@@ -343,9 +343,9 @@ INSERT INTO foundation_edge (
  '{"quantity": 120, "unitOfMeasure": "KG"}'),
 
 ('00000000-0000-4000-9000-000000000009',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Replaces document',
-  '00000000-0000-4000-8000-000000000008', 'Document',
-  '00000000-0000-4000-8000-000000000009', 'Document',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Replaces Vertex',
+  '00000000-0000-4000-8000-000000000008', 'Vertex',
+  '00000000-0000-4000-8000-000000000009', 'Vertex',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000105', 'E',
  'seed', '2025-12-14 16:35:00+00', 'seed', '2025-12-14 16:35:00+00',
@@ -354,8 +354,8 @@ INSERT INTO foundation_edge (
 
 ('00000000-0000-4000-9000-000000000010',
  '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Proposed change',
-  '00000000-0000-4000-8000-000000000011', 'EC',
-  '00000000-0000-4000-8000-000000000006', 'Item',
+  '00000000-0000-4000-8000-000000000011', 'Vertex',
+  '00000000-0000-4000-8000-000000000006', 'Vertex',
  'pending_approval', NULL, NULL,
  '00000000-0000-4000-8000-000000000103', 'E',
  'seed', '2026-02-24 11:35:00+00', 'seed', '2026-02-24 11:35:00+00',
