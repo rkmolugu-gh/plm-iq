@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from datetime import datetime as dt
 from uuid import UUID
@@ -169,6 +170,114 @@ def soft_delete_vertex(
     )
     logger.info("vertex.soft_deleted", extra={"tenant": str(tenant_id), "vertex": str(vertex_id), "actor": actor})
     return from_row(VertexOut, updated)
+
+
+# ── Numbering helpers ────────────────────────────────────────────────────────
+# Generic because every vertex kind needs them: numbering pools are a property
+# of the shared core (one foundation_vertex table), not of any subtype. Both
+# helpers take an OPTIONAL kind - pass one to keep per-type pools independent,
+# omit it to draw from all vertices.
+
+_NUMERIC_RE = re.compile(r"^\d+$")
+_ALPHA_RE = re.compile(r"^[A-Z]+$")
+
+
+def increment_revision(last: str) -> str:
+    """Produce the successor of a revision identifier.
+
+    Supported vocabularies follow strategy Section 8 ("A, B, C, 01, 02"):
+    zero-padded numeric ('009' -> '010', width preserved) and spreadsheet
+    letters ('Z' -> 'AA'). Anything else is refused loudly rather than
+    guessed - a wrong revision silently breaks supersession chains.
+    """
+    last = (last or "").strip()
+    if not last:
+        return "A"
+    if _NUMERIC_RE.match(last):
+        return str(int(last) + 1).zfill(len(last))
+    if _ALPHA_RE.match(last):
+        chars = list(last)
+        for i in range(len(chars) - 1, -1, -1):
+            if chars[i] != "Z":
+                chars[i] = chr(ord(chars[i]) + 1)
+                break
+            chars[i] = "A"
+            if i == 0:
+                chars.insert(0, "A")
+        return "".join(chars)
+    raise ValidationFailed(f"cannot auto-increment revision '{last}'; set it manually")
+
+
+def next_number(
+    session: Session,
+    tenant_id: UUID,
+    *,
+    prefix: str,
+    kind: enums.VertexKind | None = None,
+) -> str:
+    """Next free business number for a prefix: max(numeric)+1, width-padded.
+
+    Reads the ``prefix`` COLUMN (not the number text) so identities like
+    ('DOC', '3010') are found regardless of how the number was typed. New
+    sequences start at 1001; width grows with the widest stored number.
+    """
+    conditions = [
+        tables.foundation_vertex.c.tenant_id == tenant_id,
+        tables.foundation_vertex.c.prefix == prefix,
+        tables.foundation_vertex.c.marked_for_deletion.is_(False),
+    ]
+    if kind is not None:
+        conditions.append(tables.foundation_vertex.c.kind == kind)
+    numbers = session.execute(
+        select(tables.foundation_vertex.c.number).where(*conditions)
+    ).scalars().all()
+    numerics = [n for n in numbers if _NUMERIC_RE.match(n)]
+    if not numerics:
+        return "1001"
+    width = max(4, max(len(n) for n in numerics))
+    return str(max(int(n) for n in numerics) + 1).zfill(width)
+
+
+def next_revision(
+    session: Session,
+    tenant_id: UUID,
+    *,
+    prefix: str,
+    number: str,
+    kind: enums.VertexKind | None = None,
+) -> str:
+    """Revision following the highest one stored for the {prefix}-{number}
+    identity.
+
+    Revisions identify successive versions of the SAME business object in
+    this data model (one row per revision), so 'latest' means the highest
+    VALUE ever stored for the identity, not the most recently created row.
+    """
+
+    def rank(value: str) -> tuple[int, int]:
+        if _NUMERIC_RE.match(value):
+            return (0, int(value))
+        if _ALPHA_RE.match(value):
+            total = 0
+            for ch in value:
+                total = total * 26 + (ord(ch) - ord("A") + 1)
+            return (1, total)
+        return (-1, 0)
+
+    conditions = [
+        tables.foundation_vertex.c.tenant_id == tenant_id,
+        tables.foundation_vertex.c.prefix == prefix,
+        tables.foundation_vertex.c.number == number,
+    ]
+    if kind is not None:
+        conditions.append(tables.foundation_vertex.c.kind == kind)
+    revisions = session.execute(
+        select(tables.foundation_vertex.c.revision).where(*conditions)
+    ).scalars().all()
+    meaningful = [r for r in revisions if r]
+    if not meaningful:
+        return "A"
+    return increment_revision(max(meaningful, key=rank))
 
 
 def _check_transition(vertex_id: UUID, old: enums.LifecycleState, new: enums.LifecycleState) -> None:

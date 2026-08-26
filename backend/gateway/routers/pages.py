@@ -13,6 +13,7 @@ Resolution order per request: active edition first, then common.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, timezone
 from datetime import datetime as dt
 from pathlib import Path
@@ -1151,6 +1152,49 @@ def document_file_delete_action(request: Request, vertex_id: UUID, version: int 
         return _documents_redirect(msg="file removed from document")
     except (ServiceError, ValueError) as exc:
         return _documents_redirect(err=str(exc))
+
+
+@router.get("/documents/next-number", response_model=None)
+def document_next_number(request: Request, prefix: str = "DOC") -> JSONResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    clean = re.sub(r"[^A-Za-z0-9_-]", "", prefix.strip())
+    with db.tenant_session(UUID(ident.tenant_id)) as session:
+        number = vertex_service.next_number(
+            session,
+            UUID(ident.tenant_id),
+            prefix=clean,
+            kind=enums.VertexKind.DOCUMENT,
+        )
+    return JSONResponse({"number": number})
+
+
+@router.get("/documents/next-revision", response_model=None)
+def document_next_revision(
+    request: Request,
+    prefix: str = "DOC",
+    number: str = "",
+) -> JSONResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    clean_prefix = re.sub(r"[^A-Za-z0-9_-]", "", prefix.strip())
+    clean_number = number.strip()
+    if not clean_number:
+        return JSONResponse({"revision": "A"})
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            revision = vertex_service.next_revision(
+                session,
+                UUID(ident.tenant_id),
+                prefix=clean_prefix,
+                number=clean_number,
+                kind=enums.VertexKind.DOCUMENT,
+            )
+    except ServiceError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=400)
+    return JSONResponse({"revision": revision})
 
 
 @router.get("/documents/{vertex_id}/download", response_model=None)

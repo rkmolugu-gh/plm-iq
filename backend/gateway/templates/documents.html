@@ -68,15 +68,84 @@
   <h2>Create a document</h2>
   <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create document</button></div>
   <div class="form-grid">
-    <label>Number<input name="number" placeholder="3011" required></label>
-    <label>Name<input name="name" placeholder="Mounting Bracket Drawing" required></label>
-    <label>Revision<input name="revision" value="A" required></label>
-    <label>Prefix<input name="prefix" value="DOC"></label>
+    <label>Number
+      <span class="input-gen">
+        <input name="number" id="doc-number" placeholder="3011" required>
+        <button class="btn-icon" type="button" id="gen-doc-number" title="Generate next document number" aria-label="Generate next document number">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+      </span>
+    </label>
+    <label>Name<input name="name" id="doc-name" placeholder="Mounting Bracket Drawing" required></label>
+    <label>Revision
+      <span class="input-gen">
+        <input name="revision" id="doc-revision" value="A" required>
+        <button class="btn-icon" type="button" id="gen-doc-revision" title="Increment from the latest revision in the database" aria-label="Generate next revision">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </button>
+      </span>
+    </label>
+    <label>Prefix<input name="prefix" id="doc-prefix" value="DOC"></label>
     <label>Description<input name="description"></label>
     <label>Release date<input name="release_on" type="date"></label>
-    <label>File (optional)<input type="file" name="file"></label>
+    <label>File (optional)<input type="file" name="file" id="doc-file"></label>
   </div>
 </form>
+<script>
+(function () {
+  var form = document.querySelector('form[action="/documents/create"]');
+  if (!form) return;
+  var numberInput = form.querySelector('#doc-number');
+  var revisionInput = form.querySelector('#doc-revision');
+  var prefixInput = form.querySelector('#doc-prefix');
+  var nameInput = form.querySelector('#doc-name');
+  var fileInput = form.querySelector('#doc-file');
+
+  function currentPrefix() {
+    return (prefixInput.value || 'DOC').trim() || 'DOC';
+  }
+
+  async function fetchJson(url) {
+    var res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error('request failed');
+    return res.json();
+  }
+
+  // Next free numeric number for the current prefix; server derives the
+  // pool from kind=Document vertices only, so other entity types never
+  // consume a document number.
+  document.getElementById('gen-doc-number').addEventListener('click', function () {
+    fetchJson('/documents/next-number?prefix=' + encodeURIComponent(currentPrefix()))
+      .then(function (data) {
+        if (data.number) numberInput.value = data.number;
+      })
+      .catch(function () { /* leave the field untouched on failure */ });
+  });
+
+  // Revision successor of the highest revision already stored for
+  // {prefix}-{number}; requires a number to be meaningful.
+  document.getElementById('gen-doc-revision').addEventListener('click', function () {
+    var number = (numberInput.value || '').trim();
+    if (!number) { numberInput.focus(); return; }
+    fetchJson('/documents/next-revision?prefix=' + encodeURIComponent(currentPrefix()) +
+              '&number=' + encodeURIComponent(number))
+      .then(function (data) {
+        if (data.revision) revisionInput.value = data.revision;
+      })
+      .catch(function () { /* leave the field untouched on failure */ });
+  });
+
+  // Picking a file prefills Name with its stem; picking another file follows.
+  // Users who prefer their own name simply overwrite the field afterwards.
+  if (fileInput) {
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      nameInput.value = file.name.replace(/\.[^.]+$/, '');
+    });
+  }
+})();
+</script>
 {% endif %}
 
 {# ── Listing (all columns orderable) ──────────────────────────────────── #}
