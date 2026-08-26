@@ -135,7 +135,8 @@ def update_vertex(
             f"vertex {vertex_id} is Released and immutable; supersede it or route through change management"
         )
     if not changes:
-        return from_row(VertexOut, dict(current))
+        # current is already a plain dict from find_vertex; no Row unwrapping.
+        return VertexOut.model_validate(current)
     if "lifecycle_state" in changes:
         _check_transition(vertex_id, current["lifecycle_state"], changes["lifecycle_state"])
         if changes["lifecycle_state"] == enums.LifecycleState.RELEASED and changes.get("release_on") is None:

@@ -77,6 +77,15 @@ def _make_templates(base_dir: Path, overlay_dirs: tuple[Path, ...] = ()) -> Jinj
     loaders = [FileSystemLoader(str(d)) for d in overlay_dirs]
     if loaders:
         t.env.loader = ChoiceLoader([*loaders, t.env.loader])
+
+    # Long business names / filenames blow out table columns; cap the visible
+    # text at N chars with an ellipsis. The FULL value always travels in the
+    # cell's title attribute, so hovering reveals everything.
+    def short(value: Any, limit: int = 30) -> str:
+        text = "" if value is None else str(value)
+        return text if len(text) <= limit else text[:limit] + "…"
+
+    t.env.filters["short"] = short
     return t
 
 
@@ -1121,6 +1130,7 @@ def document_update_action(
     lifecycle_state: str = Form(""),
     release_on: str = Form(""),
     replace_file: UploadFile | None = File(None),
+    remove_file: str = Form(""),
 ) -> RedirectResponse:
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
@@ -1146,11 +1156,13 @@ def document_update_action(
             result = document_service.update_document(
                 session, tid, vertex_id, VertexUpdate(**changes), actor=actor
             )
-            # Core update first, file second: attach re-checks optimistic
-            # locking with the version the core update just produced, so one
-            # form submit can never double-consume the client's version.
-            old_key = None
+            # File changes apply ONLY as part of this save: the UI stages
+            # removal via a hidden flag, so leaving without Save leaves the
+            # stored file exactly as it was. Replacement supersedes removal
+            # when both arrive.
             upload = _document_upload(replace_file)
+            old_key = None
+            removed = False
             if upload is not None:
                 result, old_key = document_service.attach_file(
                     session,
@@ -1162,6 +1174,11 @@ def document_update_action(
                     stream=upload[2],
                     expected_version=result.version,
                 )
+            elif remove_file in ("1", "true", "on") and current["storage_key"]:
+                result, old_key = document_service.detach_file(
+                    session, tid, vertex_id, actor=actor, expected_version=result.version
+                )
+                removed = True
         if old_key:
             # Post-commit by construction: the tenant_session context has
             # exited, so removing the superseded object can no longer race a
@@ -1169,6 +1186,8 @@ def document_update_action(
             # database row pointing at deleted bytes.
             file_store.delete(tid, old_key)
         msg = f"document {result.prefix}-{result.number}/{result.revision} saved"
+        if removed:
+            msg += "; file removed"
         return _documents_redirect(msg=msg)
     except (ServiceError, ValueError) as exc:
         return _documents_redirect(err=str(exc), edit=str(vertex_id))
@@ -1184,21 +1203,6 @@ def document_delete_action(request: Request, vertex_id: UUID, version: int = For
         with db.tenant_session(tid) as session:
             vertex_service.soft_delete_vertex(session, tid, vertex_id, version=version, actor=_actor(request))
         return _documents_redirect(msg="document marked for deletion")
-    except (ServiceError, ValueError) as exc:
-        return _documents_redirect(err=str(exc))
-
-
-@router.post("/documents/{vertex_id}/file/delete")
-def document_file_delete_action(request: Request, vertex_id: UUID, version: int = Form(...)) -> RedirectResponse:
-    ident = _require_identity(request)
-    if isinstance(ident, RedirectResponse):
-        return ident
-    tid = UUID(ident.tenant_id)
-    try:
-        with db.tenant_session(tid) as session:
-            _, old_key = document_service.detach_file(session, tid, vertex_id, actor=_actor(request), expected_version=version)
-        file_store.delete(tid, old_key)
-        return _documents_redirect(msg="file removed from document")
     except (ServiceError, ValueError) as exc:
         return _documents_redirect(err=str(exc))
 

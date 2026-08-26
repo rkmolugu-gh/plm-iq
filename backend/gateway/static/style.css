@@ -1149,6 +1149,13 @@ pre.mermaid {
 
 .input-gen input { flex: 1; }
 
+/* value just produced by the generate button: green until the user edits it */
+.input-gen input.is-generated {
+  border-color: #bfe0cb;
+  background: #e4f3ea;
+  color: #1f7a3f;
+}
+
 .btn-icon {
   display: inline-flex;
   align-items: center;

@@ -33,29 +33,64 @@
       <label>Release date<input name="release_on" type="date" value="{{ editing_document.release_on or '' }}"></label>
       <label>Description<input name="description" value="{{ editing_document.description }}"></label>
       {% if editing_document.storage_key %}
-      <label>Replace file<input type="file" name="replace_file"></label>
+      <label>Replace file<input type="file" name="replace_file" id="replace-file-input"></label>
       {% else %}
-      <label>Attach file<input type="file" name="replace_file"></label>
+      <label>Attach file<input type="file" name="replace_file" id="replace-file-input"></label>
       {% endif %}
     </div>
+    {% if editing_document.storage_key %}
+    {# Removal is STAGED, not applied: the flag rides along with Save. Until
+       the user saves (or unless they save), the stored file stays untouched. #}
+    <input type="hidden" name="remove_file" id="remove-file-flag" value="">
+    <div class="file-block" id="file-current-block">
+      <p class="file-current" title="{{ editing_document.file_name }}">
+        Attached: <strong>{{ editing_document.file_name | short }}</strong>
+        {{ (editing_document.file_size_bytes / 1024) | round(1) }} KB
+        {% if editing_document.file_mime_type %}· {{ editing_document.file_mime_type }}{% endif %}
+        {% if editing_document.file_checksum_sha256 %}· sha256 {{ editing_document.file_checksum_sha256[:12] }}&hellip;{% endif %}
+        <a class="btn-mini" href="/documents/{{ editing_document.id }}/download">Download</a>
+      </p>
+      <button class="btn-mini btn-danger" type="button" id="remove-file-btn">Remove file</button>
+      <span class="cell-anno" id="file-remove-status" role="status" aria-live="polite"></span>
+    </div>
+    <script>
+    (function () {
+      var flag = document.getElementById('remove-file-flag');
+      var btn = document.getElementById('remove-file-btn');
+      var block = document.getElementById('file-current-block');
+      var statusEl = document.getElementById('file-remove-status');
+      var replaceInput = document.getElementById('replace-file-input');
+      if (!flag || !btn) return;
+
+      function stage() {
+        flag.value = '1';
+        block.style.display = 'none';
+        statusEl.textContent = 'File will be removed when you save.';
+      }
+      function undo() {
+        flag.value = '';
+        block.style.display = '';
+        statusEl.textContent = '';
+      }
+
+      btn.addEventListener('click', function () {
+        // Replacement supersedes removal: picking a new file and removing
+        // the old one in the same save are contradictory intents.
+        if (flag.value === '1') { undo(); } else { stage(); }
+      });
+
+      if (replaceInput) {
+        replaceInput.addEventListener('change', function () {
+          if (replaceInput.files && replaceInput.files.length && flag.value === '1') {
+            undo();
+            statusEl.textContent = 'Replacement file selected - remove cancelled.';
+          }
+        });
+      }
+    })();
+    </script>
+    {% endif %}
   </form>
-  {% if editing_document.storage_key %}
-  {# Sibling form, not nested: browsers close an open form when they meet
-     another one, so remove-file must live outside the edit form. #}
-  <div class="file-block">
-    <p class="file-current">
-      Attached: <strong>{{ editing_document.file_name }}</strong>
-      {{ (editing_document.file_size_bytes / 1024) | round(1) }} KB
-      {% if editing_document.file_mime_type %}· {{ editing_document.file_mime_type }}{% endif %}
-      {% if editing_document.file_checksum_sha256 %}· sha256 {{ editing_document.file_checksum_sha256[:12] }}&hellip;{% endif %}
-      <a class="btn-mini" href="/documents/{{ editing_document.id }}/download">Download</a>
-    </p>
-    <form class="inline-form" method="post" action="/documents/{{ editing_document.id }}/file/delete">
-      <input type="hidden" name="version" value="{{ editing_document.version }}">
-      <button class="btn-mini btn-danger" type="submit">Remove file</button>
-    </form>
-  </div>
-  {% endif %}
 {% elif doc_revising %}
 {# ── Revise form: same identity, successor revision ───────────────────── #}
 <form class="crud-form" method="post" action="/documents/create" enctype="multipart/form-data">
@@ -172,12 +207,19 @@
       .then(function (data) {
         if (data.number) {
           numberInput.value = data.number;
+          // Green = "this number came from the generator"; any manual edit
+          // clears the highlight so the color always means machine-fresh.
+          numberInput.classList.add('is-generated');
           say('Next free number for ' + currentPrefix() + ': ' + data.number);
         } else {
           fail(data, 'a number');
         }
       })
       .catch(function (error) { fail(error, 'a number'); });
+  });
+
+  numberInput.addEventListener('input', function () {
+    numberInput.classList.remove('is-generated');
   });
 
   // Revision successor of the highest revision already stored for
@@ -240,11 +282,11 @@
     {% for d in docs %}
     <tr>
       <td class="cell-mono">{{ d.prefix }}-{{ d.number }}{% if d.revision %}/{{ d.revision }}{% endif %}</td>
-      <td>{{ d.name }}</td>
+      <td title="{{ d.name }}">{{ d.name | short }}</td>
       <td>{{ d.revision }}</td>
       <td>
         {% if d.storage_key %}
-          <span class="pill">{{ d.file_name }}</span>
+          <span class="pill" title="{{ d.file_name }}">{{ d.file_name | short }}</span>
         {% else %}
           <span class="cell-anno">&mdash;</span>
         {% endif %}
