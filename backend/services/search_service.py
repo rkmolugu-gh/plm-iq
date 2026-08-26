@@ -132,7 +132,7 @@ def _vertex_row(hit: dict) -> dict:
         "title": title,
         "subtitle": " · ".join(subtitle_bits),
         "lifecycle_state": doc.get("lifecycle_state"),
-        "url": f"/graph/view/{urllib.parse.quote(display)}",
+        "url": f"/graph?tab=view&vertex={urllib.parse.quote(display)}",
         "score": round(hit["score"], 4),
         "highlights": hit["highlights"],
         "highlight_html": _safe_highlight(hit["highlights"][0]) if hit["highlights"] else "",

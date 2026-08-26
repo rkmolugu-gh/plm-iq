@@ -32,57 +32,6 @@ DASHBOARD = {
     ],
 }
 
-GRAPH = {
-    "vertices": [
-        {"number": "PRT-1001", "kind": "Node", "name": "Motor Housing, Machined", "revision": "A", "lifecycle": "released"},
-        {"number": "ASM-1000", "kind": "Node", "name": "Electric Drive Unit", "revision": "B", "lifecycle": "approved"},
-        {"number": "DOC-3010", "kind": "Document", "name": "Aluminum 6061 Material Specification", "revision": "A", "lifecycle": "released"},
-        {"number": "DOC-3009", "kind": "Document", "name": "Aluminum 6061 Material Specification (superseded)", "revision": "A", "lifecycle": "obsolete"},
-        {"number": "MAT-4001", "kind": "Node", "name": "Aluminum 6061 Raw Stock", "revision": "", "lifecycle": "released"},
-        {"number": "EC-0007", "kind": "EC", "name": "Supplier swap proposal", "revision": "", "lifecycle": "draft"},
-    ],
-    "edges": [
-        {"kind": "BOM", "name": "Has component", "source": "ASM-1000", "target": "PRT-1001", "state": "active",
-         "effective": "2026-01-01 onward",
-         "annotation": {"quantity": 4, "unitOfMeasure": "EA", "findNumber": "020"}},
-        {"kind": "REFDOCS", "name": "Has specification", "source": "PRT-1001", "target": "DOC-3010", "state": "active",
-         "effective": "2026-01-01 to 2027-01-01",
-         "annotation": {"note": "Specification valid until 2027-01-01", "referenceCategory": "Engineering Specification"}},
-        {"kind": "USES", "name": "Consumes material", "source": "ASM-1000", "target": "MAT-4001", "state": "active",
-         "effective": "2026-01-01 onward",
-         "annotation": {"quantity": 120, "unitOfMeasure": "KG"}},
-        {"kind": "SUPERSEDES", "name": "Replaces document", "source": "DOC-3010", "target": "DOC-3009", "state": "active",
-         "effective": "-", "annotation": {}},
-        {"kind": "AFFECTS", "name": "Proposed change", "source": "EC-0007", "target": "PRT-1001", "state": "pending_approval",
-         "effective": "-", "annotation": {"reason": "Supplier quality escape"}},
-    ],
-    "annotations": [
-        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "quantity", "value": "4"},
-        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "unitOfMeasure", "value": "EA"},
-        {"source": "ASM-1000", "kind": "BOM", "target": "PRT-1001", "attribute": "findNumber", "value": "020"},
-        {"source": "PRT-1001", "kind": "REFDOCS", "target": "DOC-3010", "attribute": "note", "value": "Specification valid until 2027-01-01"},
-        {"source": "PRT-1001", "kind": "REFDOCS", "target": "DOC-3010", "attribute": "referenceCategory", "value": "Engineering Specification"},
-    ],
-}
-
-# Parts are identified as number/revision everywhere they are displayed.
-_VERTEX_MAP = {v["number"]: v for v in GRAPH["vertices"]}
-
-
-def _display(number: str) -> str:
-    revision = _VERTEX_MAP[number]["revision"]
-    return f"{number}/{revision}" if revision else number
-
-
-for _edge in GRAPH["edges"]:
-    _edge["source_label"] = _display(_edge["source"])
-    _edge["target_label"] = _display(_edge["target"])
-
-for _annotation in GRAPH["annotations"]:
-    _annotation["label"] = (
-        f"{_display(_annotation['source'])} -[{_annotation['kind']}]-> {_display(_annotation['target'])}"
-    )
-
 
 def build_graph_view(
     number: str,
@@ -91,7 +40,7 @@ def build_graph_view(
     relation: str = "",
     target: str = "",
     *,
-    graph: dict | None = None,
+    graph: dict,
 ) -> dict | None:
     """Graph view semantics:
 
@@ -100,15 +49,14 @@ def build_graph_view(
       workspace matching the pattern is shown, regardless of focus or depth -
       e.g. All/BOM/All renders the full BOM connectivity.
 
-    ``graph`` defaults to the sample GRAPH; live callers pass
-    ``{"vertices": [...], "edges": [...]}`` in the same shape.
+    ``graph`` is required: ``{"vertices": [...], "edges": [...]}`` in the
+    shape produced by the live workspace query.
 
     Diagram reads left-to-right: source nodes on the left, relationship labels
     mid-arrow, target nodes on the right.
     """
-    data = graph or GRAPH
-    vertices = data["vertices"]
-    edges = data["edges"]
+    vertices = graph["vertices"]
+    edges = graph["edges"]
     vmap = {v["number"]: v for v in vertices}
     if number not in vmap:
         return None

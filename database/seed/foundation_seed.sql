@@ -199,15 +199,168 @@ INSERT INTO foundation_edge (
  '{}'::jsonb,
  '{"note": "Supplier swap changes incoming inspection requirements for the housing", "impactLevel": "Major"}'),
 
-('00000000-0000-4000-9000-000000000005',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Supersedes document',
- '00000000-0000-4000-8000-000000000003', 'Document',
- '00000000-0000-4000-8000-000000000004', 'Document',
+ ('00000000-0000-4000-9000-000000000005',
+  '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Supersedes document',
+  '00000000-0000-4000-8000-000000000003', 'Document',
+  '00000000-0000-4000-8000-000000000004', 'Document',
+  'active', '2026-01-01', NULL,
+  '00000000-0000-4000-8000-000000000105', 'E',
+  'seed', '2025-12-20 09:20:00+00', 'seed', '2025-12-20 09:20:00+00',
+  '{}'::jsonb,
+  '{"note": "Revision B supersedes Revision A of the Aluminum 6061 material specification"}');
+
+-- ── Migrated sample dataset (from backend/gateway/graph_view.py) ─────────────
+-- The gateway's placeholder GRAPH sample (PRT/ASM/DOC/MAT/EC numbering)
+-- migrated into the live seed. Dummy kind 'Node' maps to the schema-valid
+-- vertex_kind 'Item'; empty revisions stay '' so displays omit /rev.
+
+INSERT INTO foundation_vertex (
+    id, tenant_id, edition_id, kind, classification_id,
+    prefix, number, name, description, revision,
+    lifecycle_state, release_on, marked_for_deletion,
+    created_by, created_on, modified_by, modified_on,
+    solution_attributes, tenant_attributes
+) VALUES
+('00000000-0000-4000-8000-000000000006',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '00000000-0000-4000-8000-000000000999',
+ 'PRT', '1001', 'Motor Housing, Machined',
+ 'Machined aluminum housing enclosing the drive unit motor', 'A',
+ 'released', '2026-01-01', false,
+ 'seed', '2025-03-10 08:30:00+00', 'seed', '2025-12-14 15:40:00+00',
+ '{"material": "Aluminum 6061", "unitOfMeasure": "EA"}',
+ '{}'::jsonb),
+
+('00000000-0000-4000-8000-000000000007',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '00000000-0000-4000-8000-000000000999',
+ 'ASM', '1000', 'Electric Drive Unit',
+ 'Complete electric drive unit assembly integrating motor, housing and inverter interface', 'B',
+ 'approved', '2026-01-01', false,
+ 'seed', '2025-03-10 08:35:00+00', 'seed', '2025-12-14 15:45:00+00',
+ '{"makeBuyType": "Make", "weightKg": 24.5}',
+ '{}'::jsonb),
+
+('00000000-0000-4000-8000-000000000008',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '00000000-0000-4000-8000-000000000998',
+ 'DOC', '3010', 'Aluminum 6061 Material Specification',
+ 'Current material specification covering composition, temper and finish for Aluminum 6061', 'A',
+ 'released', '2026-01-01', false,
+ 'seed', '2025-03-12 09:00:00+00', 'seed', '2025-12-14 16:00:00+00',
+ '{"docType": "Material Specification", "format": "PDF", "confidentiality": "Internal"}',
+ '{}'::jsonb),
+
+('00000000-0000-4000-8000-000000000009',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Document',
+ '00000000-0000-4000-8000-000000000998',
+ 'DOC', '3009', 'Aluminum 6061 Material Specification (superseded)',
+ 'Superseded predecessor of DOC-3010; retained for traceability only', 'A',
+ 'obsolete', '2025-06-01', false,
+ 'seed', '2024-09-05 10:00:00+00', 'seed', '2025-12-14 16:05:00+00',
+ '{"docType": "Material Specification", "format": "PDF", "confidentiality": "Internal"}',
+ '{}'::jsonb),
+
+('00000000-0000-4000-8000-000000000010',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'Item',
+ '00000000-0000-4000-8000-000000000999',
+ 'MAT', '4001', 'Aluminum 6061 Raw Stock',
+ 'Aluminum 6061 bar stock consumed by the drive unit assembly', '',
+ 'released', '2026-01-01', false,
+ 'seed', '2025-03-12 09:10:00+00', 'seed', '2025-12-14 16:10:00+00',
+ '{"material": "Aluminum 6061", "unitOfMeasure": "KG"}',
+ '{}'::jsonb),
+
+('00000000-0000-4000-8000-000000000011',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
+ '00000000-0000-4000-8000-000000000997',
+ 'EC', '0007', 'Supplier swap proposal',
+ 'Proposal to swap the aluminum bar stock supplier for the motor housing', '',
+ 'draft', NULL, false,
+ 'seed', '2026-02-18 13:00:00+00', 'seed', '2026-02-24 11:30:00+00',
+ '{"changeType": "Material", "requestedBy": "procurement"}',
+ '{}'::jsonb);
+
+-- Governing rule for the migrated USES relationship (no rule existed yet).
+INSERT INTO foundation_graph_rule (
+    id, scope, tenant_id, edition_id,
+    edge_kind, source_vertex_kind, target_vertex_kind, direction,
+    source_cardinality, target_cardinality,
+    source_participation, target_participation,
+    duplicate_edges_allowed,
+    source_lifecycle_states, target_lifecycle_states,
+    required_edge_attributes, allow_tenant_extension,
+    created_by, created_on, modified_by, modified_on
+) VALUES
+('00000000-0000-4000-8000-000000000106',
+ 'platform', NULL, NULL,
+ 'USES', 'Item', 'Item', 'source_to_target',
+ '0..N', '0..N', 'optional', 'optional',
+ false,
+ ARRAY['draft', 'in_review', 'approved', 'released']::lifecycle_state[],
+ ARRAY['draft', 'in_review', 'approved', 'released']::lifecycle_state[],
+ ARRAY['quantity', 'unitOfMeasure']::text[],
+ true,
+ 'seed', '2025-01-15 08:00:00+00', 'seed', '2025-01-15 08:00:00+00');
+
+INSERT INTO foundation_edge (
+    id, tenant_id, edition_id, kind, name,
+    source_vertex_id, source_vertex_kind,
+    target_vertex_id, target_vertex_kind,
+    lifecycle_state, effective_from, effective_to,
+    graph_rule_id, prefix,
+    created_by, created_on, modified_by, modified_on,
+    tenant_attributes, annotation
+) VALUES
+('00000000-0000-4000-9000-000000000006',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'BOM', 'Has component',
+  '00000000-0000-4000-8000-000000000007', 'Item',
+  '00000000-0000-4000-8000-000000000006', 'Item',
+ 'active', '2026-01-01', NULL,
+ '00000000-0000-4000-8000-000000000102', 'E',
+ 'seed', '2025-12-14 16:20:00+00', 'seed', '2025-12-14 16:20:00+00',
+ '{}'::jsonb,
+ '{"quantity": 4, "unitOfMeasure": "EA", "findNumber": "020"}'),
+
+('00000000-0000-4000-9000-000000000007',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'REFDOCS', 'Has specification',
+  '00000000-0000-4000-8000-000000000006', 'Item',
+  '00000000-0000-4000-8000-000000000008', 'Document',
+ 'active', '2026-01-01', '2027-01-01',
+ '00000000-0000-4000-8000-000000000104', 'E',
+ 'seed', '2025-12-14 16:25:00+00', 'seed', '2025-12-14 16:25:00+00',
+ '{}'::jsonb,
+ '{"note": "Specification valid until 2027-01-01", "referenceCategory": "Engineering Specification"}'),
+
+('00000000-0000-4000-9000-000000000008',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'USES', 'Consumes material',
+  '00000000-0000-4000-8000-000000000007', 'Item',
+  '00000000-0000-4000-8000-000000000010', 'Item',
+ 'active', '2026-01-01', NULL,
+ '00000000-0000-4000-8000-000000000106', 'E',
+ 'seed', '2025-12-14 16:30:00+00', 'seed', '2025-12-14 16:30:00+00',
+ '{}'::jsonb,
+ '{"quantity": 120, "unitOfMeasure": "KG"}'),
+
+('00000000-0000-4000-9000-000000000009',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'SUPERSEDES', 'Replaces document',
+  '00000000-0000-4000-8000-000000000008', 'Document',
+  '00000000-0000-4000-8000-000000000009', 'Document',
  'active', '2026-01-01', NULL,
  '00000000-0000-4000-8000-000000000105', 'E',
- 'seed', '2025-12-20 09:20:00+00', 'seed', '2025-12-20 09:20:00+00',
+ 'seed', '2025-12-14 16:35:00+00', 'seed', '2025-12-14 16:35:00+00',
  '{}'::jsonb,
- '{"note": "Revision B supersedes Revision A of the Aluminum 6061 material specification"}');
+ '{}'::jsonb),
+
+('00000000-0000-4000-9000-000000000010',
+ '11111111-1111-1111-1111-111111111111', 'foundation', 'AFFECTS', 'Proposed change',
+  '00000000-0000-4000-8000-000000000011', 'EC',
+  '00000000-0000-4000-8000-000000000006', 'Item',
+ 'pending_approval', NULL, NULL,
+ '00000000-0000-4000-8000-000000000103', 'E',
+ 'seed', '2026-02-24 11:35:00+00', 'seed', '2026-02-24 11:35:00+00',
+ '{}'::jsonb,
+ '{"reason": "Supplier quality escape"}');
 
 -- ══ Stage 2: identity & access ══════════════════════════════════════════════
 

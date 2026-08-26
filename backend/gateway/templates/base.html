@@ -20,22 +20,20 @@
           <span class="edition-badge">{{ ctx.edition_label }}</span>
           {% endif %}
         </a>
-        {% if ctx.valid %}
+        {% if user %}
         <div class="tenant-chip" title="Tenant workspace">{{ ctx.tenant }}</div>
         {% endif %}
 
 
       </div>
 
+      {% if user %}
       <div class="topbar-search">
-        {% if user %}
         <form class="topbar-search-form" action="/search" method="get" role="search">
           <input class="topnav-search" type="search" name="q" value="{{ search_q or '' }}" placeholder="Search&hellip;" aria-label="Search" minlength="2" required>
         </form>
-        {% else %}
-        <input class="topnav-search" type="search" placeholder="Search&hellip;" aria-label="Search" disabled title="Sign in to search">
-        {% endif %}
       </div>
+      {% endif %}
 
       {% if user %}
       <div class="topbar-right">
@@ -59,7 +57,8 @@
     </div>
   </header>
 
-  <div class="shell">
+  <div class="shell{% if not user %} no-nav{% endif %}">
+    {% if user %}
     <aside class="sidenav">
       <nav aria-label="Workspace">
         <details class="nav-menu" open>
@@ -80,6 +79,7 @@
         </details>
       </nav>
     </aside>
+    {% endif %}
     <main class="page">{% block content %}{% endblock %}</main>
   </div>
 

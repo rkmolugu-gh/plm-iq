@@ -27,6 +27,7 @@
   <a class="tab{{ ' is-active' if tab == 'rule' }}" href="/graph?tab=rule">
     Edge rules <span class="tab-count">{{ gv_rules | length }}</span>
   </a>
+  <a class="tab{{ ' is-active' if tab == 'view' }}" href="/graph?tab=view">Graph view</a>
 </nav>
 
 <section class="module-card table-card">
@@ -121,7 +122,9 @@
         <td>{{ v.name }}</td>
         <td>{{ v.revision }}</td>
         <td class="row-actions">
-          <a class="btn-mini" href="/graph/view/{{ v.number }}">GView</a>
+          <a class="btn-mini" href="/graph?tab=view&amp;vertex={{ v.number }}">GView</a>
+          <a class="btn-mini" href="/graph?tab=graph&amp;src={{ v.number }}"
+             title="Author relationships starting from this vertex">GAuth</a>
           {% if graph_live %}
           <a class="btn-mini" href="/graph?tab=vertex&amp;edit={{ v.id }}">Edit</a>
           <form class="inline-form" method="post" action="/graph/vertices/{{ v.id }}/delete">
@@ -311,6 +314,7 @@
       </div>
     </form>
   </div>
+  <script type="application/json" id="builder-seed">{{ auth_source | tojson if auth_source else 'null' }}</script>
   <script type="application/json" id="builder-rules">{{ builder_rules | tojson }}</script>
   <script type="application/json" id="builder-kinds">{{ edge_kinds | tojson }}</script>
   <script>
@@ -540,11 +544,190 @@
             "No graph rule governs " + a.kind + " -> " + b.kind +
             "; creation will be rejected by the rules engine.";
         }
+
+        proposeDefault();
       }
+
+      var KIND_NAMES = { BOM: "Includes component", REFDOCS: "Has specification",
+        USES: "Consumes material", SUPERSEDES: "Supersedes document",
+        AFFECTS: "Affects item", MANUFACTURED_BY: "Manufactured by",
+        SUPPLIED_BY: "Supplied by", ALTERNATE_FOR: "Alternate for",
+        SUBSTITUTE_FOR: "Substitute for", COMPLIES_WITH: "Complies with",
+        CONTAINS: "Contains", VALIDATED_BY: "Validated by",
+        PACKAGED_IN: "Packaged in", HAS_LABEL: "Has label" };
+      var lastAutoName = "";
+
+      function defaultEdgeName(kind) {
+        return KIND_NAMES[kind] ||
+          String(kind).toLowerCase().replace(/_/g, " ").replace(/\b\w/g, function (c) {
+            return c.toUpperCase();
+          });
+      }
+
+      function proposeDefault() {
+        var nameInput = q('input[name="name"]');
+        var proposed = defaultEdgeName(q("#proposal-kind").value);
+        if (!nameInput.value.trim() || nameInput.value === lastAutoName) {
+          nameInput.value = proposed;
+          lastAutoName = proposed;
+        }
+      }
+      q("#proposal-kind").addEventListener("change", proposeDefault);
+
+      var seedEl = document.getElementById("builder-seed");
+      var seed = null;
+      try { seed = JSON.parse(seedEl.textContent || "null"); } catch (e) { seed = null; }
+      if (seed && seed.id) placeVertex(seed);
     })();
   </script>
   {% else %}
   <p class="cell-anno">Sign in to build relationships on your workspace graph.</p>
+  {% endif %}
+
+{# ── Graph view ────────────────────────────────────────────────────────── #}
+{% elif tab == 'view' %}
+  {% if not graph_live %}
+  <div class="table-toolbar">
+    <p class="table-desc">Sign in to traverse your workspace graph.</p>
+  </div>
+  {% else %}
+  <div class="table-toolbar">
+    <p class="table-desc">Pick a vertex and traverse its relationships &mdash; sources
+      render left, relationships mid-arrow, targets right; click any node to
+      traverse to it.</p>
+  </div>
+  <form class="filter-bar" method="get" action="/graph">
+    <input type="hidden" name="tab" value="view">
+    <label class="filter-field">
+      Vertex
+      <select name="vertex" required>
+        <option value="" disabled{{ ' selected' if not view_vertex }}>pick a vertex&hellip;</option>
+        {% for v in gv_vertices %}
+        <option value="{{ v.number }}"{{ ' selected' if v.number == view_vertex }}>{{ v.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary btn-sm" type="submit">Open</button>
+  </form>
+
+  {% if view %}
+  <section class="module-card">
+    <div class="table-toolbar">
+      {% if view.filtered %}
+      <p class="table-desc">Showing every relationship in the workspace that matches the
+        current filters. The focus vertex is highlighted when part of the result.</p>
+      {% else %}
+      <p class="table-desc">Traversal around <strong>{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %}</strong> up to two hops.
+        Apply a source, relation, or target filter to see every matching relationship
+        across the workspace instead.</p>
+      {% endif %}
+    </div>
+    <form class="filter-bar" method="get" action="/graph">
+      <input type="hidden" name="tab" value="view">
+      <input type="hidden" name="vertex" value="{{ view.focus }}">
+      <label class="filter-field">
+        Source
+        <select name="source">
+          <option value="">All</option>
+          {% for v in view.options.source %}
+          <option value="{{ v }}"{{ ' selected' if v == view.filters.source }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="filter-field">
+        Relation
+        <select name="relation">
+          <option value="">All</option>
+          {% for k in view.options.relations %}
+          <option value="{{ k }}"{{ ' selected' if k == view.filters.relation }}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="filter-field">
+        Target
+        <select name="target">
+          <option value="">All</option>
+          {% for v in view.options.target %}
+          <option value="{{ v }}"{{ ' selected' if v == view.filters.target }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+      <a class="btn-mini" href="/graph?tab=view&amp;vertex={{ view.focus }}">Reset</a>
+    </form>
+    <pre class="mermaid">{{ view.mermaid }}</pre>
+    <noscript><p class="table-desc">Enable JavaScript to render the diagram.</p></noscript>
+    {% if not view.edges %}
+    <p class="table-desc">No relationships match the current filters.</p>
+    {% endif %}
+  </section>
+
+  <section class="module-card table-card">
+    <div class="table-toolbar">
+      <p class="table-desc">Relationship tree &mdash; the selected vertex as root; each
+        relationship below it leads to the counterpart vertex. Outgoing first,
+        then incoming.</p>
+    </div>
+    <ul class="tree">
+      <li class="tree-root">
+        <span class="tree-vertex">{{ view.focus }}{% if view.meta.revision %}/{{ view.meta.revision }}{% endif %} &middot; {{ view.meta.kind }} &middot; {{ view.meta.name }}</span>
+        {% if view.tree %}
+        <ul>
+          {% for t in view.tree %}
+          <li>
+            <span class="tree-edge">{% if t.direction == 'out' %}{{ t.edge.kind }} --&gt;{% else %}&lt;-- {{ t.edge.kind }}{% endif %}</span>
+            <ul>
+              <li>
+                <span class="tree-vertex">{{ t.other.number }}{% if t.other.revision %}/{{ t.other.revision }}{% endif %} &middot; {{ t.other.kind }} &middot; {{ t.other.name }}</span>
+                <span class="pill lc-{{ t.other.lifecycle }}">{{ t.other.lifecycle.replace('_', ' ') }}</span>
+              </li>
+            </ul>
+          </li>
+          {% endfor %}
+        </ul>
+        {% elif view.edges %}
+        <ul><li><span class="table-desc">Drawn relationships do not connect to
+          {{ view.focus }} directly &mdash; shown in the table below.</span></li></ul>
+        {% else %}
+        <ul><li><span class="table-desc">No relationships match the current filters.</span></li></ul>
+        {% endif %}
+      </li>
+    </ul>
+  </section>
+
+  <section class="module-card table-card">
+    <div class="table-toolbar">
+      <p class="table-desc">Relationships in this view.</p>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>Kind</th><th>Name</th><th style="width:18%">Source</th><th style="width:18%">Target</th><th>State</th><th style="width:13%">Annotation</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for e in view.edges %}
+        <tr>
+          <td><span class="pill">{{ e.kind }}</span></td>
+          <td>{{ e.name }}</td>
+          <td class="cell-mono">{{ e.source_label }}</td>
+          <td class="cell-mono">{{ e.target_label }}</td>
+          <td><span class="pill lc-{{ e.state }}">{{ e.state.replace('_', ' ') }}</span></td>
+          <td class="cell-anno">
+            {% if e.annotation %}
+              {% for k, v in e.annotation.items() %}{{ k }}={{ v }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+            {% else %}&mdash;{% endif %}
+          </td>
+          <td class="row-actions"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "neutral" });
+  </script>
+  {% endif %}
   {% endif %}
 
 {# ── Edge rules ────────────────────────────────────────────────────────── #}

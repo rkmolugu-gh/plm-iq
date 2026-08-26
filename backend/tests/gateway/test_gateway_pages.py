@@ -26,6 +26,7 @@ except AttributeError:
 
 from fastapi.testclient import TestClient  # noqa: E402
 from gateway.main import app  # noqa: E402
+from gateway import graph_view  # noqa: E402
 
 client = TestClient(app)
 
@@ -340,27 +341,54 @@ def suite_gateway_help(tid=None):
     assert r.status_code == 404 and CONTACT_ADMIN_SNIPPET in r.text
 
 
+GRAPH_FIXTURE = {
+    "vertices": [
+        {"number": "PRT-1001", "kind": "Item", "name": "Motor Housing, Machined", "revision": "A", "lifecycle": "released"},
+        {"number": "ASM-1000", "kind": "Item", "name": "Electric Drive Unit", "revision": "B", "lifecycle": "approved"},
+        {"number": "DOC-3010", "kind": "Document", "name": "Aluminum 6061 Material Specification", "revision": "A", "lifecycle": "released"},
+        {"number": "DOC-3009", "kind": "Document", "name": "Aluminum 6061 Material Specification (superseded)", "revision": "A", "lifecycle": "obsolete"},
+        {"number": "MAT-4001", "kind": "Item", "name": "Aluminum 6061 Raw Stock", "revision": "", "lifecycle": "released"},
+        {"number": "EC-0007", "kind": "EC", "name": "Supplier swap proposal", "revision": "", "lifecycle": "draft"},
+    ],
+    "edges": [
+        {"kind": "BOM", "name": "Has component", "source": "ASM-1000", "target": "PRT-1001", "state": "active",
+         "effective": "2026-01-01 onward",
+         "annotation": {"quantity": 4, "unitOfMeasure": "EA", "findNumber": "020"}},
+        {"kind": "REFDOCS", "name": "Has specification", "source": "PRT-1001", "target": "DOC-3010", "state": "active",
+         "effective": "2026-01-01 to 2027-01-01",
+         "annotation": {"note": "Specification valid until 2027-01-01", "referenceCategory": "Engineering Specification"}},
+        {"kind": "USES", "name": "Consumes material", "source": "ASM-1000", "target": "MAT-4001", "state": "active",
+         "effective": "2026-01-01 onward",
+         "annotation": {"quantity": 120, "unitOfMeasure": "KG"}},
+        {"kind": "SUPERSEDES", "name": "Replaces document", "source": "DOC-3010", "target": "DOC-3009", "state": "active",
+         "effective": "-", "annotation": {}},
+        {"kind": "AFFECTS", "name": "Proposed change", "source": "EC-0007", "target": "PRT-1001", "state": "pending_approval",
+         "effective": "-", "annotation": {"reason": "Supplier quality escape"}},
+    ],
+}
+
+
 def suite_gateway_graph(tid=None):
     assert 'href="/graph"' in get("/dashboard", "plm-iq.foundation.localhost.com").text, \
         "Graph nav item missing on dashboard"
 
     v = get("/graph", "plm-iq.foundation.localhost.com")
     assert v.status_code == 200, v.status_code
-    for marker in ("Graph explorer", "Vertices", "PRT-1001/A", "New vertex"):
+    for marker in ("Graph explorer", "Vertices", "New vertex"):
         assert marker in v.text, f"missing on vertex tab: {marker}"
-    assert ">EC-0007</td>" in v.text, "empty revision must render bare number"
+    assert ">EC-0007</td>" not in v.text, "sample rows must not render anonymously"
     assert 'class="tab is-active"' in v.text and "Vertices" in v.text, "vertex tab not active"
-    assert 'href="/graph/view/PRT-1001">GView' in v.text, "GView action missing on vertex rows"
+    assert 'href="/graph/view/' not in v.text, "GView rows require signed-in data"
     assert '/graph/view/' not in get("/graph?tab=edge", "plm-iq.foundation.localhost.com").text, \
         "GView must only appear on vertex rows"
 
     e = get("/graph?tab=edge", "plm-iq.foundation.localhost.com")
     assert e.status_code == 200
-    for marker in ("Edges", "REFDOCS", "+ New edge"):
+    for marker in ("Edges", "+ New edge"):
         assert marker in e.text, f"missing on edge tab: {marker}"
     assert ">State<" not in e.text, "state column was removed from the edge table"
-    assert "ASM-1000/B" in e.text and ">PRT-1001/A</td>" in e.text, \
-        "edge endpoints missing revision identifiers"
+    assert "ASM-1000/B" not in e.text and ">PRT-1001/A</td>" not in e.text, \
+        "sample edge rows must not render anonymously"
 
     # the standalone annotations tab is gone; unknown tabs fall back to vertex
     a = get("/graph?tab=annotation", "plm-iq.foundation.localhost.com")
@@ -390,121 +418,83 @@ def suite_gateway_graph(tid=None):
     assert "New vertex" in bad.text and "+ New edge" not in bad.text, \
         "invalid tab must fall back to vertex"
 
-    gv = get("/graph/view/PRT-1001", "plm-iq.foundation.localhost.com")
-    assert gv.status_code == 200, gv.status_code
-    assert 'class="mermaid"' in gv.text and "flowchart LR" in gv.text, "mermaid diagram missing"
-    # jinja autoescapes -> the browser receives entity-encoded arrows/quotes
-    assert "ASM1000 --&gt;|&#34;BOM&#34;| PRT1001" in gv.text, "traversal edge missing from diagram"
-    assert "PRT-1001/A · Node · Motor Housing" in gv.text, "diagram label missing revision or kind"
-    assert 'click ASM1000 &#34;/graph/view/ASM-1000&#34;' in gv.text, "node click traversal missing"
+    def uview(number, **kw):
+        return graph_view.build_graph_view(number, graph=GRAPH_FIXTURE, **kw)
 
-    assert "Relationship tree" in gv.text and "tree-root" in gv.text, "tree view missing"
-    assert ">PRT-1001/A &middot; Node &middot; Motor Housing, Machined<" in gv.text, "root vertex missing from tree"
-    assert "ASM-1000/B &middot; Node &middot; Electric Drive Unit" in gv.text, "counterpart revision missing"
-    assert ">EC-0007 &middot;" in gv.text, "empty-revision counterpart must render bare"
-    assert "tree-rev" not in gv.text, "stale revision chip remains"
-    assert "Effectivity" not in gv.text, "effectivity column was removed from the view page"
-    assert "quantity=1" in gv.text and "unitOfMeasure=EA" in gv.text, \
-        "annotations must render as key=value pairs on one line"
-    # outgoing branches: KIND --> (flow toward child); incoming: <-- KIND (flow into root)
-    assert "REFDOCS --&gt;" in gv.text and "DOC-3010" in gv.text, "outgoing branch missing"
-    assert "&lt;-- BOM" in gv.text and "ASM-1000" in gv.text, "incoming branch missing"
-    assert "&lt;-- AFFECTS" in gv.text and "EC-0007" in gv.text, "second sibling missing"
+    gv = uview("PRT-1001")
+    m = gv["mermaid"]
+    assert m.startswith("flowchart LR"), "mermaid diagram missing"
+    for pair in (
+        'ASM1000 -->|"BOM"| PRT1001',
+        'PRT1001 -->|"REFDOCS"| DOC3010',
+    ):
+        assert pair in m, f"traversal edge missing from diagram: {pair}"
+    assert '"PRT-1001/A · Item · Motor Housing, Machined"' in m, \
+        "diagram label missing revision or kind"
+    assert 'click ASM1000 "/graph/view/ASM-1000"' in m, "node click traversal missing"
 
-    tree_section = gv.text.split("Relationship tree", 1)[1].split("</section>", 1)[0]
-    assert "Has component" not in tree_section, "edge name must not appear as tree label"
-    # revision is inline in the identifier (number/revision); no separate chip
-    assert "tree-rev" not in gv.text and "rev B" not in gv.text
-    assert "ASM-1000/B" in tree_section, "counterpart identifier missing revision"
+    assert [(t["direction"], t["other"]["number"]) for t in gv["tree"]] == \
+        [("out", "DOC-3010"), ("in", "EC-0007"), ("in", "ASM-1000")], "tree ordering wrong"
+    assert "classDef focus" in m and "class PRT1001 focus" in m, "focus styling missing"
+    labels = {(e["source_label"], e["target_label"]) for e in gv["edges"]}
+    assert ("ASM-1000/B", "PRT-1001/A") in labels, "counterpart revision missing"
+    assert any(t["other"]["number"] == "EC-0007" for t in gv["tree"]), \
+        "empty-revision counterpart must render bare"
 
-    assert "classDef focus" in gv.text, "focus styling missing"
-    assert "/graph?tab=vertex" in gv.text, "back link missing"
+    hop = uview("DOC-3010")
+    assert "DOC3009" in hop["mermaid"], "multi-hop traversal failed"
 
-    hop = get("/graph/view/DOC-3010", "plm-iq.foundation.localhost.com")
-    assert hop.status_code == 200 and "DOC3009" in hop.text, "multi-hop traversal failed"
-
-    f = get(
-        "/graph/view/PRT-1001",
-        "plm-iq.foundation.localhost.com",
-        params={"relation": "BOM"},
-    )
-    assert f.status_code == 200, f.status_code
-    assert 'name="relation"' in f.text and "<select" in f.text, "filter dropdowns missing"
-    assert 'value="BOM" selected' in f.text, "relation filter not preserved"
-    assert "ASM1000 --&gt;" in f.text, "BOM edge filtered out"
-    assert "DOC3010" not in f.text, "unfiltered relationship leaked through"
-    assert 'value="BOM" selected' in f.text
-    assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
+    f = uview("PRT-1001", relation="BOM")
+    fm = f["mermaid"]
+    assert 'ASM1000 -->|"BOM"| PRT1001' in fm, "BOM edge filtered out"
+    assert "DOC3010" not in fm, "unfiltered relationship leaked through"
+    assert f["filters"] == {"source": "", "relation": "BOM", "target": ""} and f["filtered"]
+    assert all("relation=BOM" in line for line in fm.splitlines() if "click " in line), \
         "node traversal must carry the selected filter"
-    assert "&lt;-- BOM" in f.text and "REFDOCS" not in f.text, \
+    assert all(e["kind"] == "BOM" for e in f["edges"]), \
         "tree must reflect the applied relation filter"
-    assert 'value="BOM" selected' in f.text
-    assert '/graph/view/PRT-1001?relation=BOM' in f.text and '/graph/view/ASM-1000?relation=BOM' in f.text, \
-        "node traversal must carry the selected filter"
-    assert 'value="DOC-3010"' not in f.text and 'value="REFDOCS"' not in f.text, \
+    assert f["options"]["relations"] == ["BOM"], \
         "dropdowns must list only entities in the drawn diagram"
+    assert f["options"]["source"] == ["ASM-1000"], \
+        "selected target must disappear from the source dropdown"
+    assert "PRT-1001" in f["options"]["target"], "target dropdown lost unrelated choices"
 
-    s = get(
-        "/graph/view/PRT-1001",
-        "plm-iq.foundation.localhost.com",
-        params={"source": "EC-0007", "relation": "AFFECTS"},
-    )
-    assert s.status_code == 200
-    assert "EC0007" in s.text and "DOC3010" not in s.text, "source filter not applied"
-    assert "No relationships match" not in s.text
-    assert s.text.count('value="EC-0007"') == 1, \
+    s = uview("PRT-1001", source="EC-0007", relation="AFFECTS")
+    sm = s["mermaid"]
+    assert "EC0007" in sm and "DOC3010" not in sm, "source filter not applied"
+    assert 'EC0007 -->|"AFFECTS"| PRT1001' in sm and s["edges"], \
+        "matching AFFECTS relationship lost"
+    assert s["options"]["source"] == ["EC-0007"], \
         "selected source must disappear from the target dropdown"
-    assert 'value="PRT-1001"' in s.text, "target dropdown lost unrelated choices"
+    assert "PRT-1001" in s["options"]["target"], "target dropdown lost unrelated choices"
 
-    same = get(
-        "/graph/view/PRT-1001",
-        "plm-iq.foundation.localhost.com",
-        params={"source": "PRT-1001", "target": "PRT-1001"},
-    )
-    assert same.status_code == 200 and "No relationships match" in same.text, \
+    same = uview("PRT-1001", source="PRT-1001", target="PRT-1001")
+    assert same["edges"] == [] and same["filtered"], \
         "self-relation filter combination must match nothing"
 
-    # target filter matches GLOBALLY (focus PRT is 2+ hops from this edge)
-    none = get(
-        "/graph/view/PRT-1001",
-        "plm-iq.foundation.localhost.com",
-        params={"target": "MAT-4001"},
-    )
-    assert none.status_code == 200
-    assert 'ASM1000 --&gt;|&#34;USES&#34;| MAT4001' in none.text, \
+    none = uview("PRT-1001", target="MAT-4001")
+    assert 'ASM1000 -->|"USES"| MAT4001' in none["mermaid"] and none["edges"], \
         "target filter must draw every matching relationship workspace-wide"
-    assert "No relationships match" not in none.text
 
-    # relation filter draws matching edges even when unrelated to the focus
-    g = get(
-        "/graph/view/DOC-3010",
-        "plm-iq.foundation.localhost.com",
-        params={"relation": "AFFECTS"},
-    )
-    assert g.status_code == 200
-    assert 'EC0007 --&gt;|&#34;AFFECTS&#34;| PRT1001' in g.text, \
-        "global relation filtering failed"
+    g = uview("DOC-3010", relation="AFFECTS")
+    assert 'EC0007 -->|"AFFECTS"| PRT1001' in g["mermaid"], "global relation filtering failed"
 
-    z = get(
-        "/graph/view/PRT-1001",
-        "plm-iq.foundation.localhost.com",
-        params={"source": "EC-0007", "relation": "BOM"},
-    )
-    assert z.status_code == 200 and "No relationships match" in z.text
+    z = uview("PRT-1001", source="EC-0007", relation="BOM")
+    assert z["edges"] == []
 
-    reset = get("/graph/view/PRT-1001", "plm-iq.foundation.localhost.com")
-    assert reset.status_code == 200 and "DOC3010" in reset.text, "reset lost unfiltered view"
+    scoped = uview("DOC-3009")
+    so = scoped["options"]
+    assert so["relations"] == ["SUPERSEDES"], "dropdown lists relation outside this diagram"
+    drawn = set(so["source"]) | set(so["target"])
+    assert drawn <= {"DOC-3009", "DOC-3010"}, "dropdown lists vertex outside this diagram"
+    assert "DOC-3010" in drawn, "neighbor option missing from dropdown"
 
-    scoped = get("/graph/view/DOC-3009", "plm-iq.foundation.localhost.com")
-    assert scoped.status_code == 200, scoped.status_code
-    assert 'value="DOC-3010"' in scoped.text, "neighbor option missing from dropdown"
-    assert 'value="ASM-1000"' not in scoped.text, "dropdown lists vertex outside this diagram"
-    assert 'value="MAT-4001"' not in scoped.text, "dropdown lists vertex outside this diagram"
-    assert 'value="USES"' not in scoped.text, "dropdown lists relation outside this diagram"
-    assert 'value="SUPERSEDES"' in scoped.text
-
-    unknown = get("/graph/view/NOPE-9999", "plm-iq.foundation.localhost.com")
-    assert unknown.status_code == 404 and CONTACT_ADMIN_SNIPPET in unknown.text
+    unknown = client.get("/graph/view/NOPE-9999",
+                         headers={"host": "plm-iq.foundation.localhost.com"},
+                         follow_redirects=False)
+    assert unknown.status_code == 303 and \
+        unknown.headers["location"].startswith("/graph?tab=view&vertex=NOPE-9999"), \
+        "legacy graph-view links must land on the explorer's Graph view tab"
 
     r = get("/graph", "127.0.0.1:8080")
     assert r.status_code == 200 and "Welcome to PLM-IQ" in r.text

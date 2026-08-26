@@ -56,7 +56,7 @@ from services.schemas import (
     VertexUpdate,
 )
 
-from .. import auth, dummy_data, resolver
+from .. import auth, graph_view, resolver
 from ..resolver import EDITIONS
 
 logger = logging.getLogger(__name__)
@@ -199,14 +199,14 @@ def dashboard(request: Request) -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
-        context.update(dash=dummy_data.DASHBOARD, show_nav=True)
+        context.update(dash=graph_view.DASHBOARD, show_nav=True)
         return _templates_for(ctx).TemplateResponse(request, "dashboard.html", context)
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path="/dashboard")
 
 
-_GRAPH_TABS = ("vertex", "edge", "graph", "rule")
+_GRAPH_TABS = ("vertex", "edge", "graph", "rule", "view")
 
 
 def _safe_uuid(raw: str) -> UUID | None:
@@ -272,28 +272,11 @@ def _effective_label(e: dict) -> str:
 
 
 def _readonly_graph_context(tab: str, msg: str, err: str) -> dict[str, Any]:
-    """Sample-data rendering for anonymous visitors: identical markup, no writes."""
-    vertices = []
-    for v in dummy_data.GRAPH["vertices"]:
-        vertices.append({
-            "number": v["number"],
-            "label": f"{v['number']}/{v['revision']}" if v["revision"] else v["number"],
-            "kind": v["kind"], "name": v["name"], "revision": v["revision"],
-            "lifecycle": v["lifecycle"],
-        })
-    edges = [
-        {
-            "kind": e["kind"], "name": e["name"],
-            "source_label": e["source_label"], "target_label": e["target_label"],
-            "state": e["state"], "effective": e["effective"],
-            "annotation": e.get("annotation", {}),
-        }
-        for e in dummy_data.GRAPH["edges"]
-    ]
+    """Shell rendering for anonymous visitors: empty tables, sign-in prompts."""
     return {
         "graph_live": False,
-        "gv_vertices": vertices,
-        "gv_edges": edges,
+        "gv_vertices": [],
+        "gv_edges": [],
         "gv_rules": [],
         "tab": tab,
         "show_nav": True,
@@ -501,14 +484,14 @@ def _live_graph_view(tenant_id: UUID, number: str, source: str, relation: str, t
             "annotation": e.annotation or {},
         })
 
-    return dummy_data.build_graph_view(
+    return graph_view.build_graph_view(
         number, source=source, relation=relation, target=target,
         graph={"vertices": list(meta_by_number.values()), "edges": graph_edges},
     )
 
 
 @router.get("/graph", response_class=HTMLResponse)
-def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
+def graph(request: Request, tab: str = "vertex", vertex: str = "") -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if ctx.valid:
@@ -516,6 +499,27 @@ def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
         identity = context.get("identity")
         if identity is not None:
             context.update(_graph_workspace(UUID(identity.tenant_id), identity.edition_id, request, tab))
+            if tab == "view":
+                params = request.query_params
+                selected = (vertex or "").strip()
+                view = None
+                if selected:
+                    view = _live_graph_view(
+                        UUID(identity.tenant_id), selected,
+                        params.get("source") or "",
+                        params.get("relation") or "",
+                        params.get("target") or "",
+                    )
+                context.update(view=view, view_vertex=selected)
+            elif tab == "graph":
+                src = (request.query_params.get("src") or "").strip()
+                if src:
+                    match = next((v for v in context["gv_vertices"] if v["number"] == src), None)
+                    if match:
+                        context["auth_source"] = {
+                            "id": match["id"], "kind": match["kind"],
+                            "label": match["label"], "name": match["name"],
+                        }
         else:
             context.update(_readonly_graph_context(tab, request.query_params.get("msg") or "",
                                                    request.query_params.get("err") or ""))
@@ -526,28 +530,24 @@ def graph(request: Request, tab: str = "vertex") -> HTMLResponse:
 
 
 @router.get("/graph/view/{number}", response_class=HTMLResponse)
-def graph_view(
+def graph_view_page(
     request: Request,
     number: str,
     source: str = "",
     relation: str = "",
     target: str = "",
 ) -> HTMLResponse:
+    """Legacy deep links move to the explorer's Graph view tab, filters intact."""
     context = _base_context(request)
     ctx = context["ctx"]
-    if ctx.valid:
-        identity = context.get("identity")
-        if identity is not None:
-            view = _live_graph_view(UUID(identity.tenant_id), number, source, relation, target)
-        else:
-            view = dummy_data.build_graph_view(number, source=source, relation=relation, target=target)
-        if view is not None:
-            context.update(view=view, show_nav=True)
-            return _templates_for(ctx).TemplateResponse(request, "g_view.html", context)
-        return _render_not_found(request, path=f"/graph/view/{number}")
     if not ctx.matched_pattern:
-        return _render_default(request)
-    return _render_not_found(request, path=f"/graph/view/{number}")
+        return _render_not_found(request, path=f"/graph/view/{number}")
+    qs = [f"{k}={quote(v)}" for k, v in
+          (("source", source), ("relation", relation), ("target", target)) if v]
+    url = "/graph?tab=view&vertex=" + quote(number)
+    if qs:
+        url += "&" + "&".join(qs)
+    return RedirectResponse(url, status_code=303)
 
 
 @router.get("/graph/vertices/search")
