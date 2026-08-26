@@ -1,18 +1,8 @@
 
-schema updates. add below new tables that inherit from Vertex. These should by default inherit all columns from Vertext. and then add additonal columns specified below.
+Schema - Document needs mime type.
+buik upload based on file extension set mime type.
+Document open should open the os app for the mime type.
 
-Item -> future_attribute_1
-Document -> 
-Change ->
-Release >
-File ->
+name job appropriately - now it is just uid. if it is bulk file upload , index etc. it should show in job. 
 
-Additonal Item Attributes
-user_attirbute_1
-
-
-
-
-
-
-now ccreate a new service bulk_file_upload_service.py for bulk document and file upload  ui add bulk file upload sub menu in admin. that asks for folder location. what ever files are listed in that folder backend will create a document with that file. this will be async job in the background. after upload a simple report will be show to user to show what objects have been created. generate new doc number, use file name as document name, revision "a" for all files. write a log file in the project root/logs folder with datetime_servicename.log 
+doc index.

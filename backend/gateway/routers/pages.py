@@ -139,9 +139,9 @@ def _base_context(request: Request) -> dict[str, Any]:
             "is_admin": identity.is_tenant_admin,
         }
         context["identity"] = identity
-    elif ctx.valid:
-        # host-only context without a session: no fabricated identity
-        context["user"] = None
+    else:
+        # No authenticated user - context is not valid for protected routes
+        context["valid"] = False
     return context
 
 
@@ -213,14 +213,13 @@ def signout(request: Request) -> RedirectResponse:
 
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _base_context(request)
     ctx = context["ctx"]
-    if ctx.valid:
-        context.update(dash=graph_view.DASHBOARD, show_nav=True)
-        return _templates_for(ctx).TemplateResponse(request, "dashboard.html", context)
-    if not ctx.matched_pattern:
-        return _render_default(request)
-    return _render_not_found(request, path="/dashboard")
+    context.update(dash=graph_view.DASHBOARD, show_nav=True)
+    return _templates_for(ctx).TemplateResponse(request, "dashboard.html", context)
 
 
 _GRAPH_TABS = ("vertex", "edge", "graph", "rule", "view")
