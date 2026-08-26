@@ -7,6 +7,7 @@ package's modules downward (api -> services -> db/tables).
 from __future__ import annotations
 
 from . import enums
+from .ai_assistant_service import assistant
 from .db import admin_session, engine, tenant_session
 from .errors import Conflict, Forbidden, NotFound, ServiceError, ValidationFailed
 from .schemas import (
@@ -42,6 +43,7 @@ __all__ = [
     "Conflict",
     "ValidationFailed",
     "Forbidden",
+    "assistant",
     "VertexCreate",
     "VertexOut",
     "VertexUpdate",

@@ -189,12 +189,18 @@ iam_role_permission = Table(
     Column("tenant_id", UUID(as_uuid=True), nullable=False),
 )
 
-iam_user_role = Table(
-    "iam_user_role",
+setting = Table(
+    "setting",
     metadata,
-    Column("user_id", UUID(as_uuid=True), primary_key=True),
-    Column("role_id", UUID(as_uuid=True), primary_key=True),
-    Column("tenant_id", UUID(as_uuid=True), nullable=False),
-    Column("assigned_by", Text, nullable=False),
-    Column("assigned_on", DateTime(timezone=True), nullable=False),
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("level", _enum(enums.SettingLevel, "setting_level"), nullable=False),
+    Column("tenant_id", UUID(as_uuid=True)),
+    Column("user_id", UUID(as_uuid=True)),
+    Column("content", Text, nullable=False),
+    Column("is_secret", Boolean, nullable=False),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
 )

@@ -331,13 +331,11 @@ CREATE POLICY document_extension_tenant_isolation ON foundation_document
 GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_document TO plmiq_app;
 GRANT ALL ON foundation_document TO plmiq_migrator;
 
--- ── Setting ─────────────────────────────────────────────────────────────────
+-- ── Setting ─────────────────────────────────────────────────────────
 -- .env-style configuration resolved at three scopes. Effective value for a
--- context = most specific row that defines the key:
+-- context = most specific row that defines the content:
 --   platform < tenant < user
--- Keys are dotted lowercase namespaces ('mail.from', 'ui.locale',
--- 'search.page_size'). Values are JSONB so booleans/numbers/objects survive
--- without parsing conventions.
+-- All .env-style key=value pairs are stored as a single text blob.
 
 CREATE TYPE setting_level AS ENUM ('platform', 'tenant', 'user');
 
@@ -346,10 +344,7 @@ CREATE TABLE setting (
     level        setting_level NOT NULL,
     tenant_id    uuid,                       -- set for tenant | user rows
     user_id      uuid,                       -- set for user rows only
-    key          text NOT NULL,
-    value        jsonb NOT NULL DEFAULT 'null'::jsonb,
-    value_type   text NOT NULL DEFAULT 'string',  -- string | number | boolean | json
-    description  text NOT NULL DEFAULT '',
+    content      text NOT NULL DEFAULT '',   -- .env-style log text (key=value pairs)
     is_secret    boolean NOT NULL DEFAULT false,  -- never render the value back to non-admin UIs
     version      bigint GENERATED ALWAYS AS IDENTITY,
     created_by   text NOT NULL,
@@ -365,24 +360,21 @@ CREATE TABLE setting (
         AND (level <> 'tenant' OR user_id IS NULL)
         AND (level <> 'platform' OR (tenant_id IS NULL AND user_id IS NULL))
     ),
-    CONSTRAINT ck_setting_value_type CHECK (
-        value_type IN ('string', 'number', 'boolean', 'json')
+    CONSTRAINT ck_setting_content NOT NULL CHECK (
+        content IS NOT NULL
     )
 );
 
--- one row per key within each scope (partial indexes sidestep NULL semantics)
-CREATE UNIQUE INDEX uq_setting_platform ON setting (key)              WHERE level = 'platform';
-CREATE UNIQUE INDEX uq_setting_tenant   ON setting (tenant_id, key)   WHERE level = 'tenant';
-CREATE UNIQUE INDEX uq_setting_user     ON setting (tenant_id, user_id, key) WHERE level = 'user';
+-- one row per scope (platform/tenant/user) with content as a text blob
+CREATE UNIQUE INDEX uq_setting_platform ON setting (content) WHERE level = 'platform';
+CREATE UNIQUE INDEX uq_setting_tenant   ON setting (tenant_id, content) WHERE level = 'tenant';
+CREATE UNIQUE INDEX uq_setting_user     ON setting (tenant_id, user_id, content) WHERE level = 'user';
 
 CREATE INDEX idx_setting_tenant ON setting (tenant_id);
 CREATE INDEX idx_setting_user   ON setting (user_id) WHERE user_id IS NOT NULL;
 
-COMMENT ON TABLE  setting             IS 'Hierarchical runtime settings: platform defaults overridden by tenant, then by user';
 COMMENT ON COLUMN setting.level       IS 'Resolution scope of this row';
-COMMENT ON COLUMN setting.key         IS 'Dotted lowercase namespace, e.g. mail.from, ui.locale, search.page_size';
-COMMENT ON COLUMN setting.value       IS 'JSONB payload - scalars or nested objects';
-COMMENT ON COLUMN setting.value_type  IS 'Coercion hint for consumers';
+COMMENT ON COLUMN setting.content     IS '.env-style log text with key=value pairs';
 COMMENT ON COLUMN setting.is_secret   IS 'True for credentials/tokens; UIs must not echo the value';
 COMMENT ON COLUMN setting.version     IS 'DB-autoincremented optimistic-lock token';
 

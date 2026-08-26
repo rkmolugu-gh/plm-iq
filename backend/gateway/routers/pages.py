@@ -42,6 +42,7 @@ from services.search_service import searcher
 from services.tenant_service import tenants
 from services.user_service import users
 from services.vertex_service import vertices
+from services.ai_assistant_service import assistant
 from services.errors import ServiceError
 from services.schemas import (
     DocumentCreate,
@@ -1891,6 +1892,54 @@ def help_page(request: Request) -> HTMLResponse:
     return _render_not_found(request, path="/help")
 
 
+# ── AI Assistant (Domain ▸ AI ▸ Assistant) ──────────────────────────────────
+# The page renders the chat shell; the JSON endpoint is what the chat actually
+# talks to. Both currently ride the dummy AIAssistantService, so the whole path
+# works end-to-end before a real model is wired in.
+
+@router.get("/ai-assistant", response_class=HTMLResponse)
+def ai_assistant_page(request: Request) -> HTMLResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    context.update(
+        show_nav=True,
+        greeting=assistant.greeting,
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "ai-assistant.html", context)
+
+
+@router.post("/ai-assistant/chat", response_model=None)
+async def ai_assistant_chat(request: Request) -> JSONResponse:
+    """Chat turn for the assistant. Returns dummy replies until a real model
+    is connected; the contract (reply/history/model) is already stable."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return JSONResponse({"detail": "sign-in required"}, status_code=401)
+
+    message = ""
+    history: list[dict[str, Any]] = []
+    try:
+        payload = await request.json()
+        if isinstance(payload, dict):
+            message = str(payload.get("message") or "")
+            history = payload.get("history") or []
+    except Exception:
+        # Non-JSON body: tolerate a form field so the endpoint is easy to poke.
+        message = (request.query_params.get("message") or "").strip()
+
+    if not isinstance(history, list):
+        history = []
+
+    result = assistant.respond(
+        message,
+        history=history,
+        tenant=ident.tenant_id if ident else None,
+    )
+    return JSONResponse(result)
+
+
 @router.get("/{rest:path}", response_class=HTMLResponse)
 def any_page(request: Request, rest: str) -> HTMLResponse:
     context = _base_context(request)
@@ -1914,3 +1963,20 @@ def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
 def _render_default(request: Request) -> HTMLResponse:
     context = _base_context(request)
     return _templates_for(context["ctx"]).TemplateResponse(request, "default.html", context)
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request) -> HTMLResponse:
+    context = _base_context(request)
+    ctx = context["ctx"]
+    with db.tenant_session() as session:
+        settings = session.query(models.Setting).filter(
+            models.Setting.level == "platform"
+        ).all()
+    if not settings:
+        context["settings"] = []
+        context["settings_error"] = "Settings not initialized. Run schema migration first."
+        return _templates_for(ctx).TemplateResponse(request, "settings.html", context, status_code=200)
+    context["settings"] = settings
+    context["settings_error"] = None
+    return _templates_for(ctx).TemplateResponse(request, "settings.html", context, status_code=200)

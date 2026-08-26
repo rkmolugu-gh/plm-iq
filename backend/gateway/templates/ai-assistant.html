@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}AI Assistant{% if ctx.valid %} · {{ ctx.tenant }}{% endif %}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">AI Assistant</h1>
+  <p class="hero-sub dash-note">A workspace assistant wired to the backend service.
+     This build returns <strong>dummy</strong> replies &mdash; the UI and the API
+     contract are complete, a real model plugs in later.</p>
+</section>
+
+<section class="module-card chat-card">
+  <div class="chat-window" id="chat-window" aria-live="polite">
+    <div class="chat-msg chat-msg-assistant">
+      <span class="chat-avatar" aria-hidden="true">AI</span>
+      <div class="chat-bubble">{{ greeting }}</div>
+    </div>
+  </div>
+
+  <form class="chat-form" id="chat-form" autocomplete="off">
+    <input class="chat-input" id="chat-input" name="message" type="text"
+           placeholder="Ask the assistant&hellip;" aria-label="Message" required>
+    <button class="btn btn-primary btn-sm" type="submit" id="chat-send">Send</button>
+  </form>
+  <p class="cell-anno" id="chat-status" role="status" aria-live="polite"></p>
+</section>
+
+<script>
+(function () {
+  var form = document.getElementById('chat-form');
+  var input = document.getElementById('chat-input');
+  var windowEl = document.getElementById('chat-window');
+  var status = document.getElementById('chat-status');
+  if (!form || !input || !windowEl) return;
+
+  // History mirrors exactly what the backend returns, so each turn replays the
+  // full conversation to the dummy service. A real model would use it too.
+  var history = [];
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  function addMessage(role, text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'chat-msg ' + (role === 'user' ? 'chat-msg-user' : 'chat-msg-assistant');
+    var avatar = document.createElement('span');
+    avatar.className = 'chat-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.textContent = role === 'user' ? 'You' : 'AI';
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = escapeHtml(text);
+    wrap.appendChild(avatar);
+    wrap.appendChild(bubble);
+    windowEl.appendChild(wrap);
+    windowEl.scrollTop = windowEl.scrollHeight;
+  }
+
+  function say(message, expired) {
+    status.textContent = message;
+    if (expired && !status.querySelector('a')) {
+      var link = document.createElement('a');
+      link.href = '/signin';
+      link.className = 'btn-mini';
+      link.textContent = 'Sign in';
+      status.appendChild(document.createTextNode(' '));
+      status.appendChild(link);
+    }
+  }
+
+  function postTurn(message) {
+    addMessage('user', message);
+    input.value = '';
+    input.disabled = true;
+    say('Assistant is thinking…');
+    fetch('/ai-assistant/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ message: message, history: history }),
+    }).then(function (res) {
+      if (res.redirected || res.status === 401) throw { expired: true };
+      if (!res.ok) throw new Error('bad status ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      history = data.history || [];
+      addMessage('assistant', data.reply || '(no reply)');
+      say('');
+    }).catch(function (err) {
+      if (err && err.expired) {
+        say('Your session has expired - the assistant is unavailable.', true);
+      } else {
+        say('Could not reach the assistant (server error).');
+      }
+    }).finally(function () {
+      input.disabled = false;
+      input.focus();
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var message = input.value.trim();
+    if (!message) return;
+    postTurn(message);
+  });
+})();
+</script>
+{% endblock %}

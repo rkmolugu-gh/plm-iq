@@ -70,6 +70,12 @@
           </div>
         </details>
         <details class="nav-menu" open>
+          <summary class="nav-menu-btn">AI <span class="chev">&#9662;</span></summary>
+          <div class="nav-menu-list">
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/ai-assistant') }}" href="/ai-assistant">Assistant</a>
+          </div>
+        </details>
+        <details class="nav-menu" open>
           <summary class="nav-menu-btn">Admin <span class="chev">&#9662;</span></summary>
           <div class="nav-menu-list">
             <a class="nav-item{{ ' is-active' if request.url.path == '/admin/index' }}" href="/admin/index">Index</a>
