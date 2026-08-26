@@ -64,3 +64,7 @@ env/.env*
 # Generated static site bundle (build-static-site.bat)
 
 setup/public_html.tar.gz
+
+# Uploaded document files (tenant-partitioned object store)
+data/file-volume/
+

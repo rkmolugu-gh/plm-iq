@@ -65,6 +65,7 @@
           <summary class="nav-menu-btn">Domain <span class="chev">&#9662;</span></summary>
           <div class="nav-menu-list">
             <a class="nav-item{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/documents') }}" href="/documents">Documents</a>
             <a class="nav-item{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">Graph</a>
           </div>
         </details>

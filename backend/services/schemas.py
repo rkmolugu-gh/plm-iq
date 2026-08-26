@@ -75,6 +75,50 @@ class VertexOut(CamelModel):
     tenant_attributes: dict[str, Any]
 
 
+class DocumentCreate(VertexCreate):
+    """Creation payload for kind=Document vertices (TSE composition).
+
+    The kind is pinned: document_service routes the core write plus the
+    foundation_document extension row, and both halves agree on the kind by
+    construction. Accepting another kind here would silently create a vertex
+    that belongs to a different subtype's feature set.
+    """
+
+    kind: enums.VertexKind = enums.VertexKind.DOCUMENT
+
+    @model_validator(mode="after")
+    def _kind_is_document(self) -> DocumentCreate:
+        if self.kind != enums.VertexKind.DOCUMENT:
+            raise ValueError("documentService creates kind='Document' vertices only")
+        return self
+
+
+class DocumentUpdate(VertexUpdate):
+    """Core-field updates for a document.
+
+    Subtype file metadata intentionally has no direct setters here: files
+    change through the upload/download flow, which keeps storage keys and
+    checksums consistent with the actual stored bytes.
+    """
+
+
+class DocumentOut(VertexOut):
+    """Full document view: core vertex columns plus the extension columns.
+
+    Mirrors one row of the ``v_document`` reporting view - this is the TSE
+    promise: consumers see a single flat, fully typed object.
+    """
+
+    file_is_directory: bool = False
+    file_name: str = ""
+    file_parent_id: UUID | None = None
+    file_full_path: str = ""
+    file_size_bytes: int = 0
+    file_mime_type: str = ""
+    file_checksum_sha256: str = ""
+    storage_key: str = ""
+
+
 # ── Edge ────────────────────────────────────────────────────────────────────
 
 

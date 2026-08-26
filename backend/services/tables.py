@@ -43,6 +43,25 @@ foundation_vertex = Table(
     Column("tenant_attributes", JSONB, nullable=False),
 )
 
+# TSE extension table (strategy Section 8): carries ONLY document attributes
+# and joins the core row by primary key. Every system attribute stays in
+# foundation_vertex - this table must never grow copies of core columns, or
+# the single-source-of-truth invariant behind the pattern erodes.
+foundation_document = Table(
+    "foundation_document",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("file_is_directory", Boolean, nullable=False),
+    Column("file_name", Text, nullable=False),
+    Column("file_parent_id", UUID(as_uuid=True)),
+    Column("file_full_path", Text, nullable=False),
+    Column("file_size_bytes", BigInteger, nullable=False),
+    Column("file_mime_type", Text, nullable=False),
+    Column("file_checksum_sha256", Text, nullable=False),
+    Column("storage_key", Text, nullable=False),
+)
+
 foundation_graph_rule = Table(
     "foundation_graph_rule",
     metadata,

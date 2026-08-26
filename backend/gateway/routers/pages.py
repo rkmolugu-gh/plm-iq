@@ -20,15 +20,17 @@ from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
 from services import (
     db,
+    document_service,
     edge_service,
     enums,
     es_ingest_service,
+    file_store,
     graph_rule_service,
     index_service,
     jobs,
@@ -40,6 +42,7 @@ from services import (
 )
 from services.errors import ServiceError
 from services.schemas import (
+    DocumentCreate,
     EdgeCreate,
     EdgeUpdate,
     GraphRuleCreate,
@@ -922,6 +925,253 @@ def graph_rule_delete(request: Request, rule_id: UUID) -> RedirectResponse:
 
 
 _TENANT_TABS = ("tenants", "users", "roles", "permissions")
+
+# ── Documents (Domain ▸ Documents) ──────────────────────────────────────────
+# First TSE subtype surface: all vertex mechanics stay in vertex_service; this
+# section only renders and routes. File bytes never flow through these handlers'
+# transactions - they are stored before/between DB work and old objects are
+# deleted after commit, so a failed request can never dangle a pointer.
+
+_DOCUMENT_SORTS = {"number", "name", "revision", "state", "file_name", "size", "modified"}
+
+
+def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
+    """Listing, edit target, and sort-link helpers for /documents."""
+    params = request.query_params
+    sort = params.get("sort") if params.get("sort") in _DOCUMENT_SORTS else "number"
+    direction = "desc" if params.get("dir") == "desc" else "asc"
+    q = (params.get("q") or "").strip()
+    tid = UUID(ident.tenant_id)
+
+    with db.tenant_session(tid) as session:
+        page = document_service.list_documents(
+            session,
+            tid,
+            number_like=q or None,
+            sort=sort,
+            direction=direction,
+        )
+        editing = None
+        edit_id = _safe_uuid(params.get("edit") or "")
+        if edit_id:
+            editing = document_service.find_document(session, tid, edit_id)
+
+    def _sort_link(col: str) -> str:
+        next_dir = "desc" if (col == sort and direction == "asc") else "asc"
+        query = f"sort={col}&dir={next_dir}"
+        if q:
+            query += f"&q={quote(q)}"
+        return f"/documents?{query}"
+
+    def _sort_icon(col: str) -> str:
+        if col != sort:
+            return ""
+        return " &#9662;" if direction == "desc" else " &#9652;"
+
+    return {
+        "docs": page.items,
+        "total_docs": page.total,
+        "doc_q": q,
+        "doc_sort": sort,
+        "doc_dir": direction,
+        "sort_link": _sort_link,
+        "sort_icon": _sort_icon,
+        "editing_document": editing,
+        "lifecycle_states": [s.value for s in enums.LifecycleState],
+    }
+
+
+def _documents_redirect(msg: str = "", err: str = "", edit: str = "") -> RedirectResponse:
+    target = "/documents"
+    parts = []
+    if edit:
+        parts.append(f"edit={edit}")
+    if msg:
+        parts.append(f"msg={quote(msg)}")
+    if err:
+        parts.append(f"err={quote(err)}")
+    if parts:
+        target += "?" + "&".join(parts)
+    return RedirectResponse(target, status_code=303)
+
+
+@router.get("/documents", response_class=HTMLResponse, response_model=None)
+def documents_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+    context.update(
+        _documents_context(ident, request),
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "documents.html", context)
+
+
+def _document_upload(upload: UploadFile | None) -> tuple[str, str | None, Any] | None:
+    """Normalize an optional multipart file into file_store's upload triple.
+
+    Browsers submit an empty filename when no file was picked; treating that
+    as "no upload" keeps the create form's file input truly optional.
+    """
+    if upload is None or not upload.filename:
+        return None
+    return upload.filename, upload.content_type, upload.file
+
+
+@router.post("/documents/create")
+def document_create_action(
+    request: Request,
+    number: str = Form(...),
+    name: str = Form(...),
+    prefix: str = Form("DOC"),
+    revision: str = Form("A"),
+    description: str = Form(""),
+    release_on: str = Form(""),
+    file: UploadFile | None = File(None),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        data = DocumentCreate(
+            edition_id=_edition_id(ident.edition_id),
+            prefix=prefix.strip() or "DOC",
+            number=number.strip(),
+            name=name.strip(),
+            revision=revision.strip() or "A",
+            description=description.strip(),
+            release_on=_opt_date(release_on),
+        )
+        with db.tenant_session(tid) as session:
+            created = document_service.create_document(
+                session,
+                tid,
+                data,
+                actor=_actor(request),
+                upload=_document_upload(file),
+            )
+        msg = f"document {created.prefix}-{created.number}/{created.revision} created"
+        return _documents_redirect(msg=msg)
+    except (ServiceError, ValueError) as exc:
+        return _documents_redirect(err=str(exc))
+
+
+@router.post("/documents/{vertex_id}/update")
+def document_update_action(
+    request: Request,
+    vertex_id: UUID,
+    version: int = Form(...),
+    name: str = Form(""),
+    description: str = Form(""),
+    revision: str = Form(""),
+    lifecycle_state: str = Form(""),
+    release_on: str = Form(""),
+    replace_file: UploadFile | None = File(None),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    actor = _actor(request)
+    try:
+        changes: dict[str, Any] = {"version": version}
+        with db.tenant_session(tid) as session:
+            current = document_service.get_document(session, tid, vertex_id)
+            if name and name != current["name"]:
+                changes["name"] = name.strip()
+            if description != "" and description != current["description"]:
+                changes["description"] = description
+            if revision and revision != current["revision"]:
+                changes["revision"] = revision.strip()
+            if lifecycle_state and lifecycle_state != getattr(current["lifecycle_state"], "value", current["lifecycle_state"]):
+                changes["lifecycle_state"] = enums.LifecycleState(lifecycle_state)
+            new_release = _opt_date(release_on)
+            if new_release and new_release != current["release_on"]:
+                changes["release_on"] = new_release
+
+            result = document_service.update_document(
+                session, tid, vertex_id, VertexUpdate(**changes), actor=actor
+            )
+            # Core update first, file second: attach re-checks optimistic
+            # locking with the version the core update just produced, so one
+            # form submit can never double-consume the client's version.
+            old_key = None
+            upload = _document_upload(replace_file)
+            if upload is not None:
+                result, old_key = document_service.attach_file(
+                    session,
+                    tid,
+                    vertex_id,
+                    actor,
+                    filename=upload[0],
+                    content_type=upload[1],
+                    stream=upload[2],
+                    expected_version=result.version,
+                )
+        if old_key:
+            # Post-commit by construction: the tenant_session context has
+            # exited, so removing the superseded object can no longer race a
+            # rollback. Worst case on crash is an orphaned blob, never a
+            # database row pointing at deleted bytes.
+            file_store.delete(tid, old_key)
+        msg = f"document {result.prefix}-{result.number}/{result.revision} saved"
+        return _documents_redirect(msg=msg)
+    except (ServiceError, ValueError) as exc:
+        return _documents_redirect(err=str(exc), edit=str(vertex_id))
+
+
+@router.post("/documents/{vertex_id}/delete")
+def document_delete_action(request: Request, vertex_id: UUID, version: int = Form(...)) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            vertex_service.soft_delete_vertex(session, tid, vertex_id, version=version, actor=_actor(request))
+        return _documents_redirect(msg="document marked for deletion")
+    except (ServiceError, ValueError) as exc:
+        return _documents_redirect(err=str(exc))
+
+
+@router.post("/documents/{vertex_id}/file/delete")
+def document_file_delete_action(request: Request, vertex_id: UUID, version: int = Form(...)) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            _, old_key = document_service.detach_file(session, tid, vertex_id, actor=_actor(request), expected_version=version)
+        file_store.delete(tid, old_key)
+        return _documents_redirect(msg="file removed from document")
+    except (ServiceError, ValueError) as exc:
+        return _documents_redirect(err=str(exc))
+
+
+@router.get("/documents/{vertex_id}/download", response_model=None)
+def document_download_action(request: Request, vertex_id: UUID) -> StreamingResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            stream, filename, mime, size = document_service.download_document(session, tid, vertex_id)
+    except ServiceError as exc:
+        return _documents_redirect(err=str(exc))
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+        "Content-Length": str(size),
+    }
+    return StreamingResponse(stream, media_type=mime, headers=headers)
+
+
+
 
 
 def _require_identity(request: Request) -> auth.Identity | RedirectResponse:

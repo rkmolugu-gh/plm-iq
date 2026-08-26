@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Documents · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Documents</h1>
+  <p class="hero-sub dash-note">Controlled documents of the workspace &mdash; core attributes
+    live on the shared vertex; file content is stored per tenant and checksummed on upload.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+
+{# ── Edit form (mandatory fields first) ────────────────────────────────── #}
+{% if editing_document %}
+  <form class="crud-form" method="post" action="/documents/{{ editing_document.id }}/update" enctype="multipart/form-data">
+    <h2>Edit document {{ editing_document.prefix }}-{{ editing_document.number }}{% if editing_document.revision %}/{{ editing_document.revision }}{% endif %}</h2>
+    <input type="hidden" name="version" value="{{ editing_document.version }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/documents">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Name<input name="name" value="{{ editing_document.name }}" required></label>
+      <label>Revision<input name="revision" value="{{ editing_document.revision }}" required></label>
+      <label>Lifecycle
+        <select name="lifecycle_state">
+          {% for s in lifecycle_states %}<option value="{{ s }}"{{ ' selected' if s == editing_document.lifecycle_state }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Release date<input name="release_on" type="date" value="{{ editing_document.release_on or '' }}"></label>
+      <label>Description<input name="description" value="{{ editing_document.description }}"></label>
+      {% if editing_document.storage_key %}
+      <label>Replace file<input type="file" name="replace_file"></label>
+      {% else %}
+      <label>Attach file<input type="file" name="replace_file"></label>
+      {% endif %}
+    </div>
+  </form>
+  {% if editing_document.storage_key %}
+  {# Sibling form, not nested: browsers close an open form when they meet
+     another one, so remove-file must live outside the edit form. #}
+  <div class="file-block">
+    <p class="file-current">
+      Attached: <strong>{{ editing_document.file_name }}</strong>
+      {{ (editing_document.file_size_bytes / 1024) | round(1) }} KB
+      {% if editing_document.file_mime_type %}· {{ editing_document.file_mime_type }}{% endif %}
+      {% if editing_document.file_checksum_sha256 %}· sha256 {{ editing_document.file_checksum_sha256[:12] }}&hellip;{% endif %}
+      <a class="btn-mini" href="/documents/{{ editing_document.id }}/download">Download</a>
+    </p>
+    <form class="inline-form" method="post" action="/documents/{{ editing_document.id }}/file/delete">
+      <input type="hidden" name="version" value="{{ editing_document.version }}">
+      <button class="btn-mini btn-danger" type="submit">Remove file</button>
+    </form>
+  </div>
+  {% endif %}
+{% else %}
+
+{# ── Create form (mandatory fields first) ─────────────────────────────── #}
+<div class="table-toolbar">
+  <p class="table-desc">Every document is a shared-core vertex with a typed extension row;
+    uploading a file stores the bytes in the tenant partition and records name, size,
+    media type, and SHA-256 alongside it.</p>
+</div>
+<form class="crud-form" method="post" action="/documents/create" enctype="multipart/form-data">
+  <h2>Create a document</h2>
+  <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create document</button></div>
+  <div class="form-grid">
+    <label>Number<input name="number" placeholder="3011" required></label>
+    <label>Name<input name="name" placeholder="Mounting Bracket Drawing" required></label>
+    <label>Revision<input name="revision" value="A" required></label>
+    <label>Prefix<input name="prefix" value="DOC"></label>
+    <label>Description<input name="description"></label>
+    <label>Release date<input name="release_on" type="date"></label>
+    <label>File (optional)<input type="file" name="file"></label>
+  </div>
+</form>
+{% endif %}
+
+{# ── Listing (all columns orderable) ──────────────────────────────────── #}
+<form class="table-toolbar toolbar-search" method="get" action="/documents">
+  <input type="search" name="q" value="{{ doc_q }}" placeholder="Filter by number&hellip;" aria-label="Filter documents">
+  {% if doc_sort %}<input type="hidden" name="sort" value="{{ doc_sort }}"><input type="hidden" name="dir" value="{{ doc_dir }}">{% endif %}
+  <button class="btn-mini" type="submit">Filter</button>
+  {% if doc_q %}<a class="btn-mini" href="/documents?sort={{ doc_sort }}&amp;dir={{ doc_dir }}">Clear</a>{% endif %}
+  <span class="cell-anno">{{ total_docs }} document{{ '' if total_docs == 1 else 's' }}</span>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th><a href="{{ sort_link('number') }}">Number{{ sort_icon('number') | safe }}</a></th>
+      <th><a href="{{ sort_link('name') }}">Name{{ sort_icon('name') | safe }}</a></th>
+      <th><a href="{{ sort_link('revision') }}">Rev{{ sort_icon('revision') | safe }}</a></th>
+      <th><a href="{{ sort_link('file_name') }}">File{{ sort_icon('file_name') | safe }}</a></th>
+      <th><a href="{{ sort_link('size') }}">Size{{ sort_icon('size') | safe }}</a></th>
+      <th><a href="{{ sort_link('modified') }}">Modified{{ sort_icon('modified') | safe }}</a></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in docs %}
+    <tr>
+      <td class="cell-mono">{{ d.prefix }}-{{ d.number }}{% if d.revision %}/{{ d.revision }}{% endif %}</td>
+      <td>{{ d.name }}</td>
+      <td>{{ d.revision }}</td>
+      <td>
+        {% if d.storage_key %}
+          <span class="pill">{{ d.file_name }}</span>
+        {% else %}
+          <span class="cell-anno">&mdash;</span>
+        {% endif %}
+      </td>
+      <td>{% if d.storage_key %}{{ (d.file_size_bytes / 1024) | round(1) }} KB{% else %}&mdash;{% endif %}</td>
+      <td>{{ d.modified_on.strftime("%Y-%m-%d %H:%M") if d.modified_on else "" }}</td>
+      <td class="row-actions">
+        {% if d.storage_key %}
+        <a class="btn-mini" href="/documents/{{ d.id }}/download" title="Download {{ d.file_name }}">Download</a>
+        {% endif %}
+        <a class="btn-mini" href="/documents?edit={{ d.id }}">Edit</a>
+        <form class="inline-form" method="post" action="/documents/{{ d.id }}/delete">
+          <input type="hidden" name="version" value="{{ d.version }}">
+          <button class="btn-mini btn-danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="cell-anno">No documents yet &mdash; create the first one above.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+</section>
+{% endblock %}

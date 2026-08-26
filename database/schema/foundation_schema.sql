@@ -256,113 +256,80 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_ap
 GRANT ALL ON ALL TABLES IN SCHEMA plmiqdb TO plmiq_migrator;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
 
--- ── Vertex subtypes (declarative inheritance) ───────────────────────────────
--- Item, Document, Change, Release inherit every column of
--- foundation_vertex and each adds extension columns. Queries against
--- foundation_vertex automatically include subtype rows; writes go through
--- the subtype table so its extra columns and constraints apply.
--- OS-file-like entries are plain Documents carrying the file_* attribute
--- columns below; there is no separate File subtype or File kind.
--- NOTE: constraints, indexes, triggers and RLS policies do NOT inherit -
--- each subtype re-declares them below.
+-- ── Vertex subtype extensions (TSE pattern) ────────────────────────────────
+-- Shared-Core Vertex with Typed Subtype Extensions (strategy doc, Section 8):
+-- foundation_vertex holds every system attribute for every kind; each business
+-- type gets a NARROW extension table referencing the core row by primary key.
+-- Extension rows carry only their own attributes - never copies of core
+-- columns - so the full picture of a document is one JOIN, materialized in the
+-- v_document reporting view below.
+-- Declarative INHERITS was rejected deliberately: it copies every parent
+-- column into each child, duplicating facts and fragmenting uniqueness.
+-- Invariant: extension.tenant_id always equals the core row's tenant_id.
+-- The two-phase write lives in one transaction in document_service, and the
+-- RLS policy below keys on the extension's own tenant_id, so even a buggy
+-- write can never leak across tenants.
 
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Item';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Change';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Release';
 
-CREATE TABLE foundation_item (
-    future_attribute_1 text NOT NULL DEFAULT '',
-    PRIMARY KEY (id),
-    CONSTRAINT uq_item_number UNIQUE (tenant_id, prefix, number, revision)
-) INHERITS (foundation_vertex);
-
 CREATE TABLE foundation_document (
-    future_attribute_1 text NOT NULL DEFAULT '',
-    file_is_directory      boolean NOT NULL DEFAULT false,
-    file_name              text NOT NULL DEFAULT '',   -- name with extension; for a directory, the folder name
-    file_parent_id         uuid REFERENCES foundation_document (id) ON DELETE CASCADE,  -- containing folder; NULL = root
-    file_full_path         text NOT NULL DEFAULT '',   -- materialized slash-path from the workspace root
-    file_size_bytes        bigint NOT NULL DEFAULT 0,
-    file_mime_type         text NOT NULL DEFAULT '',   -- e.g. application/pdf, text/plain
-    file_checksum_sha256   text NOT NULL DEFAULT '',   -- content hash; empty until content is stored
-    PRIMARY KEY (id),
-    CONSTRAINT uq_document_number UNIQUE (tenant_id, prefix, number, revision),
+    -- Same id as the core row. ON DELETE CASCADE removes extension data with
+    -- the vertex; absence of an extension row means subtype attributes are at
+    -- their defaults (all columns have DEFAULTs for exactly that reason).
+    id                   uuid PRIMARY KEY REFERENCES foundation_vertex (id) ON DELETE CASCADE,
+    tenant_id            uuid NOT NULL,   -- mirrored from core for RLS; see invariant above
+    file_is_directory    boolean NOT NULL DEFAULT false,
+    file_name            text NOT NULL DEFAULT '',   -- name with extension, as uploaded
+    file_parent_id       uuid REFERENCES foundation_document (id) ON DELETE CASCADE,  -- containing folder; NULL = root
+    file_full_path       text NOT NULL DEFAULT '',   -- logical workspace path shown in the UI
+    file_size_bytes      bigint NOT NULL DEFAULT 0,
+    file_mime_type       text NOT NULL DEFAULT '',   -- IANA media type of the stored content
+    file_checksum_sha256 text NOT NULL DEFAULT '',   -- SHA-256 of the stored content
+    storage_key          text NOT NULL DEFAULT '',   -- object-store key; empty = no file content yet
     CONSTRAINT ck_document_file_size CHECK (file_size_bytes >= 0)
-) INHERITS (foundation_vertex);
+);
 
-CREATE TABLE foundation_change (
-    future_attribute_1 text NOT NULL DEFAULT '',
-    PRIMARY KEY (id),
-    CONSTRAINT uq_change_number UNIQUE (tenant_id, prefix, number, revision)
-) INHERITS (foundation_vertex);
-
-CREATE TABLE foundation_release (
-    future_attribute_1 text NOT NULL DEFAULT '',
-    PRIMARY KEY (id),
-    CONSTRAINT uq_release_number UNIQUE (tenant_id, prefix, number, revision)
-) INHERITS (foundation_vertex);
-
--- GENERATED ALWAYS AS IDENTITY columns do not inherit; give each subtype
--- its own version sequence so inserts into the child satisfy NOT NULL and
--- bump_version() can increment it.
-ALTER TABLE foundation_item     ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
-ALTER TABLE foundation_document ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
-ALTER TABLE foundation_change   ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
-ALTER TABLE foundation_release  ALTER COLUMN version ADD GENERATED ALWAYS AS IDENTITY;
-
-COMMENT ON TABLE foundation_item     IS 'Item vertices (vertex subtype)';
-COMMENT ON TABLE foundation_document IS 'Document vertices (vertex subtype); carries optional OS-file attributes in its file_* columns';
-COMMENT ON TABLE foundation_change   IS 'Change vertices (vertex subtype)';
-COMMENT ON TABLE foundation_release  IS 'Release vertices (vertex subtype)';
+COMMENT ON TABLE foundation_document IS 'Document subtype extension: OS-file attributes for kind=Document vertices (TSE pattern, strategy Section 8)';
+COMMENT ON COLUMN foundation_document.id                   IS 'Same uuid as the foundation_vertex row this extends';
+COMMENT ON COLUMN foundation_document.tenant_id            IS 'Mirror of the core row tenant; enables independent RLS enforcement';
 COMMENT ON COLUMN foundation_document.file_is_directory    IS 'True for os-folder entries, false for os-file entries';
 COMMENT ON COLUMN foundation_document.file_name            IS 'Name with extension; the folder name for directories';
 COMMENT ON COLUMN foundation_document.file_parent_id       IS 'Containing folder; NULL places the entry at the workspace root';
-COMMENT ON COLUMN foundation_document.file_full_path       IS 'Materialized slash-path from the workspace root, kept in sync by the service layer';
-COMMENT ON COLUMN foundation_document.file_size_bytes      IS 'Content size in bytes; always 0 for directories';
-COMMENT ON COLUMN foundation_document.file_mime_type       IS 'IANA media type of the content';
-COMMENT ON COLUMN foundation_document.file_checksum_sha256 IS 'SHA-256 of the content; empty until content is stored';
-COMMENT ON COLUMN foundation_item.future_attribute_1     IS 'Reserved for future item-specific attributes';
-COMMENT ON COLUMN foundation_document.future_attribute_1 IS 'Reserved for future document-specific attributes';
-COMMENT ON COLUMN foundation_change.future_attribute_1   IS 'Reserved for future change-specific attributes';
-COMMENT ON COLUMN foundation_release.future_attribute_1  IS 'Reserved for future release-specific attributes';
+COMMENT ON COLUMN foundation_document.file_full_path       IS 'Logical slash-path from the workspace root, kept in sync by document_service';
+COMMENT ON COLUMN foundation_document.file_size_bytes      IS 'Stored content size in bytes; always 0 until content is uploaded';
+COMMENT ON COLUMN foundation_document.file_mime_type       IS 'IANA media type of the stored content';
+COMMENT ON COLUMN foundation_document.file_checksum_sha256 IS 'SHA-256 of the stored content; empty until content is uploaded';
+COMMENT ON COLUMN foundation_document.storage_key          IS 'Key inside the tenant-partitioned object store; empty = metadata-only document';
 
-CREATE TRIGGER trg_item_bump_version     BEFORE UPDATE ON foundation_item     FOR EACH ROW EXECUTE FUNCTION bump_version();
-CREATE TRIGGER trg_document_bump_version BEFORE UPDATE ON foundation_document FOR EACH ROW EXECUTE FUNCTION bump_version();
-CREATE TRIGGER trg_change_bump_version   BEFORE UPDATE ON foundation_change   FOR EACH ROW EXECUTE FUNCTION bump_version();
-CREATE TRIGGER trg_release_bump_version  BEFORE UPDATE ON foundation_release  FOR EACH ROW EXECUTE FUNCTION bump_version();
+-- Reporting surface: core + extension joined into one flat, fully typed row.
+-- security_invoker keeps the view honest: queries through it still execute
+-- under the caller's RLS context instead of the view owner's.
+CREATE VIEW v_document WITH (security_invoker = true) AS
+SELECT
+    v.id, v.tenant_id, v.edition_id, v.kind, v.classification_id,
+    v.prefix, v.number, v.name, v.description, v.revision,
+    v.lifecycle_state, v.release_on, v.marked_for_deletion, v.version,
+    v.created_by, v.created_on, v.modified_by, v.modified_on,
+    v.solution_attributes, v.tenant_attributes,
+    d.file_is_directory, d.file_name, d.file_parent_id, d.file_full_path,
+    d.file_size_bytes, d.file_mime_type, d.file_checksum_sha256, d.storage_key
+FROM foundation_vertex v
+JOIN foundation_document d ON d.id = v.id;
 
-CREATE INDEX idx_item_tenant_kind      ON foundation_item (tenant_id, kind);
-CREATE INDEX idx_document_tenant_kind  ON foundation_document (tenant_id, kind);
-CREATE INDEX idx_change_tenant_kind    ON foundation_change (tenant_id, kind);
-CREATE INDEX idx_release_tenant_kind   ON foundation_release (tenant_id, kind);
-CREATE INDEX idx_document_file_parent  ON foundation_document (file_parent_id) WHERE file_parent_id IS NOT NULL;
+CREATE INDEX idx_document_file_parent ON foundation_document (file_parent_id) WHERE file_parent_id IS NOT NULL;
+CREATE INDEX idx_document_tenant      ON foundation_document (tenant_id);
 
-ALTER TABLE foundation_item     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE foundation_item     FORCE  ROW LEVEL SECURITY;
 ALTER TABLE foundation_document ENABLE ROW LEVEL SECURITY;
 ALTER TABLE foundation_document FORCE  ROW LEVEL SECURITY;
-ALTER TABLE foundation_change   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE foundation_change   FORCE  ROW LEVEL SECURITY;
-ALTER TABLE foundation_release  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE foundation_release  FORCE  ROW LEVEL SECURITY;
 
-CREATE POLICY item_tenant_isolation ON foundation_item
-    USING      (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
-CREATE POLICY document_tenant_isolation ON foundation_document
-    USING      (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
-CREATE POLICY change_tenant_isolation ON foundation_change
-    USING      (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
-CREATE POLICY release_tenant_isolation ON foundation_release
+CREATE POLICY document_extension_tenant_isolation ON foundation_document
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_item, foundation_document,
-    foundation_change, foundation_release TO plmiq_app;
-GRANT ALL ON foundation_item, foundation_document,
-    foundation_change, foundation_release TO plmiq_migrator;
+GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_document TO plmiq_app;
+GRANT ALL ON foundation_document TO plmiq_migrator;
 
 -- ── Setting ─────────────────────────────────────────────────────────────────
 -- .env-style configuration resolved at three scopes. Effective value for a
