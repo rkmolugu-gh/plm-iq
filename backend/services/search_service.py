@@ -126,6 +126,8 @@ def _vertex_row(hit: dict) -> dict:
     return {
         "entity_type": "vertex",
         "id": str(doc.get("id") or hit["id"]),
+        "display": display,
+        "name": doc.get("name") or "",
         "kind": doc.get("kind"),
         "title": title,
         "subtitle": " · ".join(subtitle_bits),

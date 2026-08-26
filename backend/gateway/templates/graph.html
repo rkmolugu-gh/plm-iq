@@ -250,18 +250,29 @@
   <div class="builder-wrap">
     <aside class="builder-palette">
       <h2>Vertices</h2>
-      {% for v in gv_vertices %}
-      <div class="palette-chip" draggable="true"
-           data-id="{{ v.id }}" data-kind="{{ v.kind }}"
-           data-label="{{ v.label }}" data-name="{{ v.name }}">
-        <strong>{{ v.label }}</strong><span>{{ v.kind }} &middot; {{ v.name }}</span>
+      <input class="palette-search" id="palette-search" type="search"
+             placeholder="Search vertices&hellip;" autocomplete="off"
+             aria-label="Search vertices">
+      <p class="palette-count cell-anno" id="palette-count"></p>
+      <div class="palette-list" id="palette-list">
+        {% for v in gv_vertices %}
+        <div class="palette-chip" draggable="true"
+             data-id="{{ v.id }}" data-kind="{{ v.kind }}"
+             data-label="{{ v.label }}" data-name="{{ v.name }}">
+          <strong>{{ v.label }}</strong><span>{{ v.kind }} &middot; {{ v.name }}</span>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </aside>
 
-    <div class="builder-canvas" id="builder-canvas">
-      <p class="cell-anno" id="canvas-hint">Drop vertices here &mdash; first drop is the
-        source, second the target.</p>
+    <div class="builder-canvas-wrap">
+      <h2 class="builder-canvas-title">Canvas
+        <span>drag or click vertices &mdash; first is source, second target</span>
+      </h2>
+      <div class="builder-canvas" id="builder-canvas">
+        <p class="cell-anno" id="canvas-hint">Drop vertices here &mdash; first drop is the
+          source, second the target.</p>
+      </div>
     </div>
 
     <form class="crud-form builder-form is-pending" id="edge-proposal" method="post"
@@ -336,20 +347,39 @@
       }
       function q(sel) { return form.querySelector(sel); }
 
-      // the payload must be set on dragstart, otherwise getData() is empty
-      // and every drop is discarded
-      document.querySelectorAll(".palette-chip").forEach(function (chip) {
-        chip.addEventListener("dragstart", function (e) {
-          var payload = {
-            id: chip.dataset.id,
-            kind: chip.dataset.kind,
-            label: chip.dataset.label,
-            name: chip.dataset.name
-          };
-          e.dataTransfer.setData("text/plain", JSON.stringify(payload));
-          e.dataTransfer.effectAllowed = "copy";
-        });
+      // delegation keeps drag/click working on re-rendered search results
+      var list = document.getElementById("palette-list");
+      list.addEventListener("dragstart", function (e) {
+        var chip = e.target.closest(".palette-chip");
+        if (!chip) return;
+        e.dataTransfer.setData("text/plain", JSON.stringify({
+          id: chip.dataset.id,
+          kind: chip.dataset.kind,
+          label: chip.dataset.label,
+          name: chip.dataset.name
+        }));
+        e.dataTransfer.effectAllowed = "copy";
       });
+      list.addEventListener("click", function (e) {
+        var chip = e.target.closest(".palette-chip");
+        if (!chip) return;
+        placeFromChip(chip);
+      });
+
+      function placeFromChip(chip) {
+        var p = {
+          id: chip.dataset.id,
+          kind: chip.dataset.kind,
+          label: chip.dataset.label,
+          name: chip.dataset.name
+        };
+        if (placed.some(function (x) { return x.id === p.id; })) {
+          setReady(false, p.label + " is already on the canvas — pick two different vertices.");
+          return;
+        }
+        if (placed.length >= 2) return;
+        placeVertex(p);
+      }
 
       canvas.addEventListener("dragenter", function (e) {
         e.preventDefault();
@@ -368,15 +398,25 @@
         canvas.classList.remove("is-dragover");
         var p = null;
         try { p = JSON.parse(e.dataTransfer.getData("text/plain")); } catch (err) { p = null; }
-        if (!p || !p.id) return;
+        if (!p || !p.id || placed.length >= 2) return;
         if (placed.some(function (x) { return x.id === p.id; })) {
           setReady(false, p.label + " is already on the canvas — pick two different vertices.");
           return;
         }
-        if (placed.length >= 2) return;
         var rect = canvas.getBoundingClientRect();
         var x = Math.max(4, Math.min(e.clientX - rect.left - 70, rect.width - 150));
         var y = Math.max(4, Math.min(e.clientY - rect.top - 16, rect.height - 60));
+        placeVertex(p, x, y);
+      });
+
+      function placeVertex(p, x, y) {
+        var rect = canvas.getBoundingClientRect();
+        if (typeof x !== "number") {
+          x = placed.length === 0 ? 24 : rect.width - 170;
+          y = placed.length === 0 ? 24 : Math.max(24, rect.height - 90);
+        }
+        x = Math.max(4, Math.min(x, rect.width - 150));
+        y = Math.max(4, Math.min(y, rect.height - 60));
         var node = document.createElement("div");
         node.className = "canvas-node" + (placed.length === 0 ? " is-source" : " is-target");
         node.style.left = x + "px";
@@ -388,9 +428,78 @@
         var hint = document.getElementById("canvas-hint");
         if (hint) hint.remove();
         refresh();
+      }
+
+      // ── Google-like vertex search (Elasticsearch BM25 suggestions) ────────
+      var searchBox = document.getElementById("palette-search");
+      var countEl = document.getElementById("palette-count");
+      var originalHTML = list.innerHTML;
+      var sourceDoc = document.createElement("template");
+      sourceDoc.innerHTML = originalHTML;
+      var debounceTimer = null;
+
+      searchBox.addEventListener("input", function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runSearch, 250);
       });
 
+      function chipHTML(v) {
+        return '<div class="palette-chip" draggable="true" data-id="' + esc(v.id) +
+               '" data-kind="' + esc(v.kind || "") + '" data-label="' + esc(v.label) +
+               '" data-name="' + esc(v.name || "") + '"><strong>' + esc(v.label) +
+               '</strong><span>' + esc(v.kind || "") +
+               (v.name ? " · " + esc(v.name) : "") + '</span></div>';
+      }
+
+      function markPlaced() {
+        list.querySelectorAll(".palette-chip").forEach(function (chip) {
+          chip.classList.toggle("is-placed", placed.some(function (x) {
+            return x.id === chip.dataset.id;
+          }));
+        });
+      }
+
+      function runSearch() {
+        var text = searchBox.value.trim();
+        if (text.length < 2) {
+          list.innerHTML = originalHTML;
+          if (countEl) countEl.textContent = "";
+          markPlaced();
+          return;
+        }
+        fetch("/graph/vertices/search?q=" + encodeURIComponent(text))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data.results || !data.results.length) { localFilter(text); return; }
+            list.innerHTML = data.results.map(chipHTML).join("");
+            if (countEl) {
+              countEl.textContent = data.results.length + " match" +
+                (data.results.length === 1 ? "" : "es") + " for “" + text + "”";
+            }
+            markPlaced();
+          })
+          .catch(function () { localFilter(text); });
+      }
+
+      // offline / ES-down fallback: plain substring filter over the full set
+      function localFilter(text) {
+        var t = text.toLowerCase();
+        var kept = [];
+        sourceDoc.content.querySelectorAll(".palette-chip").forEach(function (chip) {
+          var hay = (chip.dataset.label + " " + chip.dataset.kind + " " +
+                     chip.dataset.name).toLowerCase();
+          if (hay.indexOf(t) !== -1) kept.push(chip.outerHTML);
+        });
+        list.innerHTML = kept.join("");
+        if (countEl) {
+          countEl.textContent = "filter · " + kept.length + " match" +
+            (kept.length === 1 ? "" : "es");
+        }
+        markPlaced();
+      }
+
       function refresh() {
+        markPlaced();
         if (placed.length < 2) { setReady(false); return; }
         setReady(true);
         var a = placed[0], b = placed[1];

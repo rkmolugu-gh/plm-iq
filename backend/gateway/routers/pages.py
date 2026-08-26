@@ -21,7 +21,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
 from services import (
@@ -548,6 +548,33 @@ def graph_view(
     if not ctx.matched_pattern:
         return _render_default(request)
     return _render_not_found(request, path=f"/graph/view/{number}")
+
+
+@router.get("/graph/vertices/search")
+def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
+    """BM25 vertex suggestions for the graph builder palette."""
+    context = _base_context(request)
+    identity = context.get("identity") if context["ctx"].valid else None
+    if identity is None:
+        return JSONResponse({"results": [], "error": "sign-in required"}, status_code=401)
+    query = (q or "").strip()
+    if len(query) < 2:
+        return JSONResponse({"query": query, "results": []})
+    try:
+        outcome = search_service.search(UUID(identity.tenant_id), query, limit=12)
+    except ServiceError as exc:
+        return JSONResponse({"query": query, "results": [], "error": str(exc)})
+    results = [
+        {
+            "id": row["id"],
+            "label": row.get("display") or row["title"],
+            "name": row.get("name") or "",
+            "kind": row.get("kind") or "",
+        }
+        for row in outcome["rows"]
+        if row["entity_type"] == "vertex"
+    ]
+    return JSONResponse({"query": query, "total": len(results), "results": results})
 
 
 @router.get("/search", response_class=HTMLResponse, response_model=None)

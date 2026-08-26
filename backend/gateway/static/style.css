@@ -1184,6 +1184,36 @@ pre.mermaid {
 
 .builder-palette h2 { margin: 0 0 0.3rem; font-size: 0.98rem; }
 
+.palette-search {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  width: 100%;
+}
+
+.palette-search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.palette-count { margin: 0.35rem 0 0.45rem; min-height: 1em; }
+
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 34rem;
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.palette-chip.is-placed { opacity: 0.45; }
+
 .palette-chip {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1199,6 +1229,24 @@ pre.mermaid {
 .palette-chip:active { cursor: grabbing; }
 .palette-chip strong { font-size: 0.85rem; }
 .palette-chip span { font-size: 0.75rem; color: var(--ink-faint); }
+
+.builder-canvas-wrap {
+  min-width: 0;
+}
+
+.builder-canvas-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.98rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.builder-canvas-title span {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
 
 .builder-canvas {
   position: relative;
