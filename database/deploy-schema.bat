@@ -10,6 +10,10 @@ rem
 rem   Schema deploys ask whether to DROP schema plmiqdb first (destructive).
 rem   Set PLMIQ_DROP_SCHEMA=1 (drop) or =0 (keep) to skip the prompt.
 rem
+rem   Seed deploys ask whether to CLEAR the seeded tables first (destructive);
+rem   cleared seed files replay afterwards. Set PLMIQ_CLEAR_SEED=1 (clear)
+rem   or =0 (keep) to skip the prompt.
+rem
 rem   Structure: one function per concern, called from the main flow below.
 rem ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +35,7 @@ call :resolve_db         || goto :failed
 call :build_psql         || goto :failed
 if defined DO_SCHEMA     call :maybe_drop_schema  || goto :failed
 call :ensure_bookkeeping || goto :failed
+if defined DO_SEED       call :maybe_clear_seed   || goto :failed
 
 set "APPLIED=0"
 set "SKIPPED=0"
@@ -104,6 +109,10 @@ echo.
 echo The schema deploy asks before dropping schema %SCHEMA_NAME%.
 echo Set PLMIQ_DROP_SCHEMA=1 to drop without asking, =0 to keep.
 echo.
+echo The seed deploy asks before clearing the seeded tables (vertices, edges,
+echo rules, tenants, users, roles, permissions); cleared seed files replay.
+echo Set PLMIQ_CLEAR_SEED=1 to clear without asking, =0 to keep.
+echo.
 echo Sample runs:
 echo   deploy-schema.bat -schema              deploy schema to dev
 echo   deploy-schema.bat -seed                seed only, dev stack
@@ -150,6 +159,38 @@ echo %Y%  dropping schema %SCHEMA_NAME% CASCADE ...%N%
 %PSQL% -c "DROP SCHEMA IF EXISTS %SCHEMA_NAME% CASCADE;"
 if errorlevel 1 ( echo %R%[FAIL] could not drop schema %SCHEMA_NAME%%N% & exit /b 1 )
 echo %G%  schema %SCHEMA_NAME% dropped%N%
+exit /b 0
+
+:maybe_clear_seed
+rem Asks whether to clear the seeded tables before applying seed files.
+rem Non-interactive override: PLMIQ_CLEAR_SEED=1 forces clear, =0 keeps.
+set "CLEAR_SEED="
+if "%PLMIQ_CLEAR_SEED%"=="1" set "CLEAR_SEED=y"
+if "%PLMIQ_CLEAR_SEED%"=="0" set "CLEAR_SEED=n"
+if defined CLEAR_SEED goto clear_decided
+echo %Y%Seed option: clearing removes ALL rows from the seeded tables%N%
+echo %Y%(vertices, edges, rules, tenants, users, roles, permissions).%N%
+set /p CLEAR_SEED="Clear seeded tables in database '%PLMIQ_DB_NAME%' before applying seed? [y/N] "
+:clear_decided
+if /i "%CLEAR_SEED%"=="y" goto do_clear
+echo %G%  keeping existing data; already-applied seed files will be skipped%N%
+exit /b 0
+:do_clear
+if not exist "%SEED_DIR%\*.sql" (
+    echo %Y%  no seed files found - nothing to clear%N%
+    exit /b 0
+)
+rem Child rows first so foreign keys never block the deletes.
+echo %Y%  clearing seeded tables ...%N%
+%PSQL% -c "DELETE FROM %SCHEMA_NAME%.foundation_edge; DELETE FROM %SCHEMA_NAME%.foundation_vertex; DELETE FROM %SCHEMA_NAME%.foundation_graph_rule; DELETE FROM %SCHEMA_NAME%.iam_role_permission; DELETE FROM %SCHEMA_NAME%.iam_user_role; DELETE FROM %SCHEMA_NAME%.iam_user; DELETE FROM %SCHEMA_NAME%.iam_role; DELETE FROM %SCHEMA_NAME%.iam_permission; DELETE FROM %SCHEMA_NAME%.iam_tenant;"
+if errorlevel 1 ( echo %R%[FAIL] could not clear seeded tables%N% & exit /b 1 )
+rem Forget recorded seed filenames so they replay right after clearing.
+set "SEED_NAMES="
+for %%f in ("%SEED_DIR%\*.sql") do call set "SEED_NAMES=%%SEED_NAMES%%'%%~nxf',"
+set "SEED_NAMES=%SEED_NAMES:~0,-1%"
+%PSQL% -c "DELETE FROM %SCHEMA_NAME%.foundation_schema_migrations WHERE filename IN (%SEED_NAMES%);"
+if errorlevel 1 ( echo %R%[FAIL] could not reset seed migration history%N% & exit /b 1 )
+echo %G%  seeded tables cleared; seed files will re-apply%N%
 exit /b 0
 
 :ensure_bookkeeping
