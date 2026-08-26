@@ -295,6 +295,8 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
     edit_raw = params.get("edit") or ""
 
     editing_vertex_row = editing_edge_row = editing_rule_row = None
+    revising_source_row = None
+    next_revision_value = ""
     with db.tenant_session(tenant_id) as session:
         vertices_page = vertex_service.list_vertices(session, tenant_id, limit=200)
         edges_page = edge_service.list_edges(session, tenant_id, limit=200)
@@ -308,6 +310,20 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
                 editing_edge_row = edge_service.find_edge(session, tenant_id, edit_id)
             elif tab == "rule":
                 editing_rule_row = graph_rule_service.find_rule(session, edit_id)
+        # ?revise=<id>: the create form becomes "revise" - same business
+        # identity ({prefix}-{number}), successor revision prefilled, new row
+        # on submit. One row per revision IS this data model's versioning.
+        revise_id = _safe_uuid(params.get("revise") or "")
+        if revise_id is not None and tab == "vertex":
+            revising_source_row = vertex_service.find_vertex(session, tenant_id, revise_id)
+            if revising_source_row is not None:
+                next_revision_value = vertex_service.next_revision(
+                    session,
+                    tenant_id,
+                    prefix=revising_source_row["prefix"],
+                    number=revising_source_row["number"],
+                    kind=getattr(revising_source_row["kind"], "value", revising_source_row["kind"]),
+                )
 
     by_id = {str(v.id): v for v in vertices_page.items}
     vertex_numbers: dict[str, list[str]] = {}
@@ -415,6 +431,14 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
 
     if editing_vertex_row is not None:
         context["editing_vertex"] = vertex_out(editing_vertex_row)
+    if revising_source_row is not None:
+        source = vertex_out(revising_source_row)
+        context["revising_vertex"] = {
+            "id": source["id"], "label": source["label"], "kind": source["kind"],
+            "prefix": source["prefix"], "number": source["number"], "name": source["name"],
+            "description": source["description"], "revision": source["revision"],
+            "next_revision": next_revision_value,
+        }
     if editing_edge_row is not None:
         view = edge_view(editing_edge_row)
         context["editing_edge"] = view
@@ -956,6 +980,26 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
         edit_id = _safe_uuid(params.get("edit") or "")
         if edit_id:
             editing = document_service.find_document(session, tid, edit_id)
+        # ?revise=<id>: create form becomes "revise" - same {prefix}-{number},
+        # successor revision prefilled from the shared core helper.
+        doc_revising = None
+        revise_id = _safe_uuid(params.get("revise") or "")
+        if revise_id:
+            source = document_service.find_document(session, tid, revise_id)
+            if source is not None:
+                doc_revising = {
+                    "id": str(source["id"]), "label": f"{source['prefix']}-{source['number']}",
+                    "prefix": source["prefix"], "number": source["number"],
+                    "name": source["name"], "description": source["description"],
+                    "revision": source["revision"],
+                    "next_revision": vertex_service.next_revision(
+                        session,
+                        tid,
+                        prefix=source["prefix"],
+                        number=source["number"],
+                        kind=enums.VertexKind.DOCUMENT,
+                    ),
+                }
 
     def _sort_link(col: str) -> str:
         next_dir = "desc" if (col == sort and direction == "asc") else "asc"
@@ -978,6 +1022,7 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
         "sort_link": _sort_link,
         "sort_icon": _sort_icon,
         "editing_document": editing,
+        "doc_revising": doc_revising,
         "lifecycle_states": [s.value for s in enums.LifecycleState],
     }
 
@@ -1040,6 +1085,10 @@ def document_create_action(
     try:
         data = DocumentCreate(
             edition_id=_edition_id(ident.edition_id),
+            # Explicit despite the DTO default: create_vertex dumps
+            # exclude_unset=True, so a defaulted kind would be dropped from
+            # the INSERT and violate the core table's NOT NULL.
+            kind=enums.VertexKind.DOCUMENT,
             prefix=prefix.strip() or "DOC",
             number=number.strip(),
             name=name.strip(),

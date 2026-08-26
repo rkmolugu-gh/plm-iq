@@ -54,6 +54,26 @@
       <label>Revision<input name="revision" value="{{ editing_vertex.revision }}"></label>
     </div>
   </form>
+  {% elif graph_live and revising_vertex %}
+  <form class="crud-form" method="post" action="/graph/vertices/create">
+    <h2>Revise {{ revising_vertex.label }} <span class="pill">{{ revising_vertex.revision }}</span>
+      &rarr; new revision <span class="pill">{{ revising_vertex.next_revision }}</span></h2>
+    <p class="cell-anno">Creates a NEW row for the same {{ revising_vertex.prefix }}-{{ revising_vertex.number }}
+      identity; the successor starts in Draft and the current revision stays untouched.</p>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Create revision</button>
+      <a class="btn-mini" href="/graph?tab=vertex">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <input type="hidden" name="kind" value="{{ revising_vertex.kind }}">
+      <label>Prefix<input name="prefix" value="{{ revising_vertex.prefix }}" readonly></label>
+      <label>Number<input name="number" value="{{ revising_vertex.number }}" readonly></label>
+      <label>Name<input name="name" value="{{ revising_vertex.name }}" required></label>
+      <label>Description<input name="description" value="{{ revising_vertex.description }}"></label>
+      <label>Revision<input name="revision" value="{{ revising_vertex.next_revision }}" required></label>
+      <label>Release date<input name="release_on" type="date"></label>
+    </div>
+  </form>
   {% elif graph_live %}
   <div class="table-toolbar">
     <p class="table-desc">Business objects of the workspace &mdash; items, documents, and
@@ -126,6 +146,8 @@
           <a class="btn-mini" href="/graph?tab=graph&amp;src={{ v.number }}"
              title="Author relationships starting from this vertex">GAuth</a>
           {% if graph_live %}
+          <a class="btn-mini" href="/graph?tab=vertex&amp;revise={{ v.id }}"
+             title="Create a new revision from this vertex">Revise</a>
           <a class="btn-mini" href="/graph?tab=vertex&amp;edit={{ v.id }}">Edit</a>
           <form class="inline-form" method="post" action="/graph/vertices/{{ v.id }}/delete">
             <input type="hidden" name="version" value="{{ v.version }}">

@@ -56,6 +56,28 @@
     </form>
   </div>
   {% endif %}
+{% elif doc_revising %}
+{# ── Revise form: same identity, successor revision ───────────────────── #}
+<form class="crud-form" method="post" action="/documents/create" enctype="multipart/form-data">
+  <h2>Revise document {{ doc_revising.label }} <span class="pill">{{ doc_revising.revision }}</span>
+    &rarr; new revision <span class="pill">{{ doc_revising.next_revision }}</span></h2>
+  <p class="cell-anno">Creates a NEW row for the same {{ doc_revising.prefix }}-{{ doc_revising.number }}
+    identity; the successor starts in Draft. Attached files belong to their revision
+    &mdash; attach content to the new revision here or after creating.</p>
+  <div class="form-actions">
+    <button class="btn btn-primary btn-sm" type="submit">Create revision</button>
+    <a class="btn-mini" href="/documents">Cancel</a>
+  </div>
+  <div class="form-grid">
+    <label>Prefix<input name="prefix" value="{{ doc_revising.prefix }}" readonly></label>
+    <label>Number<input name="number" value="{{ doc_revising.number }}" readonly></label>
+    <label>Name<input name="name" value="{{ doc_revising.name }}" required></label>
+    <label>Revision<input name="revision" value="{{ doc_revising.next_revision }}" required></label>
+    <label>Description<input name="description" value="{{ doc_revising.description }}"></label>
+    <label>Release date<input name="release_on" type="date"></label>
+    <label>File (optional)<input type="file" name="file"></label>
+  </div>
+</form>
 {% else %}
 
 {# ── Create form (mandatory fields first) ─────────────────────────────── #}
@@ -67,6 +89,7 @@
 <form class="crud-form" method="post" action="/documents/create" enctype="multipart/form-data">
   <h2>Create a document</h2>
   <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create document</button></div>
+  <p class="cell-anno" id="doc-gen-status" role="status" aria-live="polite"></p>
   <div class="form-grid">
     <label>Number
       <span class="input-gen">
@@ -100,15 +123,45 @@
   var prefixInput = form.querySelector('#doc-prefix');
   var nameInput = form.querySelector('#doc-name');
   var fileInput = form.querySelector('#doc-file');
+  var status = document.getElementById('doc-gen-status');
+
+  // Generation must never die silently: a swallowed fetch error looks
+  // exactly like a broken button. Any failure lands in #doc-gen-status,
+  // and an expired session (server answers with the sign-in page) gets an
+  // actionable hint plus a link instead of a silent no-op.
+  function say(message, expired) {
+    if (!status) return;
+    status.textContent = message;
+    if (expired && !status.querySelector('a')) {
+      var link = document.createElement('a');
+      link.href = '/signin';
+      link.className = 'btn-mini';
+      link.textContent = 'Sign in';
+      status.appendChild(document.createTextNode(' '));
+      status.appendChild(link);
+    }
+  }
 
   function currentPrefix() {
     return (prefixInput.value || 'DOC').trim() || 'DOC';
   }
 
-  async function fetchJson(url) {
-    var res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error('request failed');
-    return res.json();
+  function fetchJson(url) {
+    return fetch(url, { headers: { Accept: 'application/json' } }).then(function (res) {
+      var type = res.headers.get('content-type') || '';
+      if (!res.ok || type.indexOf('application/json') === -1) {
+        throw { expired: res.redirected || !type, status: res.status };
+      }
+      return res.json();
+    });
+  }
+
+  function fail(error, what) {
+    if (error && error.expired) {
+      say('Your session has expired - ' + what + ' unavailable.', true);
+    } else {
+      say('Could not generate ' + what + ' (server error).', false);
+    }
   }
 
   // Next free numeric number for the current prefix; server derives the
@@ -117,22 +170,36 @@
   document.getElementById('gen-doc-number').addEventListener('click', function () {
     fetchJson('/documents/next-number?prefix=' + encodeURIComponent(currentPrefix()))
       .then(function (data) {
-        if (data.number) numberInput.value = data.number;
+        if (data.number) {
+          numberInput.value = data.number;
+          say('Next free number for ' + currentPrefix() + ': ' + data.number);
+        } else {
+          fail(data, 'a number');
+        }
       })
-      .catch(function () { /* leave the field untouched on failure */ });
+      .catch(function (error) { fail(error, 'a number'); });
   });
 
   // Revision successor of the highest revision already stored for
   // {prefix}-{number}; requires a number to be meaningful.
   document.getElementById('gen-doc-revision').addEventListener('click', function () {
     var number = (numberInput.value || '').trim();
-    if (!number) { numberInput.focus(); return; }
+    if (!number) {
+      say('Enter or generate a document number first.');
+      numberInput.focus();
+      return;
+    }
     fetchJson('/documents/next-revision?prefix=' + encodeURIComponent(currentPrefix()) +
               '&number=' + encodeURIComponent(number))
       .then(function (data) {
-        if (data.revision) revisionInput.value = data.revision;
+        if (data.revision) {
+          revisionInput.value = data.revision;
+          say('Next revision for ' + currentPrefix() + '-' + number + ': ' + data.revision);
+        } else {
+          fail(data, 'a revision');
+        }
       })
-      .catch(function () { /* leave the field untouched on failure */ });
+      .catch(function (error) { fail(error, 'a revision'); });
   });
 
   // Picking a file prefills Name with its stem; picking another file follows.
@@ -188,6 +255,7 @@
         {% if d.storage_key %}
         <a class="btn-mini" href="/documents/{{ d.id }}/download" title="Download {{ d.file_name }}">Download</a>
         {% endif %}
+        <a class="btn-mini" href="/documents?revise={{ d.id }}" title="Create a new revision from this document">Revise</a>
         <a class="btn-mini" href="/documents?edit={{ d.id }}">Edit</a>
         <form class="inline-form" method="post" action="/documents/{{ d.id }}/delete">
           <input type="hidden" name="version" value="{{ d.version }}">

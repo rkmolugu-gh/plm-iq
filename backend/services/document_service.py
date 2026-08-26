@@ -40,9 +40,21 @@ _EXT = tables.foundation_document
 _CORE = tables.foundation_vertex
 
 # Column pairs selected as one flat row - the in-code equivalent of v_document.
-# Overlapping names (id, tenant_id) come only from the core side.
+# Overlapping names (id, tenant_id) come only from the core side; extension
+# columns are coalesced to their DEFAULTs because TSE treats a missing
+# extension row as "subtype attributes at defaults" (strategy Section 8):
+# seeded or imported documents must list and revise without one.
 _CORE_COLS = [c for c in _CORE.c]
-_EXT_COLS = [c for c in _EXT.c if c.key not in {"id", "tenant_id"}]
+_EXT_COLS = [
+    func.coalesce(_EXT.c.file_is_directory, False).label("file_is_directory"),
+    func.coalesce(_EXT.c.file_name, "").label("file_name"),
+    _EXT.c.file_parent_id.label("file_parent_id"),
+    func.coalesce(_EXT.c.file_full_path, "").label("file_full_path"),
+    func.coalesce(_EXT.c.file_size_bytes, 0).label("file_size_bytes"),
+    func.coalesce(_EXT.c.file_mime_type, "").label("file_mime_type"),
+    func.coalesce(_EXT.c.file_checksum_sha256, "").label("file_checksum_sha256"),
+    func.coalesce(_EXT.c.storage_key, "").label("storage_key"),
+]
 
 # Sort keys exposed to the UI, whitelisted so a query-param can never inject
 # arbitrary SQL identifiers. Mixed-core/extension keys sort naturally because
@@ -52,8 +64,8 @@ _SORTABLE = {
     "name": _CORE.c.name,
     "revision": _CORE.c.revision,
     "state": _CORE.c.lifecycle_state,
-    "file_name": _EXT.c.file_name,
-    "size": _EXT.c.file_size_bytes,
+    "file_name": func.coalesce(_EXT.c.file_name, ""),
+    "size": func.coalesce(_EXT.c.file_size_bytes, 0),
     "modified": _CORE.c.modified_on,
 }
 
@@ -65,9 +77,17 @@ def _as_out(mapping: dict) -> DocumentOut:
     return DocumentOut.model_validate(mapping)
 
 
+def _ext_row_exists(session: Session, vertex_id: UUID) -> bool:
+    return session.execute(
+        select(func.count()).select_from(_EXT).where(_EXT.c.id == vertex_id)
+    ).scalar_one() > 0
+
+
 def _flat_row(session: Session, tenant_id: UUID, vertex_id: UUID) -> dict | None:
     row = session.execute(
-        select(*_CORE_COLS, *_EXT_COLS).where(
+        select(*_CORE_COLS, *_EXT_COLS)
+        .join(_EXT, _EXT.c.id == _CORE.c.id, isouter=True)
+        .where(
             _CORE.c.id == vertex_id,
             _CORE.c.tenant_id == tenant_id,
         )
@@ -100,22 +120,28 @@ def list_documents(
     limit = min(max(limit, 1), _MAX_LIMIT)
     offset = max(offset, 0)
 
-    conditions = [_CORE.c.tenant_id == tenant_id, _CORE.c.marked_for_deletion.is_(False)]
+    conditions = [
+        _CORE.c.tenant_id == tenant_id,
+        _CORE.c.kind == enums.VertexKind.DOCUMENT,
+        _CORE.c.marked_for_deletion.is_(False),
+    ]
     if number_like:
         conditions.append(_CORE.c.number.ilike(f"%{number_like}%"))
 
     order_col = _SORTABLE.get(sort, _CORE.c.number)
     order = order_col.desc() if direction == "desc" else order_col.asc()
 
+    # LEFT JOIN everywhere: metadata-only documents (no extension row yet -
+    # seeded ones, imports) must appear with their default attributes.
     total = session.execute(
         select(func.count())
         .select_from(_CORE)
-        .join(_EXT, _EXT.c.id == _CORE.c.id)
+        .join(_EXT, _EXT.c.id == _CORE.c.id, isouter=True)
         .where(*conditions)
     ).scalar_one()
     rows = session.execute(
         select(*_CORE_COLS, *_EXT_COLS)
-        .join(_EXT, _EXT.c.id == _CORE.c.id)
+        .join(_EXT, _EXT.c.id == _CORE.c.id, isouter=True)
         .where(*conditions)
         .order_by(order, _CORE.c.number.asc(), _CORE.c.revision.asc())
         .limit(limit)
@@ -231,10 +257,13 @@ def attach_file(
     stored = file_store.save(tenant_id, filename, content_type, stream)
     old_key = current["storage_key"]
 
+    # Upsert, not update: documents created before the extension row existed
+    # (seeded/imported) must gain one on first upload.
     session.execute(
-        update(_EXT)
-        .where(_EXT.c.id == vertex_id, _EXT.c.tenant_id == tenant_id)
+        pg_insert(_EXT)
         .values(
+            id=vertex_id,
+            tenant_id=tenant_id,
             file_is_directory=False,
             file_name=stored.name,
             file_full_path=stored.name,
@@ -242,6 +271,18 @@ def attach_file(
             file_mime_type=stored.mime_type,
             file_checksum_sha256=stored.checksum_sha256,
             storage_key=stored.key,
+        )
+        .on_conflict_do_update(
+            index_elements=[_EXT.c.id],
+            set_={
+                "file_is_directory": False,
+                "file_name": stored.name,
+                "file_full_path": stored.name,
+                "file_size_bytes": stored.size_bytes,
+                "file_mime_type": stored.mime_type,
+                "file_checksum_sha256": stored.checksum_sha256,
+                "storage_key": stored.key,
+            },
         )
     )
     # Empty change-set on purpose: the UPDATE statement itself (modified_by/on)
@@ -283,18 +324,22 @@ def detach_file(
         raise NotFound(f"document {current['prefix']}-{current['number']}/{current['revision']} has no attached file")
 
     old_key = current["storage_key"]
-    session.execute(
-        update(_EXT)
-        .where(_EXT.c.id == vertex_id, _EXT.c.tenant_id == tenant_id)
-        .values(
-            file_name="",
-            file_full_path="",
-            file_size_bytes=0,
-            file_mime_type="",
-            file_checksum_sha256="",
-            storage_key="",
+    # Detach on a metadata-only document is a no-op by definition; detach on a
+    # seeded document without an extension row clears nothing but still bumps
+    # the lock token below. Upsert keeps rows uniform where they exist.
+    if _ext_row_exists(session, vertex_id):
+        session.execute(
+            update(_EXT)
+            .where(_EXT.c.id == vertex_id, _EXT.c.tenant_id == tenant_id)
+            .values(
+                file_name="",
+                file_full_path="",
+                file_size_bytes=0,
+                file_mime_type="",
+                file_checksum_sha256="",
+                storage_key="",
+            )
         )
-    )
     vertex_service._execute_versioned_update(
         session,
         _CORE,
