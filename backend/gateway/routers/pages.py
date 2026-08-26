@@ -25,22 +25,22 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
-from services import (
-    db,
-    document_service,
-    edge_service,
-    enums,
-    es_ingest_service,
-    file_store,
-    graph_rule_service,
-    index_service,
-    jobs,
-    role_service,
-    search_service,
-    tenant_service,
-    user_service,
-    vertex_service,
-)
+from services import db, edge_service, enums, es_client, graph_rule_service, index_service
+from services.document_service import documents
+from services.es_client import es
+from services.edge_service import edges
+from services.es_ingest_service import ingest
+from services.file_store import files
+from services.graph_query_service import queries
+from services.graph_rule_service import rules
+from services.index_service import indexer, watermarks
+from services.jobs import registry
+from services.role_service import roles
+from services.rule_engine import validator
+from services.search_service import searcher
+from services.tenant_service import tenants
+from services.user_service import users
+from services.vertex_service import vertices
 from services.errors import ServiceError
 from services.schemas import (
     DocumentCreate,
@@ -60,8 +60,11 @@ from services.schemas import (
     VertexUpdate,
 )
 
-from .. import auth, graph_view, resolver
-from ..resolver import EDITIONS
+from .. import auth, graph_view
+from ..auth import sessions
+from ..resolver import TenantContext, tenant_resolver
+from ..settings import settings as _gateway_settings
+_EDITIONS = _gateway_settings.editions
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +98,12 @@ _COMMON = _make_templates(_COMMON_TEMPLATES_DIR)
 # falls back to the platform-common templates until their package exists.
 _EDITION_TEMPLATES = {
     name: _make_templates(_COMMON_TEMPLATES_DIR, (_GATEWAY_DIR / name / "templates",))
-    for name in EDITIONS
+    for name in _EDITIONS
     if (_GATEWAY_DIR / name / "templates").is_dir()
 }
 
 
-def _templates_for(ctx: resolver.TenantContext) -> Jinja2Templates:
+def _templates_for(ctx: TenantContext) -> Jinja2Templates:
     """Active edition's package when it ships one, else platform-common."""
     if ctx.valid:
         return _EDITION_TEMPLATES.get(ctx.edition, _COMMON)
@@ -109,10 +112,10 @@ def _templates_for(ctx: resolver.TenantContext) -> Jinja2Templates:
 
 def _identity_ctx(request: Request) -> tuple[Any, auth.Identity | None]:
     """Signed-in identity wins over host-derived context; None when anonymous."""
-    identity = auth.load_identity(request.cookies.get(auth._COOKIE_NAME))
+    identity = sessions.load_identity(request.cookies.get(sessions.cookie_name))
     if identity is None:
-        return resolver.resolve_host(request.headers.get("host")), None
-    ctx = resolver.TenantContext(
+        return tenant_resolver.resolve(request.headers.get('host')), None
+    ctx = TenantContext(
         tenant=identity.subdomain,
         edition=identity.edition_id,
         edition_label=identity.edition_label_,
@@ -172,11 +175,11 @@ def signin_submit(
     remember: str = Form(""),
 ) -> RedirectResponse:
     """Real authentication against iam_tenant / iam_user via the services layer."""
-    ctx = resolver.resolve_host(request.headers.get("host"))
+    ctx = tenant_resolver.resolve(request.headers.get('host'))
     subdomain = (tenant or "").strip() or (ctx.tenant if ctx.valid else "")
     if not subdomain or not username or not password:
         return RedirectResponse("/signin?error=missing", status_code=303)
-    ids = auth.authenticate(subdomain, username, password)
+    ids = sessions.authenticate(subdomain, username, password)
     if ids is None:
         return RedirectResponse("/signin?error=invalid", status_code=303)
     response = RedirectResponse("/dashboard", status_code=303)
@@ -184,16 +187,16 @@ def signin_submit(
     # unchecked, the cookie lives only for this browsing session.
     if remember == "on":
         response.set_cookie(
-            auth._COOKIE_NAME,
-            auth.encode_session(*ids),
-            max_age=auth._REMEMBER_MAX_AGE_SECONDS,
+            sessions.cookie_name,
+            sessions.encode_session(*ids),
+            max_age=sessions.remember_max_age_seconds,
             httponly=True,
             samesite="lax",
         )
     else:
         response.set_cookie(
-            auth._COOKIE_NAME,
-            auth.encode_session(*ids),
+            sessions.cookie_name,
+            sessions.encode_session(*ids),
             httponly=True,
             samesite="lax",
         )
@@ -203,7 +206,7 @@ def signin_submit(
 @router.get("/signout")
 def signout(request: Request) -> RedirectResponse:
     response = RedirectResponse("/signin", status_code=303)
-    response.delete_cookie(auth._COOKIE_NAME)
+    response.delete_cookie(sessions.cookie_name)
     return response
 
 
@@ -307,31 +310,30 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
     revising_source_row = None
     next_revision_value = ""
     with db.tenant_session(tenant_id) as session:
-        vertices_page = vertex_service.list_vertices(session, tenant_id, limit=200)
-        edges_page = edge_service.list_edges(session, tenant_id, limit=200)
-        rules_page = graph_rule_service.list_rules(session, limit=200)
+        vertices_page = vertices.list(session, tenant_id, limit=200)
+        edges_page = edges.list(session, tenant_id, limit=200)
+        rules_page = rules.list(session, limit=200)
         edit_id = _safe_uuid(edit_raw)
         if edit_id is not None:
             # find_* already returns a plain dict (or None)
             if tab == "vertex":
-                editing_vertex_row = vertex_service.find_vertex(session, tenant_id, edit_id)
+                editing_vertex_row = vertices.find(session, tenant_id, edit_id)
             elif tab == "edge":
-                editing_edge_row = edge_service.find_edge(session, tenant_id, edit_id)
+                editing_edge_row = edges.find(session, tenant_id, edit_id)
             elif tab == "rule":
-                editing_rule_row = graph_rule_service.find_rule(session, edit_id)
+                editing_rule_row = rules.find(session, edit_id)
         # ?revise=<id>: the create form becomes "revise" - same business
         # identity ({prefix}-{number}), successor revision prefilled, new row
         # on submit. One row per revision IS this data model's versioning.
         revise_id = _safe_uuid(params.get("revise") or "")
         if revise_id is not None and tab == "vertex":
-            revising_source_row = vertex_service.find_vertex(session, tenant_id, revise_id)
+            revising_source_row = vertices.find(session, tenant_id, revise_id)
             if revising_source_row is not None:
-                next_revision_value = vertex_service.next_revision(
+                next_revision_value = vertices.next_revision(
                     session,
                     tenant_id,
                     prefix=revising_source_row["prefix"],
                     number=revising_source_row["number"],
-                    kind=getattr(revising_source_row["kind"], "value", revising_source_row["kind"]),
                 )
 
     by_id = {str(v.id): v for v in vertices_page.items}
@@ -484,8 +486,8 @@ def _rule_edit_view(row: dict, tenant_id: UUID) -> dict:
 
 def _live_graph_view(tenant_id: UUID, number: str, source: str, relation: str, target: str) -> dict | None:
     with db.tenant_session(tenant_id) as session:
-        vertices_page = vertex_service.list_vertices(session, tenant_id, limit=200)
-        edges_page = edge_service.list_edges(session, tenant_id, limit=200)
+        vertices_page = vertices.list(session, tenant_id, limit=200)
+        edges_page = edges.list(session, tenant_id, limit=200)
 
     # Vertices travel through the view builder under their full display
     # identifier ('EC-0042'), so focus text, diagram labels, tree, filters,
@@ -598,7 +600,7 @@ def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
     if len(query) < 2:
         return JSONResponse({"query": query, "results": []})
     try:
-        outcome = search_service.search(UUID(identity.tenant_id), query, limit=12)
+        outcome = searcher.search(UUID(identity.tenant_id), query, limit=12)
     except ServiceError as exc:
         return JSONResponse({"query": query, "results": [], "error": str(exc)})
     results = [
@@ -627,8 +629,8 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         return _render_not_found(request, path="/search")
 
     query = (q or "").strip()
-    es = es_ingest_service.cluster_status()
-    watermark = _watermark_view(index_service.get_watermark(UUID(context["identity"].tenant_id)))
+    es_status = es.cluster_status()
+    watermark = _watermark_view(watermarks.get(UUID(context["identity"].tenant_id)))
     context.update(
         show_nav=True,
         search_q=query,
@@ -637,8 +639,8 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         total=None,
         vertex_count=None,
         edge_count=None,
-        es_online=bool(es["online"]),
-        es_version=es["version"],
+        es_online=bool(es_status["online"]),
+        es_version=es_status["version"],
         watermark=watermark,
         flash_err=request.query_params.get("err") or "",
     )
@@ -646,7 +648,7 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         context["flash_err"] = ""
     elif query:
         try:
-            outcome = search_service.search(UUID(context["identity"].tenant_id), query)
+            outcome = searcher.search(UUID(context["identity"].tenant_id), query)
             context.update(
                 results=outcome["rows"],
                 total=outcome["total"],
@@ -697,7 +699,7 @@ def graph_vertex_create(
             release_on=_opt_date(release_on),
         )
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            created = vertex_service.create_vertex(session, UUID(ident.tenant_id), data, actor=_actor(request))
+            created = vertices.create(session, UUID(ident.tenant_id), data, actor=_actor(request))
         return _graph_redirect("vertex", msg=f"vertex {created.prefix}-{created.number}/{created.revision} created")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("vertex", err=str(exc))
@@ -721,7 +723,7 @@ def graph_vertex_update(
     try:
         changes: dict[str, Any] = {"version": version}
         with db.tenant_session(tid) as session:
-            current = vertex_service.get_vertex(session, tid, vertex_id)
+            current = vertices.get(session, tid, vertex_id)
             if name and name != current["name"]:
                 changes["name"] = name.strip()
             if description and description != current["description"]:
@@ -733,7 +735,7 @@ def graph_vertex_update(
             new_release = _opt_date(release_on)
             if new_release and new_release != current["release_on"]:
                 changes["release_on"] = new_release
-            vertex_service.update_vertex(
+            vertices.update(
                 session, tid, vertex_id, VertexUpdate(**changes), actor=_actor(request)
             )
         return _graph_redirect("vertex", msg="vertex saved")
@@ -749,7 +751,7 @@ def graph_vertex_delete(request: Request, vertex_id: UUID, version: int = Form(.
     tid = UUID(ident.tenant_id)
     try:
         with db.tenant_session(tid) as session:
-            vertex_service.soft_delete_vertex(session, tid, vertex_id, version=version, actor=_actor(request))
+            vertices.soft_delete(session, tid, vertex_id, version=version, actor=_actor(request))
         return _graph_redirect("vertex", msg="vertex marked for deletion")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("vertex", err=str(exc))
@@ -777,8 +779,8 @@ def graph_edge_create(
     try:
         annotation = _parse_attributes(attributes)
         with db.tenant_session(tid) as session:
-            source = vertex_service.get_vertex(session, tid, source_id)
-            target = vertex_service.get_vertex(session, tid, target_id)
+            source = vertices.get(session, tid, source_id)
+            target = vertices.get(session, tid, target_id)
             data = EdgeCreate(
                 edition_id=_edition_id(ident.edition_id),
                 kind=enums.EdgeKind(kind),
@@ -792,7 +794,7 @@ def graph_edge_create(
                 effective_to=_opt_date(effective_to),
                 annotation=annotation,
             )
-            created = edge_service.create_edge(session, tid, data, actor=_actor(request))
+            created = edges.create(session, tid, data, actor=_actor(request))
         return _graph_redirect("edge", msg=f"edge '{created.name}' created")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("edge", err=str(exc))
@@ -828,7 +830,7 @@ def graph_edge_update(
             if new_to and new_to != current["effective_to"]:
                 changes["effective_to"] = new_to
             changes["annotation"] = annotation
-            edge_service.update_edge(session, tid, edge_id, EdgeUpdate(**changes), actor=_actor(request))
+            edges.update(session, tid, edge_id, EdgeUpdate(**changes), actor=_actor(request))
         return _graph_redirect("edge", msg="edge saved")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("edge", err=str(exc), edit=str(edge_id))
@@ -841,7 +843,7 @@ def graph_edge_delete(request: Request, edge_id: UUID) -> RedirectResponse:
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            edge_service.delete_edge(session, UUID(ident.tenant_id), edge_id, actor=_actor(request))
+            edges.delete(session, UUID(ident.tenant_id), edge_id, actor=_actor(request))
         return _graph_redirect("edge", msg="edge deleted")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("edge", err=str(exc))
@@ -892,7 +894,7 @@ def graph_rule_create(
             required_edge_attributes=_attr_list(required_edge_attributes),
         )
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            created = graph_rule_service.create_rule(
+            created = rules.create(
                 session, UUID(ident.tenant_id), data, actor=_actor(request)
             )
         note = (f"rule {created.edge_kind.value} "
@@ -936,7 +938,7 @@ def graph_rule_update(
         changes["target_lifecycle_states"] = _state_list(target_states)
         changes["required_edge_attributes"] = _attr_list(required_edge_attributes)
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            graph_rule_service.update_rule(
+            rules.update(
                 session, UUID(ident.tenant_id), rule_id,
                 GraphRuleUpdate(**changes), actor=_actor(request),
             )
@@ -952,7 +954,7 @@ def graph_rule_delete(request: Request, rule_id: UUID) -> RedirectResponse:
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            graph_rule_service.delete_rule(session, UUID(ident.tenant_id), rule_id)
+            rules.delete(session, tenant_id, rule_id)
         return _graph_redirect("rule", msg="rule deleted")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("rule", err=str(exc))
@@ -961,7 +963,7 @@ def graph_rule_delete(request: Request, rule_id: UUID) -> RedirectResponse:
 _TENANT_TABS = ("tenants", "users", "roles", "permissions")
 
 # ── Documents (Domain ▸ Documents) ──────────────────────────────────────────
-# First TSE subtype surface: all vertex mechanics stay in vertex_service; this
+# First TSE subtype surface: all vertex mechanics stay in the core service; this
 # section only renders and routes. File bytes never flow through these handlers'
 # transactions - they are stored before/between DB work and old objects are
 # deleted after commit, so a failed request can never dangle a pointer.
@@ -978,7 +980,7 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
     tid = UUID(ident.tenant_id)
 
     with db.tenant_session(tid) as session:
-        page = document_service.list_documents(
+        page = documents.list(
             session,
             tid,
             number_like=q or None,
@@ -988,25 +990,24 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
         editing = None
         edit_id = _safe_uuid(params.get("edit") or "")
         if edit_id:
-            editing = document_service.find_document(session, tid, edit_id)
+            editing = documents.find(session, tid, edit_id)
         # ?revise=<id>: create form becomes "revise" - same {prefix}-{number},
         # successor revision prefilled from the shared core helper.
         doc_revising = None
         revise_id = _safe_uuid(params.get("revise") or "")
         if revise_id:
-            source = document_service.find_document(session, tid, revise_id)
+            source = documents.find(session, tid, revise_id)
             if source is not None:
                 doc_revising = {
                     "id": str(source["id"]), "label": f"{source['prefix']}-{source['number']}",
                     "prefix": source["prefix"], "number": source["number"],
                     "name": source["name"], "description": source["description"],
                     "revision": source["revision"],
-                    "next_revision": vertex_service.next_revision(
+                    "next_revision": documents.next_revision(
                         session,
                         tid,
                         prefix=source["prefix"],
                         number=source["number"],
-                        kind=enums.VertexKind.DOCUMENT,
                     ),
                 }
 
@@ -1106,7 +1107,7 @@ def document_create_action(
             release_on=_opt_date(release_on),
         )
         with db.tenant_session(tid) as session:
-            created = document_service.create_document(
+            created = documents.create(
                 session,
                 tid,
                 data,
@@ -1140,7 +1141,7 @@ def document_update_action(
     try:
         changes: dict[str, Any] = {"version": version}
         with db.tenant_session(tid) as session:
-            current = document_service.get_document(session, tid, vertex_id)
+            current = documents.get(session, tid, vertex_id)
             if name and name != current["name"]:
                 changes["name"] = name.strip()
             if description != "" and description != current["description"]:
@@ -1153,7 +1154,7 @@ def document_update_action(
             if new_release and new_release != current["release_on"]:
                 changes["release_on"] = new_release
 
-            result = document_service.update_document(
+            result = documents.update(
                 session, tid, vertex_id, VertexUpdate(**changes), actor=actor
             )
             # File changes apply ONLY as part of this save: the UI stages
@@ -1164,7 +1165,7 @@ def document_update_action(
             old_key = None
             removed = False
             if upload is not None:
-                result, old_key = document_service.attach_file(
+                result, old_key = documents.attach_file(
                     session,
                     tid,
                     vertex_id,
@@ -1175,7 +1176,7 @@ def document_update_action(
                     expected_version=result.version,
                 )
             elif remove_file in ("1", "true", "on") and current["storage_key"]:
-                result, old_key = document_service.detach_file(
+                result, old_key = documents.detach_file(
                     session, tid, vertex_id, actor=actor, expected_version=result.version
                 )
                 removed = True
@@ -1184,7 +1185,7 @@ def document_update_action(
             # exited, so removing the superseded object can no longer race a
             # rollback. Worst case on crash is an orphaned blob, never a
             # database row pointing at deleted bytes.
-            file_store.delete(tid, old_key)
+            files.delete(tid, old_key)
         msg = f"document {result.prefix}-{result.number}/{result.revision} saved"
         if removed:
             msg += "; file removed"
@@ -1201,7 +1202,7 @@ def document_delete_action(request: Request, vertex_id: UUID, version: int = For
     tid = UUID(ident.tenant_id)
     try:
         with db.tenant_session(tid) as session:
-            vertex_service.soft_delete_vertex(session, tid, vertex_id, version=version, actor=_actor(request))
+            vertices.soft_delete(session, tid, vertex_id, version=version, actor=_actor(request))
         return _documents_redirect(msg="document marked for deletion")
     except (ServiceError, ValueError) as exc:
         return _documents_redirect(err=str(exc))
@@ -1214,11 +1215,10 @@ def document_next_number(request: Request, prefix: str = "DOC") -> JSONResponse 
         return ident
     clean = re.sub(r"[^A-Za-z0-9_-]", "", prefix.strip())
     with db.tenant_session(UUID(ident.tenant_id)) as session:
-        number = vertex_service.next_number(
+        number = documents.next_number(
             session,
             UUID(ident.tenant_id),
             prefix=clean,
-            kind=enums.VertexKind.DOCUMENT,
         )
     return JSONResponse({"number": number})
 
@@ -1238,12 +1238,11 @@ def document_next_revision(
         return JSONResponse({"revision": "A"})
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            revision = vertex_service.next_revision(
+            revision = documents.next_revision(
                 session,
                 UUID(ident.tenant_id),
                 prefix=clean_prefix,
                 number=clean_number,
-                kind=enums.VertexKind.DOCUMENT,
             )
     except ServiceError as exc:
         return JSONResponse({"detail": str(exc)}, status_code=400)
@@ -1258,7 +1257,7 @@ def document_download_action(request: Request, vertex_id: UUID) -> StreamingResp
     tid = UUID(ident.tenant_id)
     try:
         with db.tenant_session(tid) as session:
-            stream, filename, mime, size = document_service.download_document(session, tid, vertex_id)
+            stream, filename, mime, size = documents.download(session, tid, vertex_id)
     except ServiceError as exc:
         return _documents_redirect(err=str(exc))
     headers = {
@@ -1299,43 +1298,43 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
             return None
 
     with db.admin_session() as session:
-        tenants_page = tenant_service.list_tenants(session, limit=200)
+        tenants_page = tenants.list(session, limit=200)
         if tab == "tenants" and edit_id:
             eid = _safe_id(edit_id)
             if eid:
-                editing_tenant = tenant_service.get_tenant(session, eid)
+                editing_tenant = tenants.get(session, eid)
     tenant_users = []
     tenant_candidates = []
     if editing_tenant is not None:
         with db.tenant_session(editing_tenant["id"]) as session:
-            tenant_users = user_service.list_users(session, editing_tenant["id"], limit=200).items
+            tenant_users = users.list(session, editing_tenant["id"], limit=200).items
         with db.admin_session() as session:
-            tenant_candidates = user_service.list_users_outside_tenant(session, editing_tenant["id"])
+            tenant_candidates = users.list_outside_tenant(session, editing_tenant["id"])
     with db.tenant_session(tid) as session:
-        users_page = user_service.list_users(session, tid, limit=200)
-        roles_page = role_service.list_roles(session, tenant_id=tid, limit=200)
-        user_roles = role_service.roles_by_user(session, tid)
+        users_page = users.list(session, tid, limit=200)
+        roles_page = roles.list(session, tenant_id=tid, limit=200)
+        user_roles = roles.roles_by_user(session, tid)
         if tab == "users" and edit_id:
             eid = _safe_id(edit_id)
             if eid:
-                editing_user = user_service.get_user(session, tid, eid)
+                editing_user = users.get(session, tid, eid)
         if tab == "roles" and edit_id:
             eid = _safe_id(edit_id)
             if eid:
-                editing_role = role_service.get_role(session, eid, tenant_id=tid)
+                editing_role = roles.get(session, eid, tenant_id=tid)
 
     permissions_view: list[dict[str, Any]] = []
     if tab == "permissions":
         with db.tenant_session(tid) as session:
-            catalog = role_service.list_permissions(session, limit=200).items
+            catalog = roles.list_permissions(session, limit=200).items
             grants: dict[str, set[str]] = {}
             for r in roles_page.items:
-                for perm in role_service.list_role_permissions(session, tid, r.id):
+                for perm in roles.list_role_permissions(session, tid, r.id):
                     grants.setdefault(perm.code, set()).add(r.code)
             if edit_id:
                 eid = _safe_id(edit_id)
                 if eid:
-                    editing_permission = role_service.get_permission(session, eid)
+                    editing_permission = roles.get_permission(session, eid)
         permissions_view = [
             {
                 "id": str(p.id),
@@ -1354,7 +1353,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
         user_roles=user_roles,
         roles=list(roles_page.items),
         permissions=permissions_view,
-        editions=EDITIONS,
+        editions=_EDITIONS,
         editing_tenant=editing_tenant,
         editing_user=editing_user,
         editing_role=editing_role,
@@ -1389,7 +1388,7 @@ def tenant_create_action(
         return ident
     try:
         with db.admin_session() as session:
-            tenant_service.provision_tenant(
+            tenants.provision(
                 session,
                 TenantCreate(subdomain=subdomain, name=name, contact_email=contact_email,
                              secret=secret, edition_id=edition_id),
@@ -1420,7 +1419,7 @@ def tenant_update_action(
             changes[field] = value
     try:
         with db.admin_session() as session:
-            tenant_service.update_tenant(session, tenant_id, TenantUpdate(**changes), actor=_actor(request))
+            tenants.update(session, tenant_id, TenantUpdate(**changes), actor=_actor(request))
         return RedirectResponse("/admin/tenant?tab=tenants&msg=saved", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=tenants&err={quote(str(exc))}&edit={tenant_id}", status_code=303)
@@ -1438,7 +1437,7 @@ def tenant_add_user_action(
         return ident
     try:
         with db.admin_session() as session:
-            user_service.assign_user_to_tenant(session, tenant_id, login_id, actor=_actor(request))
+            users.assign_to_tenant(session, tenant_id, login_id, actor=_actor(request))
         return RedirectResponse(
             f"/admin/tenant?tab=tenants&edit={tenant_id}&msg={quote(f'user {login_id} added')}",
             status_code=303,
@@ -1466,7 +1465,7 @@ def user_create_action(
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=10)).decode() if password else None
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            user_service.create_user(
+            users.create(
                 session,
                 UUID(ident.tenant_id),
                 UserCreate(email=email, full_name=full_name, is_tenant_admin=bool(is_tenant_admin),
@@ -1508,7 +1507,7 @@ def user_update_action(
         changes["is_tenant_admin"] = is_tenant_admin == "on"
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            user_service.update_user(session, UUID(ident.tenant_id), user_id, UserUpdate(**changes), actor=_actor(request))
+            users.update(session, UUID(ident.tenant_id), user_id, UserUpdate(**changes), actor=_actor(request))
         return RedirectResponse("/admin/tenant?tab=users&msg=saved", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=users&err={quote(str(exc))}&edit={user_id}", status_code=303)
@@ -1526,7 +1525,7 @@ def role_create_action(
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.create_role(
+            roles.create(
                 session, UUID(ident.tenant_id), RoleCreate(code=code, name=name, description=description),
                 actor=_actor(request),
             )
@@ -1553,7 +1552,7 @@ def role_update_action(
             changes[field] = value
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.update_role(session, UUID(ident.tenant_id), role_id, RoleUpdate(**changes), actor=_actor(request))
+            roles.update(session, UUID(ident.tenant_id), role_id, RoleUpdate(**changes), actor=_actor(request))
         return RedirectResponse("/admin/tenant?tab=roles&msg=saved", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=roles&err={quote(str(exc))}&edit={role_id}", status_code=303)
@@ -1566,7 +1565,7 @@ def role_delete_action(request: Request, role_id: UUID) -> RedirectResponse:
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.delete_role(session, UUID(ident.tenant_id), role_id, actor=_actor(request))
+            roles.delete(session, UUID(ident.tenant_id), role_id, actor=_actor(request))
         return RedirectResponse("/admin/tenant?tab=roles&msg=role deleted", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=roles&err={quote(str(exc))}", status_code=303)
@@ -1585,7 +1584,7 @@ def permission_create_action(
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.create_permission(
+            roles.create_permission(
                 session,
                 PermissionCreate(code=code.strip(), resource=resource.strip(),
                                  action=action.strip(), description=description.strip()),
@@ -1619,7 +1618,7 @@ def permission_update_action(
     changes["description"] = description.strip()
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.update_permission(
+            roles.update_permission(
                 session, permission_id, PermissionUpdate(**changes), actor=_actor(request)
             )
         return RedirectResponse("/admin/tenant?tab=permissions&msg=saved", status_code=303)
@@ -1637,7 +1636,7 @@ def permission_delete_action(request: Request, permission_id: UUID) -> RedirectR
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            role_service.delete_permission(session, permission_id)
+            roles.delete_permission(session, permission_id)
         return RedirectResponse("/admin/tenant?tab=permissions&msg=permission deleted", status_code=303)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/tenant?tab=permissions&err={quote(str(exc))}", status_code=303)
@@ -1707,23 +1706,23 @@ def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
     context = _base_context(request)
     params = request.query_params
 
-    es = es_ingest_service.cluster_status()
-    cat_rows = {row["index"]: row for row in es_ingest_service.indices_status()} if es["online"] else {}
+    es_status = es.cluster_status()
+    cat_rows = {row["index"]: row for row in ingest.indices_status()} if es_status["online"] else {}
 
     tenants_view = []
     with db.admin_session() as session:
-        tenants_page = tenant_service.list_tenants(session, limit=500)
+        tenants_page = tenants.list(session, limit=500)
     for t in tenants_page.items:
         slug = index_service.slug_for(t.subdomain)
         vertex_row = cat_rows.get(index_service.vertex_index_name(slug))
         edge_row = cat_rows.get(index_service.edge_index_name(slug))
-        latest = index_service.latest_file_for_slug(slug)
+        latest = indexer.latest_file_for_slug(slug)
         tenants_view.append({
             "id": str(t.id),
             "name": t.name,
             "subdomain": t.subdomain,
             "slug": slug,
-            "watermark": _watermark_view(index_service.get_watermark(t.id)),
+            "watermark": _watermark_view(watermarks.get(t.id)),
             "vertex_docs": vertex_row["docs_count"] if vertex_row else None,
             "edge_docs": edge_row["docs_count"] if edge_row else None,
             "latest_file": latest["name"] if latest else None,
@@ -1731,17 +1730,17 @@ def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
 
     files_view = [
         {**f, "size_kb": round(f["size_bytes"] / 1024, 1), "modified_short": f["modified_on"].replace("T", " ")[:19]}
-        for f in index_service.list_index_files()
+        for f in indexer.list_index_files()
     ]
 
     context.update(
         show_nav=True,
-        es=es,
+        es=es_status,
         es_indices=cat_rows.values(),
         tenants_index=tenants_view,
         files=files_view,
-        jobs=[_job_view(j) for j in jobs.list_jobs()],
-        active_jobs=jobs.any_active(),
+        jobs=[_job_view(j) for j in registry.list_jobs()],
+        active_jobs=registry.any_active(),
         current_tenant_id=str(ident.tenant_id),
         can_nuke=bool(ident.is_tenant_admin),
         flash_msg=params.get("msg") or "",
@@ -1764,8 +1763,8 @@ def index_run_action(
         return RedirectResponse(f"/admin/index?err={quote('pick a tenant to index')}", status_code=303)
     try:
         with db.admin_session() as session:
-            tenant = tenant_service.get_tenant(session, tid)
-        job_id = index_service.start_index_job(tid, full=bool(full))
+            tenant = tenants.get(session, tid)
+        job_id = indexer.start_index_job(tid, full=bool(full))
     except ServiceError as exc:
         return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
     mode = "full rebuild" if full else "incremental"
@@ -1779,13 +1778,13 @@ def index_ingest_action(request: Request, file: str = Form("")) -> RedirectRespo
     if isinstance(ident, RedirectResponse):
         return ident
     try:
-        if not es_ingest_service.ping():
-            raise ServiceError(f"elasticsearch is not reachable at {es_ingest_service._es_url()}")
+        if not es.ping():
+            raise ServiceError(f"elasticsearch is not reachable at {es.url}")
         name = (file or "").strip()
-        path = index_service.resolve_index_file(name) if name else _latest_index_path()
+        path = indexer.resolve_index_file(name) if name else _latest_index_path()
         if path is None:
             raise ServiceError("no index files exist yet; run an indexing job first")
-        job_id = es_ingest_service.start_ingest_job(path)
+        job_id = ingest.start_ingest_job(path)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
     msg = f"ingest of '{path.name}' started (job {job_id})"
@@ -1793,8 +1792,8 @@ def index_ingest_action(request: Request, file: str = Form("")) -> RedirectRespo
 
 
 def _latest_index_path():
-    files = index_service.list_index_files()
-    return index_service.resolve_index_file(files[0]["name"]) if files else None
+    files = indexer.list_index_files()
+    return indexer.resolve_index_file(files[0]["name"]) if files else None
 
 
 @router.post("/admin/index/nuke/{tenant_id}")
@@ -1808,7 +1807,7 @@ def index_nuke_action(request: Request, tenant_id: UUID) -> RedirectResponse:
             status_code=303,
         )
     try:
-        summary = es_ingest_service.nuke_tenant(tenant_id)
+        summary = ingest.nuke_tenant(tenant_id)
     except ServiceError as exc:
         return RedirectResponse(f"/admin/index?err={quote(str(exc))}", status_code=303)
     removed = summary["documents_removed"]
@@ -1829,7 +1828,7 @@ def help_page(request: Request) -> HTMLResponse:
     context = _base_context(request)
     ctx = context["ctx"]
     if not ctx.matched_pattern:
-        context["ctx"] = resolver.TenantContext()
+        context["ctx"] = TenantContext()
         return _templates_for(ctx).TemplateResponse(request, "help.html", context)
     if ctx.valid:
         return _templates_for(ctx).TemplateResponse(request, "help.html", context)

@@ -1,8 +1,20 @@
-"""Graph traversals over foundation_edge using recursive CTEs.
+"""GraphQueryService - traversals over foundation_edge using recursive CTEs.
 
 All queries filter on tenant_id explicitly (defense in depth alongside RLS)
 and bound traversal depth with a visited-path array to survive cycles.
 Returned rows use camelCase keys, ready for the API layer.
+
+Why a class
+-----------
+The three public traversals share one bounded-walk engine (_traverse) and
+one SQL template; grouping them documents that relationship and gives future
+query types (impact paths, genealogy, configuration scopes) an obvious home.
+
+How to extend (future scenarios)
+--------------------------------
+* New traversal -> add a method delegating to _traverse with anchor/opposite
+  swapped; depth/kind limits stay caller-controlled.
+* Performance work -> tune _WALK_SQL once; all traversals benefit.
 """
 from __future__ import annotations
 
@@ -71,94 +83,99 @@ LIMIT :limit
 """
 
 
-def neighbors(
-    session: Session,
-    *,
-    tenant_id: UUID,
-    vertex_id: UUID,
-    direction: str = "both",
-    limit: int = 50,
-) -> list[dict]:
-    if direction not in {"both", "incoming", "outgoing"}:
-        raise ValueError(f"direction must be 'both', 'incoming', or 'outgoing', got '{direction}'")
-    clause = ""
-    if direction == "outgoing":
-        clause = " AND e.source_vertex_id = :vertex_id"
-    elif direction == "incoming":
-        clause = " AND e.target_vertex_id = :vertex_id"
-    rows = session.execute(
-        text(_NEIGHBOR_SQL.format(direction_clause=clause)),
-        {"vertex_id": str(vertex_id), "limit": min(max(limit, 1), 500)},
-    ).all()
-    return [dict(r._mapping) for r in rows]
+class GraphQueryService:
+    def neighbors(
+        self,
+        session: Session,
+        *,
+        tenant_id: UUID,
+        vertex_id: UUID,
+        direction: str = "both",
+        limit: int = 50,
+    ) -> list[dict]:
+        if direction not in {"both", "incoming", "outgoing"}:
+            raise ValueError(f"direction must be 'both', 'incoming', or 'outgoing', got '{direction}'")
+        clause = ""
+        if direction == "outgoing":
+            clause = " AND e.source_vertex_id = :vertex_id"
+        elif direction == "incoming":
+            clause = " AND e.target_vertex_id = :vertex_id"
+        rows = session.execute(
+            text(_NEIGHBOR_SQL.format(direction_clause=clause)),
+            {"vertex_id": str(vertex_id), "limit": min(max(limit, 1), 500)},
+        ).all()
+        return [dict(r._mapping) for r in rows]
+
+    def where_used(
+        self,
+        session: Session,
+        *,
+        tenant_id: UUID,
+        root_id: UUID,
+        edge_kinds: tuple[enums.EdgeKind, ...] | None = None,
+        max_depth: int = 4,
+        limit: int = 200,
+    ) -> list[dict]:
+        """Vertices that (transitively) consume the root through the given edge kinds."""
+        return self._traverse(
+            session,
+            anchor="source_vertex_id",
+            opposite="target_vertex_id",
+            tenant_id=tenant_id,
+            root_id=root_id,
+            edge_kinds=edge_kinds or _DEFAULT_TRAVERSAL_KINDS,
+            max_depth=max_depth,
+            limit=limit,
+        )
+
+    def impact(
+        self,
+        session: Session,
+        *,
+        tenant_id: UUID,
+        root_id: UUID,
+        edge_kinds: tuple[enums.EdgeKind, ...] | None = None,
+        max_depth: int = 4,
+        limit: int = 200,
+    ) -> list[dict]:
+        """Downstream vertices affected by a change to the root."""
+        return self._traverse(
+            session,
+            anchor="target_vertex_id",
+            opposite="source_vertex_id",
+            tenant_id=tenant_id,
+            root_id=root_id,
+            edge_kinds=edge_kinds or _DEFAULT_TRAVERSAL_KINDS,
+            max_depth=max_depth,
+            limit=limit,
+        )
+
+    def _traverse(
+        self,
+        session: Session,
+        *,
+        anchor: str,
+        opposite: str,
+        tenant_id: UUID,
+        root_id: UUID,
+        edge_kinds: tuple[enums.EdgeKind, ...],
+        max_depth: int,
+        limit: int,
+    ) -> list[dict]:
+        params = {
+            "root_id": str(root_id),
+            "tenant_id": str(tenant_id),
+            "kinds": [kind.value for kind in edge_kinds],
+            "max_depth": max(1, max_depth),
+            "limit": min(max(limit, 1), 1000),
+        }
+        sql = _WALK_SQL.format(anchor=anchor, opposite=opposite)
+        rows = session.execute(text(sql), params).all()
+        logger.debug("graph.traversal", extra={
+            "root": str(root_id), "direction": anchor, "rows": len(rows), "max_depth": max_depth,
+        })
+        return [dict(r._mapping) for r in rows]
 
 
-def where_used(
-    session: Session,
-    *,
-    tenant_id: UUID,
-    root_id: UUID,
-    edge_kinds: tuple[enums.EdgeKind, ...] | None = None,
-    max_depth: int = 4,
-    limit: int = 200,
-) -> list[dict]:
-    """Vertices that (transitively) consume the root through the given edge kinds."""
-    return _traverse(
-        session,
-        anchor="source_vertex_id",
-        opposite="target_vertex_id",
-        tenant_id=tenant_id,
-        root_id=root_id,
-        edge_kinds=edge_kinds or _DEFAULT_TRAVERSAL_KINDS,
-        max_depth=max_depth,
-        limit=limit,
-    )
-
-
-def impact(
-    session: Session,
-    *,
-    tenant_id: UUID,
-    root_id: UUID,
-    edge_kinds: tuple[enums.EdgeKind, ...] | None = None,
-    max_depth: int = 4,
-    limit: int = 200,
-) -> list[dict]:
-    """Downstream vertices affected by a change to the root."""
-    return _traverse(
-        session,
-        anchor="target_vertex_id",
-        opposite="source_vertex_id",
-        tenant_id=tenant_id,
-        root_id=root_id,
-        edge_kinds=edge_kinds or _DEFAULT_TRAVERSAL_KINDS,
-        max_depth=max_depth,
-        limit=limit,
-    )
-
-
-def _traverse(
-    session: Session,
-    *,
-    anchor: str,
-    opposite: str,
-    tenant_id: UUID,
-    root_id: UUID,
-    edge_kinds: tuple[enums.EdgeKind, ...],
-    max_depth: int,
-    limit: int,
-) -> list[dict]:
-    params = {
-        "root_id": str(root_id),
-        "tenant_id": str(tenant_id),
-        "kinds": [kind.value for kind in edge_kinds],
-        "max_depth": max(1, max_depth),
-        "limit": min(max(limit, 1), 1000),
-    }
-    sql = _WALK_SQL.format(anchor=anchor, opposite=opposite)
-    rows = session.execute(text(sql), params).all()
-    logger.debug(
-        "graph.traversal",
-        extra={"root": str(root_id), "direction": anchor, "rows": len(rows), "max_depth": max_depth},
-    )
-    return [dict(r._mapping) for r in rows]
+#: Shared singleton - stateless query engine.
+queries = GraphQueryService()

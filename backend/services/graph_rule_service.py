@@ -1,7 +1,23 @@
-"""CRUD for foundation_graph_rule.
+"""GraphRuleService - CRUD for foundation_graph_rule.
 
-Tenants author only scope='tenant' rules; platform and edition rules are
-read-only (enforced here and by RLS insert/update policies).
+Why this class exists
+---------------------
+Rules are the governance data of the graph engine. Classifying them behind
+one service keeps the authorization contract ("tenants author only
+scope='tenant' rules; platform/edition rules are read-only") in exactly one
+place - enforced here AND by RLS insert/update policies as defense in depth.
+
+Benefits
+--------
+* Inherits row->DTO conversion from BaseService.
+* The ownership guard is a single method every mutation funnels through.
+
+How to extend (future scenarios)
+--------------------------------
+* Edition packages shipping rules -> extend list() with edition filtering;
+  creation stays platform-team-only per strategy Section 12.
+* Rule versioning/effective windows -> add columns + methods here; edge
+  resolution in RuleValidator picks up precedence automatically.
 """
 from __future__ import annotations
 
@@ -14,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import enums, tables
+from .base import BaseService
 from .errors import Conflict, Forbidden, NotFound, ValidationFailed
 from .schemas import GraphRuleCreate, GraphRuleOut, GraphRuleUpdate, Page, from_row
 
@@ -36,115 +53,123 @@ _UPDATABLE_FIELDS = frozenset(
 _MAX_LIMIT = 200
 
 
-def find_rule(session: Session, rule_id: UUID) -> dict | None:
-    row = session.execute(
-        select(tables.foundation_graph_rule).where(tables.foundation_graph_rule.c.id == rule_id)
-    ).one_or_none()
-    return dict(row._mapping) if row else None
+class GraphRuleService(BaseService):
+    out_model = GraphRuleOut
+
+    # ── reads ────────────────────────────────────────────────────────────────
+
+    def find(self, session: Session, rule_id: UUID) -> dict | None:
+        return self._fetch_one(session, tables.foundation_graph_rule, row_id=rule_id)
+
+    def get(self, session: Session, rule_id: UUID) -> dict:
+        rule = self.find(session, rule_id)
+        if rule is None:
+            raise NotFound(f"graph rule {rule_id} not found")
+        return rule
+
+    def list(
+        self,
+        session: Session,
+        *,
+        scopes: list[enums.RuleScope] | None = None,
+        edge_kinds: list[enums.EdgeKind] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Page[GraphRuleOut]:
+        """List rules visible to the tenant (RLS hides other tenants' rules)."""
+        limit = min(max(limit, 1), _MAX_LIMIT)
+        offset = max(offset, 0)
+        conditions = []
+        if scopes:
+            conditions.append(tables.foundation_graph_rule.c.scope.in_(scopes))
+        if edge_kinds:
+            conditions.append(tables.foundation_graph_rule.c.edge_kind.in_(edge_kinds))
+        total = session.execute(
+            select(func.count())
+            .select_from(tables.foundation_graph_rule)
+            .where(*conditions)
+        ).scalar_one()
+        rows = session.execute(
+            select(tables.foundation_graph_rule)
+            .where(*conditions)
+            .order_by(tables.foundation_graph_rule.c.created_on)
+            .limit(limit)
+            .offset(offset)
+        ).all()
+        return Page[GraphRuleOut](items=[from_row(GraphRuleOut, r) for r in rows],
+                                  total=total, limit=limit, offset=offset)
+
+    # ── writes ───────────────────────────────────────────────────────────────
+
+    def create(self, session: Session, tenant_id: UUID, data: GraphRuleCreate, actor: str) -> GraphRuleOut:
+        if data.scope != enums.RuleScope.TENANT:
+            raise Forbidden("tenants may author only rules with scope 'tenant'")
+        values = data.model_dump(exclude_unset=True)
+        values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
+        row = session.execute(
+            insert(tables.foundation_graph_rule)
+            .values(**values)
+            .returning(*tables.foundation_graph_rule.c)
+        ).one()
+        logger.info("graph_rule.created", extra={
+            "tenant": str(tenant_id), "rule": str(row.id), "kind": data.edge_kind.value, "actor": actor,
+        })
+        return from_row(GraphRuleOut, row)
+
+    def update(
+        self, session: Session, tenant_id: UUID, rule_id: UUID, data: GraphRuleUpdate, actor: str
+    ) -> GraphRuleOut:
+        current = self._require_own_tenant_rule(tenant_id, self.get(session, rule_id))
+        if current["version"] != data.version:
+            raise Conflict(
+                f"version mismatch on graph rule {rule_id}: expected {data.version}, "
+                f"current {current['version']}"
+            )
+        changes = data.model_dump(exclude_unset=True, exclude={"version"})
+        unknown = set(changes) - _UPDATABLE_FIELDS
+        if unknown:
+            raise ValidationFailed(f"fields not updatable on a graph rule: {sorted(unknown)}")
+        if not changes:
+            return from_row(GraphRuleOut, current)
+        row = session.execute(
+            update(tables.foundation_graph_rule)
+            .where(
+                tables.foundation_graph_rule.c.id == rule_id,
+                tables.foundation_graph_rule.c.version == data.version,
+            )
+            .values(**changes, modified_by=actor, modified_on=dt.now())
+            .returning(*tables.foundation_graph_rule.c)
+        ).one_or_none()
+        if row is None:
+            refreshed = self.find(session, rule_id)
+            raise Conflict(f"concurrent modification on graph rule {rule_id}" if refreshed
+                           else f"graph rule {rule_id} not found")
+        logger.info("graph_rule.updated", extra={
+            "tenant": str(tenant_id), "rule": str(rule_id), "actor": actor,
+        })
+        return from_row(GraphRuleOut, row)
+
+    def delete(self, session: Session, tenant_id: UUID, rule_id: UUID) -> None:
+        self._require_own_tenant_rule(tenant_id, self.get(session, rule_id))
+        try:
+            deleted = session.execute(
+                delete(tables.foundation_graph_rule).where(tables.foundation_graph_rule.c.id == rule_id)
+            ).rowcount
+        except IntegrityError as exc:
+            logger.warning("graph_rule.delete.in_use", extra={"rule": str(rule_id)})
+            raise Conflict(f"graph rule {rule_id} is referenced by edges and cannot be deleted") from exc
+        if not deleted:
+            raise NotFound(f"graph rule {rule_id} not found")
+        logger.info("graph_rule.deleted", extra={"tenant": str(tenant_id), "rule": str(rule_id)})
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _require_own_tenant_rule(tenant_id: UUID, rule: dict) -> dict:
+        if rule["scope"] != enums.RuleScope.TENANT or rule["tenant_id"] != tenant_id:
+            raise Forbidden("only the owning tenant may modify its own 'tenant' rules")
+        return rule
 
 
-def get_rule(session: Session, rule_id: UUID) -> dict:
-    rule = find_rule(session, rule_id)
-    if rule is None:
-        raise NotFound(f"graph rule {rule_id} not found")
-    return rule
-
-
-def list_rules(
-    session: Session,
-    *,
-    scopes: list[enums.RuleScope] | None = None,
-    edge_kinds: list[enums.EdgeKind] | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> Page[GraphRuleOut]:
-    """List rules visible to the tenant (RLS hides other tenants' rules)."""
-    limit = min(max(limit, 1), _MAX_LIMIT)
-    offset = max(offset, 0)
-    conditions = []
-    if scopes:
-        conditions.append(tables.foundation_graph_rule.c.scope.in_(scopes))
-    if edge_kinds:
-        conditions.append(tables.foundation_graph_rule.c.edge_kind.in_(edge_kinds))
-    base = select(tables.foundation_graph_rule)
-    total = session.execute(
-        select(func.count())
-        .select_from(tables.foundation_graph_rule)
-        .where(*conditions)
-    ).scalar_one()
-    rows = session.execute(
-        base.where(*conditions).order_by(tables.foundation_graph_rule.c.created_on).limit(limit).offset(offset)
-    ).all()
-    return Page[GraphRuleOut](
-        items=[from_row(GraphRuleOut, r) for r in rows],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
-
-
-def create_rule(session: Session, tenant_id: UUID, data: GraphRuleCreate, actor: str) -> GraphRuleOut:
-    if data.scope != enums.RuleScope.TENANT:
-        raise Forbidden("tenants may author only rules with scope 'tenant'")
-    values = data.model_dump(exclude_unset=True)
-    values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
-    row = session.execute(
-        insert(tables.foundation_graph_rule)
-        .values(**values)
-        .returning(*tables.foundation_graph_rule.c)
-    ).one()
-    logger.info(
-        "graph_rule.created",
-        extra={"tenant": str(tenant_id), "rule": str(row.id), "kind": data.edge_kind.value, "actor": actor},
-    )
-    return from_row(GraphRuleOut, row)
-
-
-def update_rule(
-    session: Session, tenant_id: UUID, rule_id: UUID, data: GraphRuleUpdate, actor: str
-) -> GraphRuleOut:
-    current = _require_own_tenant_rule(tenant_id, get_rule(session, rule_id))
-    if current["version"] != data.version:
-        raise Conflict(
-            f"version mismatch on graph rule {rule_id}: expected {data.version}, current {current['version']}"
-        )
-    changes = data.model_dump(exclude_unset=True, exclude={"version"})
-    unknown = set(changes) - _UPDATABLE_FIELDS
-    if unknown:
-        raise ValidationFailed(f"fields not updatable on a graph rule: {sorted(unknown)}")
-    if not changes:
-        return from_row(GraphRuleOut, current)
-    row = session.execute(
-        update(tables.foundation_graph_rule)
-        .where(
-            tables.foundation_graph_rule.c.id == rule_id,
-            tables.foundation_graph_rule.c.version == data.version,
-        )
-        .values(**changes, modified_by=actor, modified_on=dt.now())
-        .returning(*tables.foundation_graph_rule.c)
-    ).one_or_none()
-    if row is None:
-        refreshed = find_rule(session, rule_id)
-        raise Conflict(f"concurrent modification on graph rule {rule_id}" if refreshed else f"graph rule {rule_id} not found")
-    logger.info("graph_rule.updated", extra={"tenant": str(tenant_id), "rule": str(rule_id), "actor": actor})
-    return from_row(GraphRuleOut, row)
-
-
-def delete_rule(session: Session, tenant_id: UUID, rule_id: UUID) -> None:
-    _require_own_tenant_rule(tenant_id, get_rule(session, rule_id))
-    try:
-        deleted = session.execute(
-            delete(tables.foundation_graph_rule).where(tables.foundation_graph_rule.c.id == rule_id)
-        ).rowcount
-    except IntegrityError as exc:
-        logger.warning("graph_rule.delete.in_use", extra={"rule": str(rule_id)})
-        raise Conflict(f"graph rule {rule_id} is referenced by edges and cannot be deleted") from exc
-    if not deleted:
-        raise NotFound(f"graph rule {rule_id} not found")
-    logger.info("graph_rule.deleted", extra={"tenant": str(tenant_id), "rule": str(rule_id)})
-
-
-def _require_own_tenant_rule(tenant_id: UUID, rule: dict) -> dict:
-    if rule["scope"] != enums.RuleScope.TENANT or rule["tenant_id"] != tenant_id:
-        raise Forbidden("only the owning tenant may modify its own 'tenant' rules")
-    return rule
+#: Shared singleton for the gateway.
+rules = GraphRuleService()

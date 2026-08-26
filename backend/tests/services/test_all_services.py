@@ -36,78 +36,193 @@ except AttributeError:
     pass
 
 from services import db, enums, errors  # noqa: E402
-from services.edge_service import create_edge, list_edges, update_edge  # noqa: E402
-from services.errors import Conflict, Forbidden, NotFound, ValidationFailed  # noqa: E402
-from services.graph_query_service import impact, neighbors, where_used  # noqa: E402
-from services.graph_rule_service import (  # noqa: E402
-    create_rule,
-    delete_rule,
-    get_rule,
-    list_rules,
-    update_rule,
-)
-from services.role_service import (  # noqa: E402
-    assign_roles_to_user,
-    create_role,
-    delete_role,
-    effective_permissions,
-    get_role,
-    grant_role_permissions,
-    list_permissions,
-    list_roles,
-    list_user_roles,
-    revoke_role_permissions,
-    unassign_roles_from_user,
-    update_role,
-)
-from services.rule_engine import resolve_rule, validate_against_rule  # noqa: E402
-from services.schemas import (  # noqa: E402
-    EdgeCreate,
-    EdgeUpdate,
-    GraphRuleCreate,
-    GraphRuleUpdate,
-    RoleCreate,
-    RoleUpdate,
-    TenantCreate,
-    TenantUpdate,
-    UserCreate,
-    UserUpdate,
-    VertexCreate,
-    VertexUpdate,
-)
-from services.tables import (  # noqa: E402
-    foundation_edge,
-    foundation_graph_rule,
-    foundation_vertex,
-    iam_role,
-    iam_role_permission,
-    iam_tenant,
-    iam_user,
-    iam_user_role,
-)
-from services.tenant_service import (  # noqa: E402
-    find_tenant_by_subdomain,
-    get_tenant,
-    list_tenants,
-    provision_tenant,
-    rotate_secret,
-    update_tenant,
-)
-from services.user_service import (  # noqa: E402
-    create_user,
-    find_user_by_login,
-    get_user,
-    list_users,
-    record_login,
-    update_user,
-)
-from services.vertex_service import (  # noqa: E402
-    create_vertex,
-    get_vertex,
-    list_vertices,
-    soft_delete_vertex,
-    update_vertex,
-)
+# ── Class-based services ────────────────────────────────────────────────────
+# The suite predates the OOP port and calls bare functions. These thin
+# adapters bind the historical names onto the shared service singletons so
+# every existing assertion exercises the SAME behavior through the new API.
+# New tests should use the singletons directly.
+from services.document_service import documents as _documents  # noqa: E402
+from services.edge_service import edges as _edge_svc  # noqa: E402
+from services.graph_query_service import queries as _queries  # noqa: E402
+from services.graph_rule_service import rules as _rules_svc  # noqa: E402
+from services.jobs import registry as _registry  # noqa: E402
+from services.role_service import roles as _roles_svc  # noqa: E402
+from services.rule_engine import validator as _validator  # noqa: E402
+from services.tenant_service import tenants as _tenants_svc  # noqa: E402
+from services.user_service import users as _users_svc  # noqa: E402
+from services.vertex_service import VertexCoreService, vertices as _vertices  # noqa: E402
+
+_core = VertexCoreService()
+
+
+def create_edge(*a, **k):
+    return _edge_svc.create(*a, **k)
+
+
+def list_edges(*a, **k):
+    return _edge_svc.list(*a, **k)
+
+
+def update_edge(*a, **k):
+    return _edge_svc.update(*a, **k)
+
+
+def impact(*a, **k):
+    return _queries.impact(*a, **k)
+
+
+def neighbors(*a, **k):
+    return _queries.neighbors(*a, **k)
+
+
+def where_used(*a, **k):
+    return _queries.where_used(*a, **k)
+
+
+def create_rule(*a, **k):
+    return _rules_svc.create(*a, **k)
+
+
+def delete_rule(*a, **k):
+    return _rules_svc.delete(*a, **k)
+
+
+def get_rule(*a, **k):
+    return _rules_svc.get(*a, **k)
+
+
+def list_rules(*a, **k):
+    return _rules_svc.list(*a, **k)
+
+
+def update_rule(*a, **k):
+    return _rules_svc.update(*a, **k)
+
+
+def resolve_rule(*a, **k):
+    return _validator.resolve_rule(*a, **k)
+
+
+def validate_against_rule(*a, **k):
+    return _validator.validate_against_rule(*a, **k)
+
+
+def assign_roles_to_user(*a, **k):
+    return _roles_svc.assign_roles_to_user(*a, **k)
+
+
+def create_role(*a, **k):
+    return _roles_svc.create(*a, **k)
+
+
+def delete_role(*a, **k):
+    return _roles_svc.delete(*a, **k)
+
+
+def effective_permissions(*a, **k):
+    return _roles_svc.effective_permissions(*a, **k)
+
+
+def get_role(*a, **k):
+    return _roles_svc.get(*a, **k)
+
+
+def grant_role_permissions(*a, **k):
+    return _roles_svc.grant_role_permissions(*a, **k)
+
+
+def list_permissions(*a, **k):
+    return _roles_svc.list_permissions(*a, **k)
+
+
+def list_roles(*a, **k):
+    return _roles_svc.list(*a, **k)
+
+
+def list_user_roles(*a, **k):
+    return _roles_svc.list_user_roles(*a, **k)
+
+
+def revoke_role_permissions(*a, **k):
+    return _roles_svc.revoke_role_permissions(*a, **k)
+
+
+def unassign_roles_from_user(*a, **k):
+    return _roles_svc.unassign_roles_from_user(*a, **k)
+
+
+def update_role(*a, **k):
+    return _roles_svc.update(*a, **k)
+
+
+def find_tenant_by_subdomain(*a, **k):
+    return _tenants_svc.find_by_subdomain(*a, **k)
+
+
+def get_tenant(*a, **k):
+    return _tenants_svc.get(*a, **k)
+
+
+def list_tenants(*a, **k):
+    return _tenants_svc.list(*a, **k)
+
+
+def provision_tenant(*a, **k):
+    return _tenants_svc.provision(*a, **k)
+
+
+def rotate_secret(*a, **k):
+    return _tenants_svc.rotate_secret(*a, **k)
+
+
+def update_tenant(*a, **k):
+    return _tenants_svc.update(*a, **k)
+
+
+def create_user(*a, **k):
+    return _users_svc.create(*a, **k)
+
+
+def find_user_by_login(*a, **k):
+    return _users_svc.find_by_login(*a, **k)
+
+
+def get_user(*a, **k):
+    return _users_svc.get(*a, **k)
+
+
+def list_users(*a, **k):
+    return _users_svc.list(*a, **k)
+
+
+def record_login(*a, **k):
+    return _users_svc.record_login(*a, **k)
+
+
+def update_user(*a, **k):
+    return _users_svc.update(*a, **k)
+
+
+def create_vertex(*a, **k):
+    return _core.create(*a, **k)
+
+
+def get_vertex(*a, **k):
+    return _core.get(*a, **k)
+
+
+def list_vertices(*a, **k):
+    return _core.list(*a, **k)
+
+
+def soft_delete_vertex(*a, **k):
+    return _core.soft_delete(*a, **k)
+
+
+def update_vertex(*a, **k):
+    return _core.update(*a, **k)
+
+
 from sqlalchemy import delete  # noqa: E402
 
 ACTOR = "svc-suite"
