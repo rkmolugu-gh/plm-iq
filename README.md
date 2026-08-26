@@ -32,4 +32,3 @@ Tenant URLs follow `{tenant}.{edition}.localhost[:8080]`, e.g.
 ## Documentation
 
 - `docs/strategy-plm-iq-saas-application.md` — product/architecture strategy
-- `metamodel-prd.md` — metamodel and storage detail

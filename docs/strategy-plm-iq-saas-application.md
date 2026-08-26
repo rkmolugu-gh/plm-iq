@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Status | Draft |
-| Version | 0.4 |
+| Version | 0.5 |
 | Owner | PLM-IQ Platform Team |
-| Last Updated | 2026-08-23 |
-| Related Documents | `metamodel-prd.md` (metamodel and storage detail) |
+| Last Updated | 2026-08-26 |
+| Related Documents | `database/schema/foundation_schema.sql`, `database/seed/foundation_seed.sql` (storage and seed detail) |
 
 
 ## 1. Executive Summary
@@ -379,6 +379,58 @@ Vertex:
     customerPartCode: "TES-MTR-HSG-001"
     internalProgram: "EV Platform X"
 ```
+
+### Vertex Storage Pattern: Shared-Core Vertex with Typed Subtype Extensions
+
+Every vertex is stored once in the shared-core table; each business type's specific attributes live in a narrow companion table keyed by the same id. This is the platform's canonical storage pattern, called **Shared-Core Vertex with Typed Subtype Extensions (TSE)** — class-table (joined-table) inheritance in relational terms. It deliberately replaces declarative table inheritance (`INHERITS`), which would copy core columns into every subtype table.
+
+| Store | Holds |
+|---|---|
+| `plmiqdb.foundation_vertex` (shared core) | One row per vertex of every kind: all system attributes plus `solutionAttributes` / `tenantAttributes` |
+| `plmiqdb.foundation_document` (extension) | Same `id` as the core row; only Document attributes (`fileIsDirectory`, `fileName`, `fileParentId`, `fileFullPath`, `fileSizeBytes`, `fileMimeType`, `fileChecksumSha256`) |
+| `plmiqdb.foundation_item`, `plmiqdb.foundation_ec` | Same pattern per typed kind |
+| `plmiqdb.v_document`, `plmiqdb.v_item`, … | Reporting views joining core + extension into one flat, fully typed row |
+
+Pattern rules:
+
+- System attributes exist exactly once, in the shared core. Extension tables never duplicate them; absence of an extension row means subtype attributes are at their defaults.
+- Global uniqueness (`tenantId, prefix, number, revision`), the optimistic-lock `version`, lifecycle triggers, and RLS policies live once, on the core.
+- Edition packages extend the same way: an edition may add its own extension table (for example `discrete_part`) keyed identically, without touching the core or other editions' tables.
+- SQL reports target the views, never JSONB paths:
+
+```sql
+SELECT number, revision, lifecycleState, fileName
+FROM plmiqdb.v_document
+WHERE fileName LIKE '%bracket';
+```
+
+#### TSE Impact: Schema, Seed, Services
+
+**Schema** (`database/schema/foundation_schema.sql`)
+
+- Extension tables are ordinary tables referencing the core, not `INHERITS` children: `id uuid PRIMARY KEY REFERENCES plmiqdb.foundation_vertex(id) ON DELETE CASCADE` plus only that type's columns and constraints (Document: size CHECK ≥ 0, folder self-reference FK).
+- Per-kind CHECKs, FKs, and partial indexes belong in extension tables; triggers, sequences, uniqueness, and RLS stay core-only.
+- Each subtype ships a `v_<kind>` view (`core JOIN extension`) as the reporting surface.
+
+**Seed** (`database/seed/foundation_seed.sql`)
+
+- All rows insert into `foundation_vertex` with concrete kinds (`Item`, `Document`, `EC`); the generic `Vertex` kind value is retired from sample data.
+- Sample Documents carrying OS-file metadata get paired extension rows; deploy order is schema (tables + views) → seed.
+
+**Services**
+
+- `vertex_service` remains the reusable base: create / update / soft-delete / lifecycle transitions / listing operate on the core only and are unaware of subtypes beyond the `kind` value.
+- Each subtype gets a dedicated service composing the base — `document_service`, `item_service`, `ec_service`. Writes are two-phase in one transaction: core insert, then extension upsert (`ON CONFLICT (id) DO UPDATE`); deletes need nothing extra (cascade).
+- DTOs mirror the pattern: `DocumentCreate(VertexCreate)`, `DocumentOut(VertexOut)` add only subtype fields.
+- Edge service, graph rules, search indexing, and traversal stay untouched — they address vertices by `id` + `kind` and read the core.
+
+**Feature split this buys**
+
+| Base (shared, written once) | Per-type features (independent) |
+|---|---|
+| CRUD, numbering, revisions, lifecycle, audit | Document: upload, folder tree, path materialization, checksums |
+| Rule validation, search, graph traversal | Item: BOM utilities, make/buy analytics |
+| Tenant attributes, classification | EC: impact analysis over AFFECTS, approval workflow |
 
 ### Required System Attributes
 
@@ -916,11 +968,11 @@ Data and Platform Layer
 
 ### Data Storage Decision
 
-Phase 1 adopts the PostgreSQL-hybrid storage model defined in `metamodel-prd.md`:
+Phase 1 adopts the PostgreSQL-hybrid storage model:
 
 - Vertices and edges are stored relationally with adjacency columns; traversals use recursive CTEs and tuned indexes.
-- Configurable payloads live inline on the graph elements as JSONB documents — `solutionAttributes`/`tenantAttributes` on vertices, `tenantAttributes`/`annotation` on edges. This supersedes the metamodel PRD's typed value-column tables (`node_attribute`, `edge_annotation`); reintroduce typed columns only if attribute-level query performance demands it.
-- The physical schema ships as `database/schema/foundation_schema.sql`: everything lives in the dedicated `plmiqdb` schema with tables `foundation_vertex`, `foundation_edge`, and `foundation_graph_rule`; row-level-security policies keyed on the `app.tenant_id` session setting; and database-autoincremented `version` columns. Sample data lives in `database/seed/foundation_seed.sql` (5 rows per table, FK-consistent), applied via `deploy-schema.bat -seed`.
+- Configurable payloads live inline on the graph elements as JSONB documents — `solutionAttributes`/`tenantAttributes` on vertices, `tenantAttributes`/`annotation` on edges. Typed per-attribute value tables were evaluated and rejected; reintroduce them only if attribute-level query performance demands it.
+- The physical schema ships as `database/schema/foundation_schema.sql`: everything lives in the dedicated `plmiqdb` schema — the shared core (`foundation_vertex`, `foundation_edge`, `foundation_graph_rule`) plus typed subtype extension tables (`foundation_item`, `foundation_document`, `foundation_ec`, …) joined through `v_<kind>` reporting views per the Shared-Core Vertex with Typed Subtype Extensions pattern (Section 8); RLS policies keyed on the `app.tenant_id` session setting attach to the core; database-autoincremented `version` columns live on the core. Sample data lives in `database/seed/foundation_seed.sql`, applied via `deploy-schema.bat -seed`.
 - Elasticsearch handles full-text and faceted search; object storage holds files; the audit store is append-only.
 - A dedicated graph engine is deferred. Revisit triggers are explicit: sustained p95 where-used or impact-traversal latency beyond the Section 21 SLO at production depth (≥ 4 hops), or query classes that cannot be expressed efficiently in SQL. Until a trigger fires, no second graph technology is introduced.
 
