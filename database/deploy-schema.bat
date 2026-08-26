@@ -40,7 +40,13 @@ if defined DO_SEED       call :maybe_clear_seed   || goto :failed
 set "APPLIED=0"
 set "SKIPPED=0"
 if defined DO_SCHEMA call :apply_dir "%SCHEMA_DIR%" || goto :failed
-if defined DO_SEED   call :apply_dir "%SEED_DIR%"   || goto :failed
+if defined DO_SEED (
+    rem Seeding needs the application tables; deploy the schema first when it
+    rem was not explicitly requested. Idempotent: files already recorded in
+    rem foundation_schema_migrations are skipped, so re-running is safe.
+    if not defined DO_SCHEMA call :apply_dir "%SCHEMA_DIR%" || goto :failed
+    call :apply_dir "%SEED_DIR%" || goto :failed
+)
 
 echo %G%[OK] deploy complete (%PROFILE%): %APPLIED% applied, %SKIPPED% skipped%N%
 exit /b 0
@@ -99,7 +105,7 @@ echo.
 echo Actions:
 echo   -schema          apply pending database\schema\*.sql
 echo                    ^(default action when no -schema/-seed is given^)
-echo   -seed            apply pending database\seed\*.sql
+echo   -seed            apply pending database\seed\*.sql (deploys schema first if needed)
 echo Target:
 echo   dev              dev stack ^(default^)
 echo   prod             prod stack
@@ -180,16 +186,22 @@ if not exist "%SEED_DIR%\*.sql" (
     echo %Y%  no seed files found - nothing to clear%N%
     exit /b 0
 )
-rem Child rows first so foreign keys never block the deletes.
+rem Delete rows from whichever seeded tables already exist, in FK-safe
+rem (children-before-parents) order. Tables created later by the seed are
+rem skipped gracefully instead of aborting the deploy on "relation does not
+rem exist" - this happens after a schema DROP (CASCADE removes the tables)
+rem or when only -seed is run against a still-empty database.
 echo %Y%  clearing seeded tables ...%N%
-%PSQL% -c "DELETE FROM %SCHEMA_NAME%.foundation_edge; DELETE FROM %SCHEMA_NAME%.foundation_vertex; DELETE FROM %SCHEMA_NAME%.foundation_graph_rule; DELETE FROM %SCHEMA_NAME%.iam_role_permission; DELETE FROM %SCHEMA_NAME%.iam_user_role; DELETE FROM %SCHEMA_NAME%.iam_user; DELETE FROM %SCHEMA_NAME%.iam_role; DELETE FROM %SCHEMA_NAME%.iam_permission; DELETE FROM %SCHEMA_NAME%.iam_tenant;"
+%PSQL% -c "DO $$ DECLARE tbls text[] := ARRAY['foundation_edge','foundation_vertex','foundation_graph_rule','iam_role_permission','iam_user_role','iam_user','iam_role','iam_permission','iam_tenant']; t text; BEGIN FOREACH t IN ARRAY tbls LOOP IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='%SCHEMA_NAME%' AND tablename=t) THEN EXECUTE format('DELETE FROM %SCHEMA_NAME%.%%I', t); END IF; END LOOP; END; $$;"
 if errorlevel 1 ( echo %R%[FAIL] could not clear seeded tables%N% & exit /b 1 )
 rem Forget recorded seed filenames so they replay right after clearing.
 set "SEED_NAMES="
 for %%f in ("%SEED_DIR%\*.sql") do call set "SEED_NAMES=%%SEED_NAMES%%'%%~nxf',"
+if "%SEED_NAMES%"=="" ( echo %G%  no seed filenames to reset%N% & goto clear_done )
 set "SEED_NAMES=%SEED_NAMES:~0,-1%"
 %PSQL% -c "DELETE FROM %SCHEMA_NAME%.foundation_schema_migrations WHERE filename IN (%SEED_NAMES%);"
 if errorlevel 1 ( echo %R%[FAIL] could not reset seed migration history%N% & exit /b 1 )
+:clear_done
 echo %G%  seeded tables cleared; seed files will re-apply%N%
 exit /b 0
 

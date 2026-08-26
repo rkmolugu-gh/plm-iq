@@ -10,6 +10,37 @@
     {% endif %}
     <h1 class="auth-title">Sign in{% if ctx.tenant %} to {{ ctx.tenant }}{% endif %}</h1>
 
+    <label class="auth-label auth-quick">
+      Quick sign-in (dev)
+      <select id="quick-signin" class="auth-input">
+        <option value="">— pick a demo user —</option>
+        <option data-user="dane@plm-iq.site" data-pass="plmiq"
+                data-tenant="plm-iq">Dane — Tenant Administrator</option>
+        <option data-user="nick@plm-iq.site" data-pass="plmiq"
+                data-tenant="plm-iq">Nick — Platform Admin</option>
+        <option data-user="priya@plm-iq.site" data-pass="plmiq"
+                data-tenant="plm-iq">Priya — Contributor</option>
+        <option data-user="platformadmin@plm-iq.site" data-pass="plmiq"
+                data-tenant="plm-iq">PLM-IQ Service Login — Platform Admin</option>
+      </select>
+    </label>
+    <script>
+      (function () {
+        var sel = document.getElementById('quick-signin');
+        if (!sel) return;
+        sel.addEventListener('change', function () {
+          var opt = sel.options[sel.selectedIndex];
+          if (!opt || !opt.dataset.user) return;
+          var user = document.querySelector('input[name="username"]');
+          var pass = document.querySelector('input[name="password"]');
+          var tenant = document.querySelector('input[name="tenant"]');
+          if (user) user.value = opt.dataset.user;
+          if (pass) pass.value = opt.dataset.pass;
+          if (tenant && opt.dataset.tenant) tenant.value = opt.dataset.tenant;
+        });
+      })();
+    </script>
+
     {% if request.query_params.get('error') %}
     <p class="auth-error">
       {% set e = request.query_params.get('error') %}

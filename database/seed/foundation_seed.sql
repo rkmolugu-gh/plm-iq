@@ -382,15 +382,15 @@ INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, password
                       status, created_by, modified_by)
 VALUES ('20000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111',
         'dane@plm-iq.site', 'Dane', true,
-        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        '$2b$10$B5fUUnFnlsHMWldDIf2JUONjKPvSv/0Mk/Nn6wJYAFexeG4J15pby',
         'active', 'seed', 'seed'),
        ('20000000-0000-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111',
         'nick@plm-iq.site', 'Nick', false,
-        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        '$2b$10$B5fUUnFnlsHMWldDIf2JUONjKPvSv/0Mk/Nn6wJYAFexeG4J15pby',
         'active', 'seed', 'seed'),
        ('20000000-0000-4000-8000-000000000003', '11111111-1111-1111-1111-111111111111',
         'priya@plm-iq.site', 'Priya', false,
-        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        '$2b$10$B5fUUnFnlsHMWldDIf2JUONjKPvSv/0Mk/Nn6wJYAFexeG4J15pby',
         'active', 'seed', 'seed');
 
 -- Service login for the plm-iq tenant: a bare login id (no '@') with the
@@ -399,7 +399,7 @@ INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, password
                       status, created_by, modified_by)
 VALUES ('20000000-0000-4000-8000-000000000004', '11111111-1111-1111-1111-111111111111',
         'platformadmin@plm-iq.site', 'PLM-IQ Service Login', true,
-        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        '$2b$10$B5fUUnFnlsHMWldDIf2JUONjKPvSv/0Mk/Nn6wJYAFexeG4J15pby',
         'active', 'seed', 'seed');
 
 -- ── Permissions ─────────────────────────────────────────────────────────────

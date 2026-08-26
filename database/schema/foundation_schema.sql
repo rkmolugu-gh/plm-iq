@@ -359,9 +359,6 @@ CREATE TABLE setting (
         (level <> 'user' OR (tenant_id IS NOT NULL AND user_id IS NOT NULL))
         AND (level <> 'tenant' OR user_id IS NULL)
         AND (level <> 'platform' OR (tenant_id IS NULL AND user_id IS NULL))
-    ),
-    CONSTRAINT ck_setting_content NOT NULL CHECK (
-        content IS NOT NULL
     )
 );
 
