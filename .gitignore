@@ -68,3 +68,7 @@ setup/public_html.tar.gz
 # Uploaded document files (tenant-partitioned object store)
 data/file-volume/
 
+
+# Bulk-upload run logs
+logs/
+

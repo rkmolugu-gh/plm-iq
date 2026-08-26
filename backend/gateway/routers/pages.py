@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
 from services import db, edge_service, enums, es_client, graph_rule_service, index_service
+from services.bulk_file_upload_service import bulk_uploads
 from services.document_service import documents
 from services.es_client import es
 from services.edge_service import edges
@@ -1696,6 +1697,62 @@ def _job_view(record: dict) -> dict:
         "duration": duration,
         "note": note or "",
     }
+
+
+# ── Bulk file upload (Admin ▸ Bulk Upload) ─────────────────────────────────
+# Folder-driven bulk import: the page collects a server-side folder, the job
+# runs on the shared JobRegistry, and this same page renders the finished
+# report (per-file outcome + created document numbers).
+
+
+def _bulk_upload_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
+    params = request.query_params
+    job_id = params.get("job") or ""
+    job = registry.get_job(job_id) if job_id else None
+    report = bulk_uploads.report(job_id) if job_id else None
+    return {
+        "bulk_job": job,
+        "bulk_report": report,
+        "bulk_jobs": bulk_uploads.recent_jobs(),
+        "bulk_prefix": params.get("prefix") or "DOC",
+    }
+
+
+@router.get("/admin/bulk-upload", response_class=HTMLResponse, response_model=None)
+def bulk_upload_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+    context.update(
+        _bulk_upload_context(ident, request),
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "admin_bulk_upload.html", context)
+
+
+@router.post("/admin/bulk-upload/run")
+def bulk_upload_run_action(
+    request: Request,
+    folder: str = Form(...),
+    prefix: str = Form("DOC"),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    try:
+        job_id = bulk_uploads.start(
+            folder,
+            tenant_id=UUID(ident.tenant_id),
+            edition_id=_edition_id(ident.edition_id),
+            actor=_actor(request),
+            prefix=prefix.strip() or "DOC",
+        )
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse(f"/admin/bulk-upload?err={quote(str(exc))}", status_code=303)
+    return RedirectResponse(f"/admin/bulk-upload?job={job_id}&msg=import+started", status_code=303)
 
 
 @router.get("/admin/index", response_class=HTMLResponse, response_model=None)

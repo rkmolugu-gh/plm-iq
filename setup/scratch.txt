@@ -15,3 +15,4 @@ user_attirbute_1
 
 
 
+now ccreate a new service bulk_file_upload_service.py for bulk document and file upload  ui add bulk file upload sub menu in admin. that asks for folder location. what ever files are listed in that folder backend will create a document with that file. this will be async job in the background. after upload a simple report will be show to user to show what objects have been created. generate new doc number, use file name as document name, revision "a" for all files. write a log file in the project root/logs folder with datetime_servicename.log 

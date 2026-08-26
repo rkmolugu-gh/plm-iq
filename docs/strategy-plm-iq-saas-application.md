@@ -420,7 +420,7 @@ WHERE fileName LIKE '%bracket';
 **Services**
 
 - `vertex_service` remains the reusable base: create / update / soft-delete / lifecycle transitions / listing operate on the core only and are unaware of subtypes beyond the `kind` value.
-- Each subtype gets a dedicated service composing the base — `document_service`, `item_service`, `ec_service`. Writes are two-phase in one transaction: core insert, then extension upsert (`ON CONFLICT (id) DO UPDATE`); deletes need nothing extra (cascade).
+- Services are classes: `VertexCoreService` (in `vertex_service.py`) owns all shared vertex mechanics — CRUD, numbering (`next_number`/`next_revision`), revisions, lifecycle transitions, optimistic locking — and each subtype extends it (`DocumentService(VertexCoreService)` in `document_service.py`; future `ItemService`, `EcService` are ~20-line subclasses pinning `kind`, DTOs, and extension table). Writes are two-phase in one transaction: core insert, then extension upsert (`ON CONFLICT (id) DO UPDATE`); deletes need nothing extra (cascade). Shared mechanics live once in `BaseService`; infrastructure is class-pluggable too (`StorageBackend` ABC → `LocalFileStorage`, `EsClient`, `JobRegistry`).
 - DTOs mirror the pattern: `DocumentCreate(VertexCreate)`, `DocumentOut(VertexOut)` add only subtype fields.
 - Edge service, graph rules, search indexing, and traversal stay untouched — they address vertices by `id` + `kind` and read the core.
 

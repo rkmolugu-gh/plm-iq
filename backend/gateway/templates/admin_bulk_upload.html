@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Bulk File Upload · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Bulk File Upload</h1>
+  <p class="hero-sub dash-note">Point at a server-side folder; every file becomes a
+    Document with a generated number, the filename as its name, and revision A.
+    The import runs in the background and reports each created object below.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+
+  <form class="crud-form" method="post" action="/admin/bulk-upload/run">
+    <h2>Start an import</h2>
+    <p class="cell-anno">The folder must exist on the machine running the gateway.
+      Subfolders and hidden files are skipped; each import runs alone (a second
+      one is rejected while one is queued or running).</p>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Start background import</button></div>
+    <div class="form-grid">
+      <label>Folder location<input name="folder" placeholder="C:\data\drawings" required></label>
+      <label>Number prefix<input name="prefix" value="{{ bulk_prefix }}"></label>
+      <label>Revision<input value="A" readonly></label>
+    </div>
+  </form>
+
+  {% if bulk_job %}
+  <div class="table-toolbar">
+    <p class="table-desc">
+      Job <span class="pill">{{ bulk_job.id }}</span> —
+      <strong>{{ bulk_job.status }}</strong>
+      {% if bulk_job.status == "running" %}· still working, refresh to update{% endif %}
+      {% if bulk_job.error %}· error: {{ bulk_job.error }}{% endif %}
+      <a class="btn-mini" href="/admin/bulk-upload?job={{ bulk_job.id }}">Refresh</a>
+    </p>
+  </div>
+
+  {% if bulk_report %}
+  <p class="table-desc">
+    Imported <strong>{{ bulk_report.created }}</strong> of
+    <strong>{{ bulk_report.total }}</strong> files from
+    <code>{{ bulk_report.folder }}</code>
+    {% if bulk_report.failed %}(<strong>{{ bulk_report.failed }} failed</strong>){% endif %}.
+  </p>
+  <table class="data-table">
+    <thead>
+      <tr><th>File</th><th>Status</th><th>Document</th><th>Error</th></tr>
+    </thead>
+    <tbody>
+      {% for item in bulk_report.entries %}
+      <tr>
+        <td title="{{ item.file }}">{{ item.file | short(40) }}</td>
+        <td>{{ "created" if item.status == "created" else "failed" }}</td>
+        <td class="cell-mono">
+          {% if item.document_id %}
+          <a href="/documents?edit={{ item.document_id }}">{{ item.document }}</a>
+          {% else %}&mdash;{% endif %}
+        </td>
+        <td class="cell-anno" title="{{ item.error or '' }}">{{ (item.error or "") | truncate(60) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="cell-anno">No report yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% endif %}
+
+  <div class="table-toolbar toolbar-search">
+    <span class="cell-anno">Recent imports</span>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Job</th><th>Folder</th><th>Status</th><th>Report</th></tr></thead>
+    <tbody>
+      {% for j in bulk_jobs %}
+      <tr>
+        <td class="cell-mono">{{ j.id }}</td>
+        <td>{{ j.name | replace("bulk-upload:", "") }}</td>
+        <td>{{ j.status }}</td>
+        <td><a class="btn-mini" href="/admin/bulk-upload?job={{ j.id }}">Open</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="cell-anno">No bulk uploads yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+</section>
+{% endblock %}

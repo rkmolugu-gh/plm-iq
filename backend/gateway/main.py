@@ -1,4 +1,16 @@
-"""Gateway application factory: static files + page routes + health."""
+"""Gateway application factory - the COMPOSITION ROOT of the ported backend.
+
+``create_app()`` is where singletons meet: service instances live at module
+scope in ``services/*`` (vertices, documents, edges, rules, tenants, users,
+roles, validator, queries, files, registry, es, ingest, searcher, indexer),
+gateway collaborators load here (settings, tenant_resolver, sessions), and
+routers translate HTTP into service calls. To swap an implementation (e.g.
+S3Storage for LocalFileStorage, or Redis jobs for JobRegistry), rebind the
+singleton in its module - this factory and every route keep working.
+
+Current layout: one router module (``routers/pages.py``) hosting all page
+routes; feature-router splitting is prepared but intentionally deferred so
+URLs stay byte-identical through the OOP port."""
 from __future__ import annotations
 
 import logging
