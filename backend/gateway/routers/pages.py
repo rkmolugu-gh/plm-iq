@@ -38,6 +38,7 @@ from services.index_service import indexer, watermarks
 from services.jobs import registry
 from services.role_service import roles
 from services.rule_engine import validator
+from services import setting_service
 from services.search_service import searcher
 from services.tenant_service import tenants
 from services.user_service import users
@@ -1967,16 +1968,31 @@ def _render_default(request: Request) -> HTMLResponse:
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request) -> HTMLResponse:
+    """Render the signed-in tenant's effective settings.
+
+    Resolution is platform < tenant < user; when no row exists for this tenant
+    (e.g. the schema/data has not been seeded yet) we render a friendly
+    "not configured" state instead of a 404.
+    """
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    with db.tenant_session(tid) as session:
+        setting = setting_service.get_for_tenant(session, tid)
+
     context = _base_context(request)
-    ctx = context["ctx"]
-    with db.tenant_session() as session:
-        settings = session.query(models.Setting).filter(
-            models.Setting.level == "platform"
-        ).all()
-    if not settings:
-        context["settings"] = []
-        context["settings_error"] = "Settings not initialized. Run schema migration first."
-        return _templates_for(ctx).TemplateResponse(request, "settings.html", context, status_code=200)
-    context["settings"] = settings
-    context["settings_error"] = None
-    return _templates_for(ctx).TemplateResponse(request, "settings.html", context, status_code=200)
+    if setting is None:
+        context.update(setting=None, parsed=[], settings_error=(
+            "No settings are configured for this tenant yet. "
+            "Seed the setting table (platform or tenant scope) to populate this page."
+        ))
+        return _templates_for(context["ctx"]).TemplateResponse(
+            request, "settings.html", context, status_code=200
+        )
+
+    parsed = setting_service.parse_content(setting.content)
+    context.update(setting=setting, parsed=parsed, settings_error=None)
+    return _templates_for(context["ctx"]).TemplateResponse(
+        request, "settings.html", context, status_code=200
+    )

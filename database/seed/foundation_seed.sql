@@ -374,22 +374,32 @@ VALUES ('11111111-1111-1111-1111-111111111111',
         'foundation', 'active', 'seed', 'seed');
 
 -- ── Users (demo tenant) ─────────────────────────────────────────────────────
+-- Dev convenience: every demo user shares the bcrypt password 'plmiq'
+-- (hash below) so the quick-sign-in dropdown on /signin can pre-fill both
+-- fields for role-based testing. Rotate for any non-dev deployment.
 
-INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, status, created_by, modified_by)
+INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, password_hash,
+                      status, created_by, modified_by)
 VALUES ('20000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111',
-        'dane@plm-iq.site', 'Dane', true,  'active', 'seed', 'seed'),
+        'dane@plm-iq.site', 'Dane', true,
+        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        'active', 'seed', 'seed'),
        ('20000000-0000-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111',
-        'nick@plm-iq.site', 'Nick', false, 'active', 'seed', 'seed'),
+        'nick@plm-iq.site', 'Nick', false,
+        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        'active', 'seed', 'seed'),
        ('20000000-0000-4000-8000-000000000003', '11111111-1111-1111-1111-111111111111',
-        'priya@plm-iq.site', 'Priya', false, 'active', 'seed', 'seed');
+        'priya@plm-iq.site', 'Priya', false,
+        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
+        'active', 'seed', 'seed');
 
--- Service login for the plm-iq tenant: a bare login id (no '@') with a
--- bcrypt-hashed password. Dev-only secret; rotate operationally.
+-- Service login for the plm-iq tenant: a bare login id (no '@') with the
+-- shared dev password 'plmiq'. Dev-only; rotate operationally.
 INSERT INTO iam_user (id, tenant_id, email, full_name, is_tenant_admin, password_hash,
                       status, created_by, modified_by)
 VALUES ('20000000-0000-4000-8000-000000000004', '11111111-1111-1111-1111-111111111111',
         'platformadmin@plm-iq.site', 'PLM-IQ Service Login', true,
-        '$2b$10$wnddFhsUX2Eh3l1CMS.z2.fj9fDTE2lRDneFTgomOHfVboRcX8s62',
+        '$2b$10$QqYBwkp1GoePfgw2zqBa7ulkoJpQBdtI/SkFvPohYsemVQl2PqUXK',
         'active', 'seed', 'seed');
 
 -- ── Permissions ─────────────────────────────────────────────────────────────

@@ -88,3 +88,9 @@ class UserStatus(str, Enum):
 class RoleScope(str, Enum):
     GLOBAL = "global"
     TENANT = "tenant"
+
+
+class SettingLevel(str, Enum):
+    PLATFORM = "platform"
+    TENANT = "tenant"
+    USER = "user"

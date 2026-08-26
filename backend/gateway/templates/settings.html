@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Settings{% if ctx.valid %} · {{ ctx.tenant }}{% endif %}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Settings</h1>
+  <p class="hero-sub dash-note">
+    Effective runtime configuration for this workspace. Values resolve from
+    platform defaults, overridden by tenant settings.
+  </p>
+</section>
+
+{% if settings_error %}
+<div class="flash flash-err">{{ settings_error }}</div>
+{% endif %}
+
+<section class="module-card table-card">
+  {% if setting %}
+  <h2>
+    Active configuration
+    <span class="pill {{ 'lc-released' if setting.level == 'tenant' else 'lc-approved' }}">{{ setting.level }} scope</span>
+  </h2>
+  <p class="cell-anno">
+    Source blob id <span class="cell-mono">{{ setting.id }}</span>,
+    last modified by <span class="cell-mono">{{ setting.modified_by }}</span> on
+    {{ setting.modified_on }}.
+  </p>
+
+  {% if parsed %}
+  <table class="data-table">
+    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+    <tbody>
+      {% for key, value in parsed %}
+      <tr>
+        <td class="cell-mono">{{ key }}</td>
+        <td class="cell-mono">{{ value }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="cell-anno">The configuration blob is present but contains no <code>KEY=VALUE</code> entries.</p>
+  {% endif %}
+  {% else %}
+  <p class="cell-anno">Nothing to display yet.</p>
+  {% endif %}
+</section>
+
+{% if parsed %}
+<script>
+document.querySelectorAll('table.data-table').forEach(function (table) {
+  var headers = table.querySelectorAll('thead th');
+  headers.forEach(function (th, i) {
+    th.classList.add('sortable');
+    th.addEventListener('click', function () {
+      var tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+      var dir = th.dataset.dir === 'asc' ? -1 : 1;
+      headers.forEach(function (h) { delete h.dataset.dir; });
+      th.dataset.dir = dir === 1 ? 'asc' : 'desc';
+      rows.sort(function (a, b) {
+        var av = a.children[i].innerText.trim(), bv = b.children[i].innerText.trim();
+        return av.localeCompare(bv) * dir;
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    });
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -362,6 +362,25 @@ class PermissionUpdate(CamelModel):
     description: str | None = None
 
 
+# ── Settings ────────────────────────────────────────────────────────────────
+
+
+class SettingOut(CamelModel):
+    """One setting row. ``content`` is the full .env-style blob for its scope."""
+
+    id: UUID
+    level: enums.SettingLevel
+    tenant_id: UUID | None = None
+    user_id: UUID | None = None
+    content: str
+    is_secret: bool = False
+    version: int
+    created_by: str
+    created_on: datetime
+    modified_by: str
+    modified_on: datetime
+
+
 # ── Pagination ──────────────────────────────────────────────────────────────
 
 ItemT = TypeVar("ItemT")
