@@ -272,14 +272,14 @@ INSERT INTO foundation_vertex (
  '{}'::jsonb),
 
 ('00000000-0000-4000-8000-000000000011',
- '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
- '00000000-0000-4000-8000-000000000997',
- 'EC', '0007', 'Supplier swap proposal',
- 'Proposal to swap the aluminum bar stock supplier for the motor housing', '',
- 'draft', NULL, false,
- 'seed', '2026-02-18 13:00:00+00', 'seed', '2026-02-24 11:30:00+00',
- '{"changeType": "Material", "requestedBy": "procurement"}',
- '{}'::jsonb);
+  '11111111-1111-1111-1111-111111111111', 'foundation', 'EC',
+  '00000000-0000-4000-8000-000000000997',
+  'EC', '0007', 'Supplier swap proposal',
+  'Proposal to swap the aluminum bar stock supplier for the motor housing', 'A',
+  'draft', NULL, false,
+  'seed', '2026-02-18 13:00:00+00', 'seed', '2026-02-24 11:30:00+00',
+  '{"changeType": "Material", "requestedBy": "procurement"}',
+  '{}'::jsonb);
 
 -- Governing rule for the migrated USES relationship (no rule existed yet).
 INSERT INTO foundation_graph_rule (

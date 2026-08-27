@@ -291,22 +291,36 @@
     </aside>
 
     <div class="builder-canvas-wrap">
-      <h2 class="builder-canvas-title">Canvas
-        <span>drag or click vertices &mdash; first is source, second target</span>
-      </h2>
+      <div class="builder-canvas-header">
+        <h2 class="builder-canvas-title">Canvas
+          <span>drag or click vertices &mdash; first is source, second target</span>
+        </h2>
+        <div class="builder-canvas-actions">
+          <a class="btn-mini" href="/graph?tab=graph">Reset canvas</a>
+        </div>
+      </div>
       <div class="builder-canvas" id="builder-canvas">
         <p class="cell-anno" id="canvas-hint">Drop vertices here &mdash; first drop is the
           source, second the target.</p>
       </div>
+      <div class="existing-edges" id="existing-edges" style="display:none;">
+        <h3>Existing edges between these vertices</h3>
+        <ul id="existing-edges-list"></ul>
+        <p class="cell-anno">These edges already exist. You can create additional edges if needed.</p>
+      </div>
     </div>
 
-    <form class="crud-form builder-form is-pending" id="edge-proposal" method="post"
-          action="/graph/edges/create">
-      <h2>Proposed relationship</h2>
-      <p class="builder-empty" id="proposal-empty">No vertices yet &mdash; drag two from
-        the palette onto the canvas. First drop is the source, second the target.</p>
-      <input type="hidden" name="source_vertex_id" value="">
-      <input type="hidden" name="target_vertex_id" value="">
+    <div class="builder-proposal-panel">
+      <div class="builder-proposal-actions">
+        <button class="btn btn-primary btn-sm" id="create-edge-btn" type="button" disabled>+ Create edge</button>
+      </div>
+      <form class="crud-form builder-form is-pending" id="edge-proposal" method="post"
+            action="/graph/edges/create">
+        <h2>Proposed relationship</h2>
+        <p class="builder-empty" id="proposal-empty">No vertices yet &mdash; drag two from
+          the palette onto the canvas. First drop is the source, second the target.</p>
+        <input type="hidden" name="source_vertex_id" value="">
+        <input type="hidden" name="target_vertex_id" value="">
       <div class="form-grid">
         <label>Source vertex
           <output id="src-label" class="builder-vertex">&mdash;</output>
@@ -330,26 +344,25 @@
         </label>
       </div>
       <p class="cell-anno" id="proposal-hint"></p>
-      <div class="form-actions">
-        <button class="btn btn-primary btn-sm" type="submit">+ Create edge</button>
-        <a class="btn-mini" href="/graph?tab=graph">Reset canvas</a>
-      </div>
     </form>
   </div>
-  <script type="application/json" id="builder-seed">{{ auth_source | tojson if auth_source else 'null' }}</script>
+</div>
+<script type="application/json" id="builder-seed">{{ auth_source | tojson if auth_source else 'null' }}</script>
   <script type="application/json" id="builder-rules">{{ builder_rules | tojson }}</script>
   <script type="application/json" id="builder-kinds">{{ edge_kinds | tojson }}</script>
+  <script type="application/json" id="existing-edges-data">{{ gv_edges | tojson }}</script>
   <script>
     (function () {
       var canvas = document.getElementById("builder-canvas");
       if (!canvas) return;
-      var rules = [], kinds = [];
+      var rules = [], kinds = [], existingEdges = [];
       try { rules = JSON.parse(document.getElementById("builder-rules").textContent || "[]"); } catch (e) {}
       try { kinds = JSON.parse(document.getElementById("builder-kinds").textContent || "[]"); } catch (e) {}
+      try { existingEdges = JSON.parse(document.getElementById("existing-edges-data").textContent || "[]"); } catch (e) {}
       var placed = [];
       var form = document.getElementById("edge-proposal");
       var emptyEl = document.getElementById("proposal-empty");
-      var submitBtn = form.querySelector('button[type="submit"]');
+      var createEdgeBtn = document.getElementById("create-edge-btn");
 
       function setReady(ready, msg) {
         form.classList.toggle("is-pending", !ready);
@@ -362,7 +375,7 @@
                 " is the source; drop one more.");
           }
         }
-        if (submitBtn) submitBtn.disabled = !ready;
+        if (createEdgeBtn) createEdgeBtn.disabled = !ready;
       }
       setReady(false);
 
@@ -456,6 +469,48 @@
         refresh();
       }
 
+      function drawExistingEdges() {
+        // Remove existing edge lines
+        canvas.querySelectorAll(".canvas-edge").forEach(function(e) { e.remove(); });
+        if (placed.length < 2) return;
+        var a = placed[0], b = placed[1];
+        var nodes = canvas.querySelectorAll(".canvas-node");
+        if (nodes.length < 2) return;
+        var srcNode = nodes[0];
+        var tgtNode = nodes[1];
+        var srcRect = srcNode.getBoundingClientRect();
+        var tgtRect = tgtNode.getBoundingClientRect();
+        var canvasRect = canvas.getBoundingClientRect();
+        var srcX = srcRect.left + srcRect.width / 2 - canvasRect.left;
+        var srcY = srcRect.top + srcRect.height / 2 - canvasRect.top;
+        var tgtX = tgtRect.left + tgtRect.width / 2 - canvasRect.left;
+        var tgtY = tgtRect.top + tgtRect.height / 2 - canvasRect.top;
+        var edgesBetween = existingEdges.filter(function(edge) {
+          return (edge.source_vertex_id === a.id && edge.target_vertex_id === b.id) ||
+                 (edge.source_vertex_id === b.id && edge.target_vertex_id === a.id);
+        });
+        edgesBetween.forEach(function(edge) {
+          var line = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          line.style.position = "absolute";
+          line.style.left = "0";
+          line.style.top = "0";
+          line.style.width = "100%";
+          line.style.height = "100%";
+          line.style.pointerEvents = "none";
+          line.style.zIndex = "1";
+          var g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("d", "M" + srcX + "," + srcY + " L" + tgtX + "," + tgtY);
+          path.setAttribute("stroke", "#0e6e6e");
+          path.setAttribute("stroke-width", "2");
+          path.setAttribute("stroke-dasharray", "5,5");
+          path.setAttribute("fill", "none");
+          g.appendChild(path);
+          line.appendChild(g);
+          canvas.appendChild(line);
+        });
+      }
+
       // ── Google-like vertex search (Elasticsearch BM25 suggestions) ────────
       var searchBox = document.getElementById("palette-search");
       var countEl = document.getElementById("palette-count");
@@ -536,6 +591,29 @@
         q("#tgt-label").textContent = b.label;
         q("#tgt-kind").textContent = b.kind;
 
+        // Check for existing edges between these vertices
+        var existingEdgesList = document.getElementById("existing-edges-list");
+        var existingEdgesDiv = document.getElementById("existing-edges");
+        var edgesBetween = existingEdges.filter(function(edge) {
+          return (edge.source_vertex_id === a.id && edge.target_vertex_id === b.id) ||
+                 (edge.source_vertex_id === b.id && edge.target_vertex_id === a.id);
+        });
+        
+        if (edgesBetween.length > 0) {
+          existingEdgesDiv.style.display = "block";
+          existingEdgesList.innerHTML = "";
+          edgesBetween.forEach(function(edge) {
+            var li = document.createElement("li");
+            li.textContent = edge.kind + ": " + edge.name + " (" + edge.source_label + " -> " + edge.target_label + ")";
+            existingEdgesList.appendChild(li);
+          });
+        } else {
+          existingEdgesDiv.style.display = "none";
+        }
+
+        // Draw existing edges on the canvas
+        drawExistingEdges();
+
         var matches = rules.filter(function (r) {
           return r.sk === a.kind && r.tk === b.kind;
         });
@@ -595,6 +673,13 @@
         }
       }
       q("#proposal-kind").addEventListener("change", proposeDefault);
+
+      // Wire up the "Create edge" button to submit the form
+      if (createEdgeBtn) {
+        createEdgeBtn.addEventListener("click", function() {
+          form.submit();
+        });
+      }
 
       var seedEl = document.getElementById("builder-seed");
       var seed = null;

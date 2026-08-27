@@ -562,7 +562,7 @@ def _rule_edit_view(row: dict, tenant_id: UUID) -> dict:
     }
 
 
-def _live_graph_view(tenant_id: UUID, number: str, source: str, relation: str, target: str) -> dict | None:
+def _live_graph_view(request: Request, tenant_id: UUID, number: str, source: str, relation: str, target: str) -> dict | None:
     with _request_session(request) as session:
         vertices_page = vertices.list(session, tenant_id, limit=200)
         edges_page = edges.list(session, tenant_id, limit=200)
@@ -622,7 +622,7 @@ def graph(request: Request, tab: str = "vertex", vertex: str = "") -> HTMLRespon
                 view = None
                 if selected:
                     view = _live_graph_view(
-                        UUID(identity.tenant_id), selected,
+                        request, UUID(identity.tenant_id), selected,
                         params.get("source") or "",
                         params.get("relation") or "",
                         params.get("target") or "",

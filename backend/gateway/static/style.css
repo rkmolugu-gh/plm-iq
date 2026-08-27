@@ -11,7 +11,7 @@
   --ink-soft: #55677a;
   --ink-faint: #8aa0b4;
   --line: #dde5ec;
-  --accent: #0e6e6e;
+   --accent: #005a87;
   --accent-ink: #ffffff;
   --accent-soft: #e2f1f1;
   --danger: #b3392f;
@@ -1412,6 +1412,62 @@ pre.mermaid {
 
 @media (max-width: 1100px) {
   .builder-wrap { grid-template-columns: 1fr; }
+}
+
+.builder-canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.builder-canvas-title {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.builder-canvas-title span {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.builder-canvas-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.builder-proposal-panel {
+  /* Wraps the proposal actions and form */
+}
+
+.builder-proposal-actions {
+  margin-bottom: 0.75rem;
+}
+
+.existing-edges {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  border: 1px solid var(--accent);
+}
+
+.existing-edges h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.existing-edges ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.existing-edges li {
+  font-size: 0.85rem;
+  color: var(--ink);
 }
 
 .form-grid label.check {
