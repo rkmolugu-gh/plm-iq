@@ -13,6 +13,7 @@ Resolution order per request: active edition first, then common.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, timezone
 from datetime import datetime as dt
@@ -22,10 +23,12 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
+from starlette.concurrency import run_in_threadpool
 from services import db, edge_service, enums, es_client, graph_rule_service, index_service
 from services.bulk_file_upload_service import bulk_uploads
 from services.document_service import documents
@@ -141,9 +144,25 @@ def _base_context(request: Request) -> dict[str, Any]:
             "is_admin": identity.is_tenant_admin,
         }
         context["identity"] = identity
+        # Resolve the tenant's effective settings once and expose them to every
+        # authenticated page (settings, dashboard, nav, etc.). Degrades silently
+        # when the setting table/schema is not applied yet.
+        tid = UUID(identity.tenant_id)
+        setting = None
+        try:
+            with db.tenant_session(tid) as session:
+                setting = setting_service.settings.get_for_tenant(session, tid)
+        except (OperationalError, ProgrammingError):
+            logger.warning("settings.unavailable", extra={"tenant": str(tid)})
+        context["setting"] = setting
+        context["tenant_settings"] = (
+            setting_service.parse_content(setting.content) if setting else []
+        )
     else:
         # No authenticated user - context is not valid for protected routes
         context["valid"] = False
+        context["setting"] = None
+        context["tenant_settings"] = []
     return context
 
 
@@ -1910,14 +1929,15 @@ def ai_assistant_page(request: Request) -> HTMLResponse:
     context.update(
         show_nav=True,
         greeting=assistant.greeting,
+        assistant_warning=not bool(os.getenv("OPENROUTER_API_KEY")),
     )
     return _templates_for(context["ctx"]).TemplateResponse(request, "ai-assistant.html", context)
 
 
 @router.post("/ai-assistant/chat", response_model=None)
 async def ai_assistant_chat(request: Request) -> JSONResponse:
-    """Chat turn for the assistant. Returns dummy replies until a real model
-    is connected; the contract (reply/history/model) is already stable."""
+    """Chat turn for the assistant. Forwards to OpenRouter using the tenant's
+    configured model/URL and the OPENROUTER_API_KEY environment variable."""
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return JSONResponse({"detail": "sign-in required"}, status_code=401)
@@ -1936,10 +1956,18 @@ async def ai_assistant_chat(request: Request) -> JSONResponse:
     if not isinstance(history, list):
         history = []
 
-    result = assistant.respond(
+    # Resolve the tenant's effective LLM settings from the shared context.
+    settings_map = dict(context.get("tenant_settings") or []) if (context := _base_context(request)) else {}
+    model = settings_map.get("chatllmmodel")
+    base_url = settings_map.get("llmproviderurl") or settings_map.get("LLM_URL")
+
+    result = await run_in_threadpool(
+        assistant.respond,
         message,
         history=history,
         tenant=ident.tenant_id if ident else None,
+        model=model,
+        base_url=base_url,
     )
     return JSONResponse(result)
 
@@ -1955,18 +1983,10 @@ def settings_page(request: Request) -> HTMLResponse:
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return ident
-    tid = UUID(ident.tenant_id)
-    try:
-        with db.tenant_session(tid) as session:
-            setting = setting_service.settings.get_for_tenant(session, tid)
-    except (OperationalError, ProgrammingError):
-        # Setting table/schema not applied yet: degrade gracefully, never 500.
-        logger.warning("settings.table_unavailable", extra={"tenant": str(tid)})
-        setting = None
-
     context = _base_context(request)
+    setting = context.get("setting")
     if setting is None:
-        context.update(setting=None, parsed=[], settings_error=(
+        context.update(parsed=[], settings_error=(
             "No settings are configured for this tenant yet. "
             "Seed the setting table (platform or tenant scope) to populate this page."
         ))
@@ -1974,15 +1994,47 @@ def settings_page(request: Request) -> HTMLResponse:
             request, "settings.html", context, status_code=200
         )
 
-    parsed = setting_service.parse_content(setting.content)
-    context.update(setting=setting, parsed=parsed, settings_error=None)
+    context.update(parsed=context["tenant_settings"], settings_error=None)
     return _templates_for(context["ctx"]).TemplateResponse(
         request, "settings.html", context, status_code=200
     )
 
 
-@router.get("/{rest:path}", response_class=HTMLResponse)
-def any_page(request: Request, rest: str) -> HTMLResponse:
+@router.post("/settings")
+def settings_update(request: Request, content: str = Form("")) -> RedirectResponse:
+    """Persist the edited ``.env``-style settings blob for this tenant.
+
+    Updates the resolved setting row (platform or tenant) directly; when no row
+    exists yet, a tenant-scoped override is created so the tenant can extend the
+    platform defaults. Writes go through ``admin_session`` so a platform row can
+    be edited (its RLS policy forbids tenant-session writes).
+    """
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    with db.tenant_session(tid) as session:
+        setting = setting_service.settings.get_for_tenant(session, tid)
+    new_content = (content or "").replace("\r\n", "\n")
+    try:
+        with db.admin_session() as session:
+            if setting is not None:
+                session.execute(
+                    text("UPDATE setting SET content = :c, modified_by = :m WHERE id = :id"),
+                    {"c": new_content, "m": ident.email, "id": str(setting.id)},
+                )
+            else:
+                session.execute(
+                    text(
+                        "INSERT INTO setting (id, level, tenant_id, user_id, content, "
+                        "is_secret, created_by, modified_by) "
+                        "VALUES (gen_random_uuid(), 'tenant', :tid, NULL, :c, false, :m, :m)"
+                    ),
+                    {"tid": str(tid), "c": new_content, "m": ident.email},
+                )
+    except (OperationalError, ProgrammingError):
+        return RedirectResponse("/settings?error=db", status_code=303)
+    return RedirectResponse("/settings", status_code=303)
     context = _base_context(request)
     if not context["ctx"].matched_pattern:
         return _render_default(request)

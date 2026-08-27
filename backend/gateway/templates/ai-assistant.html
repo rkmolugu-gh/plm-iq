@@ -5,9 +5,15 @@
   <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
   <h1 class="hero-title dash-title">AI Assistant</h1>
   <p class="hero-sub dash-note">A workspace assistant wired to the backend service.
-     This build returns <strong>dummy</strong> replies &mdash; the UI and the API
-     contract are complete, a real model plugs in later.</p>
+     It connects to an LLM via OpenRouter using the workspace settings.</p>
 </section>
+
+{% if assistant_warning %}
+<div class="flash flash-err">
+  OPENROUTER_API_KEY is not set. The assistant cannot reach the LLM until it is
+  configured in the environment (or setup/.env), then restart the gateway.
+</div>
+{% endif %}
 
 <section class="module-card chat-card">
   <div class="chat-window" id="chat-window" aria-live="polite">
@@ -87,7 +93,12 @@
     }).then(function (data) {
       history = data.history || [];
       addMessage('assistant', data.reply || '(no reply)');
-      say('');
+      if (data.warning) {
+        status.textContent = '⚠ ' + data.warning;
+        status.classList.add('chat-warn');
+      } else {
+        say('');
+      }
     }).catch(function (err) {
       if (err && err.expired) {
         say('Your session has expired - the assistant is unavailable.', true);

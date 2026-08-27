@@ -10,6 +10,10 @@
   </p>
 </section>
 
+{% if request.query_params.get('error') == 'db' %}
+<div class="flash flash-err">Could not save settings &mdash; the database is unavailable. Please try again later.</div>
+{% endif %}
+
 {% if settings_error %}
 <div class="flash flash-err">{{ settings_error }}</div>
 {% endif %}
@@ -18,7 +22,7 @@
   {% if setting %}
   <h2>
     Active configuration
-    <span class="pill {{ 'lc-released' if setting.level == 'tenant' else 'lc-approved' }}">{{ setting.level }} scope</span>
+    <span class="pill {{ 'lc-released' if setting.level.value == 'tenant' else 'lc-approved' }}">{{ setting.level.value }} scope</span>
   </h2>
   <p class="cell-anno">
     Source blob id <span class="cell-mono">{{ setting.id }}</span>,
@@ -44,6 +48,24 @@
   {% else %}
   <p class="cell-anno">Nothing to display yet.</p>
   {% endif %}
+</section>
+
+<section class="module-card">
+  <h2>Edit configuration</h2>
+  <p class="cell-anno">
+    Settings are stored as a plain <code>.env</code> blob &mdash; one
+    <code>KEY=VALUE</code> pair per line. Save replaces the entire blob for this
+    workspace (tenant overrides platform defaults).
+  </p>
+  <form method="post" action="/settings">
+    <label class="auth-label">
+      Configuration
+      <textarea class="auth-input" name="content" rows="10" spellcheck="false">{{ setting.content if setting else '' }}</textarea>
+    </label>
+    <div class="settings-actions">
+      <button type="submit" class="btn btn-primary">Save configuration</button>
+    </div>
+  </form>
 </section>
 
 {% if parsed %}

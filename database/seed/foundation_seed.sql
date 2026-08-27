@@ -487,5 +487,14 @@ INSERT INTO iam_user_role (user_id, role_id, tenant_id, assigned_by) VALUES
 ('20000000-0000-4000-8000-000000000004', '40000000-0000-4000-8000-000000000002',
  '11111111-1111-1111-1111-111111111111', 'seed');
 
+-- ── Settings (platform scope) ────────────────────────────────────────────────
+-- One platform row shared by every tenant (RLS exposes level='platform' to all).
+-- .env-style KEY=VALUE blob; bump the value to roll out new defaults.
+INSERT INTO setting (id, level, tenant_id, user_id, content, is_secret, created_by, modified_by)
+VALUES ('60000000-0000-4000-8000-000000000001', 'platform', NULL, NULL,
+         E'chatllmmodel=openrouter/free\nLLM_URL=https://openrouter.ai/api/v1',
+        false, 'seed', 'seed')
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 

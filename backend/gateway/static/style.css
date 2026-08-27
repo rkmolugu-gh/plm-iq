@@ -1172,6 +1172,11 @@ pre.mermaid {
   border: 1px solid #eccfcb;
 }
 
+.chat-warn {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .auth-error {
   margin: 0 0 1.1rem;
   padding: 0.55rem 0.75rem;
