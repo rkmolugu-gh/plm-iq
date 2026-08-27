@@ -22,5 +22,13 @@ if %errorlevel%==0 (
 
 echo Gateway starting on http://plm-iq.foundation.localhost.com:8080/
 echo ^(add hosts entry 127.0.0.1 plm-iq.foundation.localhost.com first^)
+
+rem -- Login smoke test (plm-iq / platformadmin / 19691969) ---------------------
+echo Running login smoke test...
+%RUNNER% python scripts/login_smoke.py
+if not %errorlevel%==0 (
+    echo Login smoke test failed - check the database and seed before continuing.
+)
+
 %RUNNER% uvicorn gateway.main:app --reload --host 127.0.0.1 --port 8080
 endlocal & exit /b %ERRORLEVEL%

@@ -14,13 +14,13 @@
       Quick sign-in (dev)
       <select id="quick-signin" class="auth-input">
         <option value="">— pick a demo user —</option>
-        <option data-user="dane@plm-iq.site" data-pass="plmiq"
+        <option data-user="dane@plm-iq.site" data-pass="19691969"
                 data-tenant="plm-iq">Dane — Tenant Administrator</option>
-        <option data-user="nick@plm-iq.site" data-pass="plmiq"
+        <option data-user="nick@plm-iq.site" data-pass="19691969"
                 data-tenant="plm-iq">Nick — Platform Admin</option>
-        <option data-user="priya@plm-iq.site" data-pass="plmiq"
+        <option data-user="priya@plm-iq.site" data-pass="19691969"
                 data-tenant="plm-iq">Priya — Contributor</option>
-        <option data-user="platformadmin@plm-iq.site" data-pass="plmiq"
+        <option data-user="platformadmin@plm-iq.site" data-pass="19691969"
                 data-tenant="plm-iq">PLM-IQ Service Login — Platform Admin</option>
       </select>
     </label>
@@ -37,6 +37,8 @@
           if (user) user.value = opt.dataset.user;
           if (pass) pass.value = opt.dataset.pass;
           if (tenant && opt.dataset.tenant) tenant.value = opt.dataset.tenant;
+          var form = sel.closest('form');
+          if (form) form.requestSubmit();
         });
       })();
     </script>
@@ -46,6 +48,7 @@
       {% set e = request.query_params.get('error') %}
       {% if e == 'invalid' %}Unknown tenant, account, or wrong password.
       {% elif e == 'missing' %}Tenant, username and password are required.
+      {% elif e == 'db' %}The database is currently unavailable &mdash; please try again later or contact support.
       {% else %}Your session has expired &mdash; please sign in again.{% endif %}
     </p>
     {% endif %}

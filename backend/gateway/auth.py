@@ -26,8 +26,13 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from itsdangerous import BadSignature, URLSafeSerializer
+from sqlalchemy.exc import OperationalError
 
 from .settings import edition_label
+
+
+class DatabaseUnavailable(Exception):
+    """Raised when authentication cannot reach the database (e.g. it is down)."""
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +180,11 @@ class SessionManager:
             with db.tenant_session(tid) as session:
                 users.record_login(session, tid, user["id"], actor=user["email"])
             return str(tid), str(user["id"])
+        except OperationalError:
+            # Database is unreachable (down, not accepting connections). Surface a
+            # distinct, user-friendly signal instead of a generic "invalid" error.
+            logger.exception("auth.authenticate.db_unavailable")
+            raise DatabaseUnavailable("The database is currently unavailable.") from None
         except Exception:
             logger.exception("auth.authenticate.failed")
             return None

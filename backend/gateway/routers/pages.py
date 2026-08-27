@@ -22,6 +22,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
@@ -62,9 +63,8 @@ from services.schemas import (
     VertexCreate,
     VertexUpdate,
 )
-
 from .. import auth, graph_view
-from ..auth import sessions
+from ..auth import DatabaseUnavailable, sessions
 from ..resolver import TenantContext, tenant_resolver
 from ..settings import settings as _gateway_settings
 _EDITIONS = _gateway_settings.editions
@@ -182,7 +182,10 @@ def signin_submit(
     subdomain = (tenant or "").strip() or (ctx.tenant if ctx.valid else "")
     if not subdomain or not username or not password:
         return RedirectResponse("/signin?error=missing", status_code=303)
-    ids = sessions.authenticate(subdomain, username, password)
+    try:
+        ids = sessions.authenticate(subdomain, username, password)
+    except DatabaseUnavailable:
+        return RedirectResponse("/signin?error=db", status_code=303)
     if ids is None:
         return RedirectResponse("/signin?error=invalid", status_code=303)
     response = RedirectResponse("/dashboard", status_code=303)
@@ -1941,6 +1944,43 @@ async def ai_assistant_chat(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
+@router.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request) -> HTMLResponse:
+    """Render the signed-in tenant's effective settings.
+
+    Resolution is platform < tenant < user; when no row exists for this tenant
+    (e.g. the schema/data has not been seeded yet) we render a friendly
+    "not configured" state instead of a 404.
+    """
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with db.tenant_session(tid) as session:
+            setting = setting_service.settings.get_for_tenant(session, tid)
+    except (OperationalError, ProgrammingError):
+        # Setting table/schema not applied yet: degrade gracefully, never 500.
+        logger.warning("settings.table_unavailable", extra={"tenant": str(tid)})
+        setting = None
+
+    context = _base_context(request)
+    if setting is None:
+        context.update(setting=None, parsed=[], settings_error=(
+            "No settings are configured for this tenant yet. "
+            "Seed the setting table (platform or tenant scope) to populate this page."
+        ))
+        return _templates_for(context["ctx"]).TemplateResponse(
+            request, "settings.html", context, status_code=200
+        )
+
+    parsed = setting_service.parse_content(setting.content)
+    context.update(setting=setting, parsed=parsed, settings_error=None)
+    return _templates_for(context["ctx"]).TemplateResponse(
+        request, "settings.html", context, status_code=200
+    )
+
+
 @router.get("/{rest:path}", response_class=HTMLResponse)
 def any_page(request: Request, rest: str) -> HTMLResponse:
     context = _base_context(request)
@@ -1964,35 +2004,3 @@ def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
 def _render_default(request: Request) -> HTMLResponse:
     context = _base_context(request)
     return _templates_for(context["ctx"]).TemplateResponse(request, "default.html", context)
-
-
-@router.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request) -> HTMLResponse:
-    """Render the signed-in tenant's effective settings.
-
-    Resolution is platform < tenant < user; when no row exists for this tenant
-    (e.g. the schema/data has not been seeded yet) we render a friendly
-    "not configured" state instead of a 404.
-    """
-    ident = _require_identity(request)
-    if isinstance(ident, RedirectResponse):
-        return ident
-    tid = UUID(ident.tenant_id)
-    with db.tenant_session(tid) as session:
-        setting = setting_service.get_for_tenant(session, tid)
-
-    context = _base_context(request)
-    if setting is None:
-        context.update(setting=None, parsed=[], settings_error=(
-            "No settings are configured for this tenant yet. "
-            "Seed the setting table (platform or tenant scope) to populate this page."
-        ))
-        return _templates_for(context["ctx"]).TemplateResponse(
-            request, "settings.html", context, status_code=200
-        )
-
-    parsed = setting_service.parse_content(setting.content)
-    context.update(setting=setting, parsed=parsed, settings_error=None)
-    return _templates_for(context["ctx"]).TemplateResponse(
-        request, "settings.html", context, status_code=200
-    )
