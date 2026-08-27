@@ -47,7 +47,7 @@ from services.search_service import searcher
 from services.tenant_service import tenants
 from services.user_service import users
 from services.vertex_service import vertices
-from services.ai_assistant_service import assistant
+from services.ai_assistant_service import assistant, DEFAULT_MODEL, DEFAULT_BASE_URL
 from services.errors import ServiceError
 from services.schemas import (
     DocumentCreate,
@@ -1926,10 +1926,15 @@ def ai_assistant_page(request: Request) -> HTMLResponse:
     if isinstance(ident, RedirectResponse):
         return ident
     context = _base_context(request)
+    settings_map = dict(context.get("tenant_settings") or [])
+    chat_model = settings_map.get("chatllmmodel") or DEFAULT_MODEL
+    chat_url = settings_map.get("llmproviderurl") or DEFAULT_BASE_URL
     context.update(
         show_nav=True,
         greeting=assistant.greeting,
         assistant_warning=not bool(os.getenv("OPENROUTER_API_KEY")),
+        chat_model=chat_model,
+        chat_url=chat_url,
     )
     return _templates_for(context["ctx"]).TemplateResponse(request, "ai-assistant.html", context)
 

@@ -6,6 +6,8 @@
   <h1 class="hero-title dash-title">AI Assistant</h1>
   <p class="hero-sub dash-note">A workspace assistant wired to the backend service.
      It connects to an LLM via OpenRouter using the workspace settings.</p>
+  <p class="cell-anno">Model: {{ chat_model }} · URL: {{ chat_url }}</p>
+  <p class="cell-anno" id="token-info">Tokens: -</p>
 </section>
 
 {% if assistant_warning %}
@@ -98,6 +100,17 @@
         status.classList.add('chat-warn');
       } else {
         say('');
+      }
+      // Show token usage below the last assistant message.
+      var tokens = document.getElementById('token-info');
+      if (tokens && data.connected) {
+        var parts = ['Tokens:'];
+        if (data.prompt_tokens != null) parts.push('in ' + data.prompt_tokens);
+        if (data.completion_tokens != null) parts.push('out ' + data.completion_tokens);
+        if (data.total_tokens != null) parts.push('total ' + data.total_tokens);
+        tokens.textContent = parts.join(' · ');
+      } else if (tokens) {
+        tokens.textContent = 'Tokens: -';
       }
     }).catch(function (err) {
       if (err && err.expired) {

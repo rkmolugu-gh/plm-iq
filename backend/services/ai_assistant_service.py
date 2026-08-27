@@ -4,10 +4,10 @@ The seam where a real model plugs in. It now talks to OpenRouter
 (https://openrouter.ai) using two pieces of configuration:
 
 * ``chatllmmodel``   - the model id (e.g. ``openai/gpt-4o-mini``), resolved from
-                       the tenant's effective ``setting`` blob.
+                        the tenant's effective ``setting`` blob.
 * ``llmproviderurl`` - the OpenRouter base URL (``https://openrouter.ai/api/v1``).
 * ``OPENROUTER_API_KEY`` - read from the environment; REQUIRED. Without it the
-  assistant degrades to a clear warning instead of failing silently.
+   assistant degrades to a clear warning instead of failing silently.
 
 Design notes
 ------------
@@ -20,6 +20,7 @@ Design notes
   and URL used are logged and printed so it is obvious what was reached.
 * When ``OPENROUTER_API_KEY`` is missing the response carries a ``warning`` the
   UI surfaces to the user.
+* Tool service is injected for assistant-tooling capabilities.
 """
 from __future__ import annotations
 
@@ -30,6 +31,11 @@ import urllib.error
 import urllib.request
 from datetime import datetime as dt
 from typing import Any
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from .tools_service import tools as default_tools
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +56,15 @@ class AIAssistantService:
         "PLM-IQ Assistant. I connect to an LLM via OpenRouter using the "
         "workspace's configured model and provider URL. Ask me anything."
     )
+
+    def __init__(self, tool_service: Any = None) -> None:
+        """Initialize the assistant with optional tool service injection.
+
+        Args:
+            tool_service: Tool service instance. If not provided, uses the
+                         default pinned singleton.
+        """
+        self.tools = tool_service or default_tools
 
     def respond(
         self,
@@ -76,12 +91,28 @@ class AIAssistantService:
             return self._wrap(text, history, _NO_KEY_WARNING, model, base_url, live=False)
 
         try:
-            reply = self._call_openrouter(api_key, model, base_url, text, history)
-            return self._wrap(text, history, None, model, base_url, live=True, reply=reply)
+            reply, prompt_tokens, completion_tokens, total_tokens = self._call_openrouter(api_key, model, base_url, text, history)
+            return self._wrap(text, history, None, model, base_url, live=True, reply=reply, 
+                           prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, total_tokens=total_tokens)
         except Exception as exc:  # noqa: BLE001 - surface a user-friendly warning
             warning = f"Could not reach the LLM at {base_url} (model {model}): {exc}"
             logger.warning("ai_assistant.llm_error", extra={"tenant": tenant or "", "error": str(exc)})
             return self._wrap(text, history, warning, model, base_url, live=False)
+
+    def list_documents(
+        self,
+        session: Session,
+        tenant_id: UUID,
+        *,
+        limit: int = 5,
+    ) -> dict[str, Any]:
+        """List the last N documents in the tenant via the injected tool service.
+
+        Delegates to ``self.tools.list_documents``; the tool service holds the
+        actual DB query. The assistant surface here is the public contract the
+        route (or future LLM tool-call) calls.
+        """
+        return self.tools.list_documents(session, tenant_id, limit=limit)
 
     def _call_openrouter(
         self,
@@ -90,8 +121,8 @@ class AIAssistantService:
         base_url: str,
         text: str,
         history: list[dict[str, Any]] | None,
-    ) -> str:
-        """Perform one chat completion and return the assistant text."""
+    ) -> tuple[str, int | None, int | None, int | None]:
+        """Perform one chat completion and return (text, prompt_tokens, completion_tokens, total_tokens)."""
         messages = [
             {"role": m.get("role", "user"), "content": str(m.get("content", ""))}
             for m in (history or [])
@@ -121,7 +152,17 @@ class AIAssistantService:
             detail = exc.read().decode("utf-8", "replace")[:300]
             raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc
 
-        return data["choices"][0]["message"]["content"]
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens")
+        completion_tokens = usage.get("completion_tokens")
+        total_tokens = usage.get("total_tokens")
+
+        return (
+            data["choices"][0]["message"]["content"],
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        )
 
     def _wrap(
         self,
@@ -133,6 +174,9 @@ class AIAssistantService:
         *,
         live: bool,
         reply: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        total_tokens: int | None = None,
     ) -> dict[str, Any]:
         if reply is None:
             reply = (
@@ -145,6 +189,9 @@ class AIAssistantService:
             "connected": live,
             "model_used": model,
             "url_used": base_url,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
             "warning": warning,
             "created_at": dt.utcnow().isoformat() + "Z",
             "history": [
