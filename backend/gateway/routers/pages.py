@@ -12,6 +12,8 @@ Resolution order per request: active edition first, then common.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import logging
 import os
 import re
@@ -158,6 +160,32 @@ def _identity_ctx(request: Request) -> tuple[Any, auth.Identity | None]:
     return ctx, identity
 
 
+@contextmanager
+def _request_session(request: Request):
+    """Yield the request-scoped tenant session from the auth context.
+
+    The session is built once during auth resolution (``_identity_ctx``) and
+    cached on ``request.state.session`` so every DB call in the request - page
+    routes, the assistant, tool handlers - reuses the SAME tenant RLS-scoped
+    connection instead of opening its own. The single transaction is finalized
+    (commit on success / rollback on error) by the gateway's session middleware.
+
+    This context manager is intentionally a no-op on exit: it does not commit,
+    rollback, or close - those are owned by the middleware so the whole request
+    is one atomic unit over one shared connection.
+    """
+    session = getattr(request.state, "session", None)
+    if session is None:
+        # Defensive: build the session if a caller reached here without auth
+        # resolution (should not happen for protected routes).
+        ctx, identity = _identity_ctx(request)
+        if identity is None:
+            raise RuntimeError("No tenant session is available for an anonymous request.")
+        session = db.tenant_session_open(UUID(identity.tenant_id))
+        request.state.session = session
+    yield session
+
+
 def _base_context(request: Request) -> dict[str, Any]:
     ctx, identity = _identity_ctx(request)
     context: dict[str, Any] = {"request": request, "ctx": ctx}
@@ -176,7 +204,7 @@ def _base_context(request: Request) -> dict[str, Any]:
         tid = UUID(identity.tenant_id)
         setting = None
         try:
-            with db.tenant_session(tid) as session:
+            with _request_session(request) as session:
                 setting = setting_service.settings.get_for_tenant(session, tid)
         except (OperationalError, ProgrammingError):
             logger.warning("settings.unavailable", extra={"tenant": str(tid)})
@@ -359,7 +387,7 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
     editing_vertex_row = editing_edge_row = editing_rule_row = None
     revising_source_row = None
     next_revision_value = ""
-    with db.tenant_session(tenant_id) as session:
+    with _request_session(request) as session:
         vertices_page = vertices.list(session, tenant_id, limit=200)
         edges_page = edges.list(session, tenant_id, limit=200)
         rules_page = rules.list(session, limit=200)
@@ -535,7 +563,7 @@ def _rule_edit_view(row: dict, tenant_id: UUID) -> dict:
 
 
 def _live_graph_view(tenant_id: UUID, number: str, source: str, relation: str, target: str) -> dict | None:
-    with db.tenant_session(tenant_id) as session:
+    with _request_session(request) as session:
         vertices_page = vertices.list(session, tenant_id, limit=200)
         edges_page = edges.list(session, tenant_id, limit=200)
 
@@ -772,7 +800,7 @@ def graph_vertex_update(
     tid = UUID(ident.tenant_id)
     try:
         changes: dict[str, Any] = {"version": version}
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             current = vertices.get(session, tid, vertex_id)
             if name and name != current["name"]:
                 changes["name"] = name.strip()
@@ -800,7 +828,7 @@ def graph_vertex_delete(request: Request, vertex_id: UUID, version: int = Form(.
         return ident
     tid = UUID(ident.tenant_id)
     try:
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             vertices.soft_delete(session, tid, vertex_id, version=version, actor=_actor(request))
         return _graph_redirect("vertex", msg="vertex marked for deletion")
     except (ServiceError, ValueError) as exc:
@@ -828,7 +856,7 @@ def graph_edge_create(
         return _graph_redirect("edge", err="pick both a source and a target vertex")
     try:
         annotation = _parse_attributes(attributes)
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             source = vertices.get(session, tid, source_id)
             target = vertices.get(session, tid, target_id)
             data = EdgeCreate(
@@ -868,7 +896,7 @@ def graph_edge_update(
     try:
         annotation = _parse_attributes(attributes)
         changes: dict[str, Any] = {"version": version}
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             current = edge_service.get_edge(session, tid, edge_id)
             if name and name != current["name"]:
                 changes["name"] = name.strip()
@@ -1029,7 +1057,7 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
     q = (params.get("q") or "").strip()
     tid = UUID(ident.tenant_id)
 
-    with db.tenant_session(tid) as session:
+    with _request_session(request) as session:
         page = documents.list(
             session,
             tid,
@@ -1156,7 +1184,7 @@ def document_create_action(
             description=description.strip(),
             release_on=_opt_date(release_on),
         )
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             created = documents.create(
                 session,
                 tid,
@@ -1190,7 +1218,7 @@ def document_update_action(
     actor = _actor(request)
     try:
         changes: dict[str, Any] = {"version": version}
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             current = documents.get(session, tid, vertex_id)
             if name and name != current["name"]:
                 changes["name"] = name.strip()
@@ -1251,7 +1279,7 @@ def document_delete_action(request: Request, vertex_id: UUID, version: int = For
         return ident
     tid = UUID(ident.tenant_id)
     try:
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             vertices.soft_delete(session, tid, vertex_id, version=version, actor=_actor(request))
         return _documents_redirect(msg="document marked for deletion")
     except (ServiceError, ValueError) as exc:
@@ -1306,7 +1334,7 @@ def document_download_action(request: Request, vertex_id: UUID) -> StreamingResp
         return ident
     tid = UUID(ident.tenant_id)
     try:
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             stream, filename, mime, size = documents.download(session, tid, vertex_id)
     except ServiceError as exc:
         return _documents_redirect(err=str(exc))
@@ -1360,7 +1388,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
             tenant_users = users.list(session, editing_tenant["id"], limit=200).items
         with db.admin_session() as session:
             tenant_candidates = users.list_outside_tenant(session, editing_tenant["id"])
-    with db.tenant_session(tid) as session:
+    with _request_session(request) as session:
         users_page = users.list(session, tid, limit=200)
         roles_page = roles.list(session, tenant_id=tid, limit=200)
         user_roles = roles.roles_by_user(session, tid)
@@ -1375,7 +1403,7 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
 
     permissions_view: list[dict[str, Any]] = []
     if tab == "permissions":
-        with db.tenant_session(tid) as session:
+        with _request_session(request) as session:
             catalog = roles.list_permissions(session, limit=200).items
             grants: dict[str, set[str]] = {}
             for r in roles_page.items:
@@ -2046,7 +2074,7 @@ def settings_update(request: Request, content: str = Form("")) -> RedirectRespon
     if isinstance(ident, RedirectResponse):
         return ident
     tid = UUID(ident.tenant_id)
-    with db.tenant_session(tid) as session:
+    with _request_session(request) as session:
         setting = setting_service.settings.get_for_tenant(session, tid)
     new_content = (content or "").replace("\r\n", "\n")
     try:
