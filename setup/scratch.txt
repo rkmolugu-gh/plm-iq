@@ -1,8 +1,363 @@
+PLM-IQ SEARCH ARCHITECTURE
 
-Schema - Document needs mime type.
-buik upload based on file extension set mime type.
-Document open should open the os app for the mime type.
+Implement/maintain the PLM-IQ search architecture using the following principles.
 
-name job appropriately - now it is just uid. if it is bulk file upload , index etc. it should show in job. 
+1. SOURCE OF TRUTH
 
-doc index.
+PostgreSQL is the authoritative source for:
+- PLM objects
+- object metadata
+- attributes
+- revisions
+- lifecycle/state
+- relationships / graph
+- workflows
+- permissions
+- document records
+
+Original PDF/DOCX/XLSX/etc. binaries are stored in object storage such as S3/MinIO.
+
+Elasticsearch is a DERIVED SEARCH PROJECTION only. It must never become the authoritative source for PLM relationships or business data.
+
+2. ELASTICSEARCH SEARCH INDICES
+
+Maintain separate Elasticsearch indices for different search concerns.
+
+A. PLM METADATA INDEX
+
+The existing metadata BM25 index should contain searchable PLM object information such as:
+- object_id
+- object_type
+- name
+- description
+- classification
+- identifiers
+- important attributes
+- graph_context
+- tenant_id
+- lifecycle state
+- revision information
+- searchable permissions/ACL identifiers where required
+
+Use BM25/full-text search for:
+- object names
+- descriptions
+- classifications
+- engineering terminology
+- identifiers where appropriate
+
+Use keyword fields for:
+- tenant_id
+- object_id
+- state
+- revision_id
+- exact identifiers
+- security/filter fields
+
+B. DOCUMENT CONTENT INDEX
+
+Create a separate Elasticsearch index for extracted document content.
+
+Do NOT store the original PDF/DOCX binary in Elasticsearch.
+
+Pipeline:
+
+Original Document
+    -> document extraction
+    -> structured document
+    -> chunking
+    -> PLM graph enrichment
+    -> Elasticsearch content index
+
+Each content chunk should retain enough provenance to locate the original content.
+
+Recommended fields:
+
+- tenant_id
+- object_id
+- revision_id
+- document_id
+- chunk_id
+- chunk_index
+- page_start
+- page_end
+- section
+- heading/path
+- content
+- graph_context
+- document metadata
+- lifecycle/security filtering fields
+
+The content field must be Elasticsearch "text" and searchable using BM25/full-text search.
+
+3. DOCUMENT EXTRACTION AND CHUNKING
+
+Use an open-source document processing library such as Docling.
+
+Preferred pipeline:
+
+PDF/DOCX/etc.
+    -> Docling
+    -> structured document representation
+    -> HybridChunker
+    -> chunks with document structure/provenance
+
+Preserve:
+- headings
+- sections
+- paragraphs
+- tables where practical
+- page/provenance information
+- document hierarchy
+
+Do not use arbitrary fixed-character splitting unless there is a demonstrated reason.
+
+The objective is retrieval-quality chunks, not merely equal-sized text fragments.
+
+4. GRAPH-AWARE CONTENT
+
+PLM-IQ has a graph-based metadata model.
+
+Do not flatten the entire graph into every document/chunk.
+
+For each PLM object/document, generate a controlled semantic graph context from relevant relationships.
+
+Example:
+
+Object:
+Electric Motor Assembly
+
+Graph context:
+
+"Electric Motor Assembly is part of EV Platform.
+It is manufactured by ABC Motors.
+It uses Aluminium.
+It satisfies Motor Performance Requirement."
+
+Preserve relationship semantics. Do NOT represent relationships merely as an unordered list of IDs/names.
+
+Use controlled graph traversal:
+- primarily direct relationships
+- optionally selected 2-hop/derived relationships
+- relationship-type-specific inclusion rules
+- avoid unrestricted graph traversal and graph explosion
+
+The graph remains authoritative in PostgreSQL.
+
+graph_context in Elasticsearch is only a search projection.
+
+5. SEARCH API
+
+Expose one unified PLM-IQ search API to the application/user.
+
+The user should not need to know whether a result came from metadata or document content.
+
+A query such as:
+
+"electric motor thermal requirements for EV platform"
+
+may search:
+
+- metadata BM25
+- document-content BM25
+- graph_context
+- structured filters
+- graph relationships
+
+Combine/fuse the candidate results and return PLM-level results.
+
+Content matches should be mapped back to:
+object_id / revision_id / document_id.
+
+The search API should support result provenance so the UI can show:
+- object
+- document
+- revision
+- section
+- page
+- matching passage/highlight
+
+6. FILTERING
+
+Use Elasticsearch filters for high-selectivity structured constraints where practical:
+
+- tenant_id
+- lifecycle state
+- revision
+- object type
+- project
+- permissions/security identifiers
+
+Do not rely on semantic/vector similarity to enforce authorization or tenant isolation.
+
+Security filtering must be deterministic.
+
+7. BM25 + VECTOR SEARCH
+
+Do NOT replace BM25 with embeddings.
+
+Treat them as complementary retrieval mechanisms.
+
+Current implementation:
+
+Metadata:
+    BM25
+
+Document content:
+    BM25
+
+Future implementation:
+
+Metadata:
+    BM25 + vector
+
+Document content:
+    BM25 + vector
+
+Eventually support hybrid retrieval:
+
+Query
+  -> metadata BM25
+  -> content BM25
+  -> metadata vector
+  -> content vector
+  -> graph filtering/validation
+  -> result fusion/reranking
+
+Do not introduce embeddings until BM25 extraction, chunking, filtering, provenance and ranking are working correctly.
+
+8. FUTURE EMBEDDINGS
+
+When embeddings are introduced:
+
+- generate embeddings from meaningful semantic text
+- metadata embeddings should include relevant metadata and controlled graph context
+- document embeddings should normally use chunk-level content plus useful heading/context
+- do not embed raw IDs, lifecycle values, tenant IDs, etc. as the primary semantic representation
+- store embeddings in Elasticsearch alongside the relevant search document
+- keep the original text used to generate the embedding available for reproducibility/debugging
+
+Embedding generation must be deterministic/reproducible from the source projection where possible.
+
+9. INDEXING ARCHITECTURE
+
+Use an asynchronous indexing pipeline.
+
+PostgreSQL/domain changes
+    -> domain event / outbox
+    -> indexing worker
+    -> build search projection
+    -> Elasticsearch bulk indexing
+
+Document changes:
+
+Object Storage
+    -> extraction worker
+    -> chunking
+    -> PLM graph enrichment
+    -> search projection
+    -> Elasticsearch bulk indexing
+
+Do not make Elasticsearch writes the primary transaction for a PLM operation.
+
+PostgreSQL transaction succeeds independently; search indexing is eventually consistent.
+
+Use an outbox/event mechanism where appropriate.
+
+10. REINDEXING
+
+Elasticsearch must be rebuildable from authoritative data.
+
+The implementation should allow:
+
+PostgreSQL + Object Storage
+    -> regenerate search projection
+    -> recreate Elasticsearch index
+
+Do not design the system such that loss of Elasticsearch causes loss of business data.
+
+Use versioned Elasticsearch index names and aliases where appropriate:
+
+plm_metadata_v1
+plm_metadata_v2
+
+plm_content_v1
+plm_content_v2
+
+Then switch aliases after successful reindexing.
+
+11. ELASTICSEARCH DOCUMENT CONTENT
+
+For a document such as:
+
+Motor Specification.pdf
+
+do NOT create one huge Elasticsearch document containing the entire PDF text.
+
+Instead create chunks such as:
+
+DOC-123 / chunk 001
+DOC-123 / chunk 002
+DOC-123 / chunk 003
+...
+
+Each chunk should contain provenance.
+
+Example:
+
+{
+  "tenant_id": "tenant-1",
+  "object_id": "MTR-400-023",
+  "revision_id": "MTR-400-023-B",
+  "document_id": "DOC-123",
+  "chunk_id": "42",
+  "page_start": 27,
+  "page_end": 28,
+  "section": "Thermal Requirements",
+  "content": "The motor temperature shall not exceed 120°C.",
+  "graph_context": "Electric Motor Assembly is part of EV Platform..."
+}
+
+12. SEARCH RESULT UX
+
+Content search results should provide:
+
+- object identity
+- object type
+- revision
+- document name
+- page
+- section
+- matching passage
+- highlight
+- relevance score
+- relationship context where useful
+
+The user should be able to select a result and navigate to the original document/page.
+
+13. IMPLEMENTATION PRINCIPLES
+
+Prefer simple, explicit components over unnecessary frameworks.
+
+Use:
+- PostgreSQL for authoritative PLM data and graph relationships
+- S3/MinIO/object storage for original documents
+- Docling for document extraction/structure
+- HybridChunker for document chunking
+- Elasticsearch for BM25/full-text and later vector retrieval
+
+Keep extraction, graph enrichment, indexing and search as separate services/modules.
+
+Do not introduce LangChain or another orchestration framework unless there is a concrete requirement for it.
+
+Prioritize:
+- correctness
+- tenant isolation
+- deterministic indexing
+- rebuildability
+- provenance
+- observability
+- testability
+- incremental adoption
+
+When modifying existing code, preserve the current metadata BM25 search and extend it with document-content search rather than replacing the existing search architecture.

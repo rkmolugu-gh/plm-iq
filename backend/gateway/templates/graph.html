@@ -16,6 +16,21 @@
 {% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
 {% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
 
+<!-- Developer Commands -->
+<section class="module-card">
+  <h2>Developer Commands</h2>
+  <ul>
+    <li><code>curl -s http://localhost:9200/_cat/indices?v</code> – List all indices</li>
+    <li><code>curl -s http://localhost:9200/plm-iq-vertices/_mapping?pretty</code> – View vertex mapping</li>
+    <li><code>curl -s http://localhost:9200/plm-iq-edges/_mapping?pretty</code> – View edge mapping</li>
+    <li><code>curl -s "http://localhost:9200/plm-iq-vertices/_search?size=5&pretty"</code> – Sample vertices (5 docs)</li>
+    <li><code>curl -s "http://localhost:9200/plm-iq-edges/_search?size=5&pretty"</code> – Sample edges (5 docs)</li>
+    <li><code>curl -s "http://localhost:9200/plm-iq-vertices/_count?pretty"</code> – Vertex count</li>
+    <li><code>curl -s "http://localhost:9200/plm-iq-edges/_count?pretty"</code> – Edge count</li>
+    <li><code>curl -s "http://localhost:9200/plm-iq-vertices/_search?pretty" -H 'Content-Type: application/json' -d '{"query":{"match":{"kind":"Item"}}}'</code> – Search by kind=Item</li>
+  </ul>
+</section>
+
 <nav class="tabs" aria-label="Graph entities">
   <a class="tab{{ ' is-active' if tab == 'vertex' }}" href="/graph?tab=vertex">
     Vertices <span class="tab-count">{{ gv_vertices | length }}</span>

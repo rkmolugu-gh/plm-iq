@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Developer · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Developer Tools</h1>
+  <p class="hero-sub dash-note">Internal utilities for studying system internals.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card" style="margin-top:1.5rem;">
+  <h2>Elasticsearch Internals</h2>
+  <p class="table-desc">Browse ES indices, mappings, and data directly. Replace <code>&lt;slug&gt;</code> with your tenant subdomain (e.g. <code>plm-iq</code>).</p>
+
+  <form class="filter-bar" method="get" action="/developer">
+    <label class="filter-field">
+      Tenant Slug
+      <input name="slug" value="{{ slug or '' }}" placeholder="plm-iq" required>
+    </label>
+    <button class="btn btn-primary btn-sm" type="submit">Load</button>
+  </form>
+
+  {% if slug %}
+  {% set vs = (slug + '-vertices') %}
+  {% set es = (slug + '-edges') %}
+  <details open>
+    <summary class="nav-menu-btn" style="margin-bottom:0.75rem;">Index Status <span class="chev">&#9662;</span></summary>
+    <table class="data-table">
+      <thead><tr><th>Index</th><th>Health</th><th>Status</th><th>Docs</th><th>Store Size</th></tr></thead>
+      <tbody>
+        <tr><td class="cell-mono">{{ vs }}</td><td><span class="pill">green</span></td><td>open</td><td>{{ vertex_count or '?' }}</td><td>—</td></tr>
+        <tr><td class="cell-mono">{{ es }}</td><td><span class="pill">green</span></td><td>open</td><td>{{ edge_count or '?' }}</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </details>
+
+  <details style="margin-top:1rem;">
+    <summary class="nav-menu-btn" style="margin-bottom:0.75rem;">Vertex Mapping <span class="chev">&#9662;</span></summary>
+    <pre style="overflow:auto;max-height:320px;font-size:0.82rem;background:var(--bg);padding:1rem;border-radius:8px;">{
+  "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+  "mappings": {
+    "properties": {
+      "id":            {"type": "keyword"},
+      "entity_type":   {"type": "keyword"},
+      "tenant_id":     {"type": "keyword"},
+      "edition_id":    {"type": "keyword"},
+      "kind":          {"type": "keyword"},
+      "prefix":        {"type": "keyword"},
+      "number":        {"type": "keyword"},
+      "display_number":{"type": "keyword", "fields": {"text": {"type": "text"}}},
+      "name":          {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+      "description":   {"type": "text"},
+      "revision":      {"type": "keyword"},
+      "lifecycle_state":{"type": "keyword"},
+      "release_on":    {"type": "date"},
+      "version":       {"type": "long"},
+      "solution_attributes":{"type": "flattened"},
+      "tenant_attributes":{"type": "flattened"},
+      "embedding":     {"type": "dense_vector", "dims": 1536, "index": true, "similarity": "cosine"}
+    }
+  }
+}</pre>
+  </details>
+
+  <details style="margin-top:1rem;">
+    <summary class="nav-menu-btn" style="margin-bottom:0.75rem;">Edge Mapping <span class="chev">&#9662;</span></summary>
+    <pre style="overflow:auto;max-height:320px;font-size:0.82rem;background:var(--bg);padding:1rem;border-radius:8px;">{
+  "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+  "mappings": {
+    "properties": {
+      "id":              {"type": "keyword"},
+      "entity_type":     {"type": "keyword"},
+      "tenant_id":       {"type": "keyword"},
+      "kind":            {"type": "keyword"},
+      "name":            {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+      "source_vertex_id":{"type": "keyword"},
+      "target_vertex_id":{"type": "keyword"},
+      "source_display":  {"type": "keyword", "fields": {"text": {"type": "text"}}},
+      "target_display":  {"type": "keyword", "fields": {"text": {"type": "text"}}},
+      "source_name":     {"type": "text"},
+      "target_name":     {"type": "text"},
+      "lifecycle_state": {"type": "keyword"},
+      "annotation":      {"type": "flattened"},
+      "embedding":       {"type": "dense_vector", "dims": 1536, "index": true, "similarity": "cosine"}
+    }
+  }
+}</pre>
+  </details>
+
+  <details style="margin-top:1rem;">
+    <summary class="nav-menu-btn" style="margin-bottom:0.75rem;">ES Commands <span class="chev">&#9662;</span></summary>
+    <table class="data-table">
+      <thead><tr><th>Action</th><th>cURL Command</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>List all indices</td>
+          <td><code>curl -s http://localhost:9200/_cat/indices?v</code></td>
+        </tr>
+        <tr>
+          <td>View vertex mapping</td>
+          <td><code>curl -s http://localhost:9200/{{ vs }}/_mapping?pretty</code></td>
+        </tr>
+        <tr>
+          <td>View edge mapping</td>
+          <td><code>curl -s http://localhost:9200/{{ es }}/_mapping?pretty</code></td>
+        </tr>
+        <tr>
+          <td>Sample vertices (5 docs)</td>
+          <td><code>curl -s "http://localhost:9200/{{ vs }}/_search?size=5&pretty"</code></td>
+        </tr>
+        <tr>
+          <td>Sample edges (5 docs)</td>
+          <td><code>curl -s "http://localhost:9200/{{ es }}/_search?size=5&pretty"</code></td>
+        </tr>
+        <tr>
+          <td>Vertex count</td>
+          <td><code>curl -s "http://localhost:9200/{{ vs }}/_count?pretty"</code></td>
+        </tr>
+        <tr>
+          <td>Edge count</td>
+          <td><code>curl -s "http://localhost:9200/{{ es }}/_count?pretty"</code></td>
+        </tr>
+        <tr>
+          <td>Search by kind=Item</td>
+          <td><code>curl -s "http://localhost:9200/{{ vs }}/_search?pretty" -H 'Content-Type: application/json' -d '{"query":{"match":{"kind":"Item"}}}'</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </details>
+
+  <div style="margin-top:1.5rem;padding:0.75rem 1rem;background:var(--accent-soft);border-radius:var(--radius);font-size:0.85rem;color:var(--ink-soft);">
+    <strong>Note:</strong> All commands target <code>http://localhost:9200</code>. Ensure Elasticsearch is running. For Kibana GUI access, visit <code>http://localhost:5601</code>.
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

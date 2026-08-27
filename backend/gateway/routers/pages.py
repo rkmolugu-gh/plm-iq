@@ -35,6 +35,7 @@ from services import db, edge_service, enums, es_client, graph_rule_service, ind
 from services.bulk_file_upload_service import bulk_uploads
 from services.document_service import documents
 from services.es_client import es
+from services.es_dev_service import es_dev
 from services.edge_service import edges
 from services.es_ingest_service import ingest
 from services.file_store import files
@@ -2096,6 +2097,29 @@ def settings_update(request: Request, content: str = Form("")) -> RedirectRespon
     except (OperationalError, ProgrammingError):
         return RedirectResponse("/settings?error=db", status_code=303)
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.get("/developer", response_class=HTMLResponse)
+def developer_page(request: Request, slug: str = "") -> HTMLResponse:
+    """Developer tools page - Elasticsearch internals viewer."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    s = (slug or "").strip()
+    if not s:
+        try:
+            with _request_session(request) as session:
+                tenant_row = tenants.find(session, UUID(ident.tenant_id))
+            s = index_service.slug_for(tenant_row["subdomain"]) if tenant_row else ""
+        except Exception:
+            pass
+    context.update(slug=s)
+    return _templates_for(context["ctx"]).TemplateResponse(
+        request, "developer.html", context, status_code=200
+    )
+
+
     context = _base_context(request)
     if not context["ctx"].matched_pattern:
         return _render_default(request)

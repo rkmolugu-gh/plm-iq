@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from .document_service import documents
 from .edge_service import edges
 from .errors import ServiceError
-from .graph_rule_service import graph_rules
+from .graph_rule_service import rules as graph_rules
 from .rule_engine import validator
 from .vertex_service import vertices
 
