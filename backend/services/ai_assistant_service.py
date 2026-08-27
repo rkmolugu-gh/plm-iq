@@ -132,12 +132,15 @@ class AIAssistantService:
         model: str | None = None,
         base_url: str | None = None,
         identity: Any = None,
+        session: Any = None,
     ) -> dict[str, Any]:
         """Produce an assistant reply, running the ReAct tool loop when needed.
 
-        Returns the stable contract (reply / model / created_at / history) plus a
-        ``warning`` field whenever the call could not be completed (missing key or
-        network/API failure) so the UI can alert the user.
+        The ``session`` (a tenant RLS-scoped SQLAlchemy session) is expected to
+        come from the auth context built during request resolution; when omitted
+        the assistant opens its own so it still works for direct/non-route
+        callers. Returns the stable contract (reply / model / created_at /
+        history) plus a ``warning`` field for failures.
         """
         # Store identity temporarily for tool access during this call.
         prior_identity = self.identity
@@ -164,11 +167,16 @@ class AIAssistantService:
             tid = UUID(str(tenant_id))
             conversation = self._build_conversation(text, history)
 
+            # Reuse the request-scoped session from the auth context if supplied;
+            # otherwise open (and own) one for this call's lifetime.
+            own_session = session is None
+            if own_session:
+                cm = tenant_session(tid)
+                session = cm.__enter__()
             try:
-                with tenant_session(tid) as session:
-                    reply, p_tok, c_tok, t_tok = self._run_tool_loop(
-                        conversation, model, base_url, api_key, session, tid
-                    )
+                reply, p_tok, c_tok, t_tok = self._run_tool_loop(
+                    conversation, model, base_url, api_key, session, tid
+                )
                 return self._wrap(
                     text, history, None, model, base_url, live=True,
                     reply=reply, prompt_tokens=p_tok,
@@ -178,6 +186,9 @@ class AIAssistantService:
                 warning = f"Could not reach the LLM at {base_url} (model {model}): {exc}"
                 logger.warning("ai_assistant.llm_error", extra={"tenant": str(tid), "error": str(exc)})
                 return self._wrap(text, history, warning, model, base_url, live=False)
+            finally:
+                if own_session:
+                    cm.__exit__(None, None, None)
         finally:
             # Restore prior identity (the singleton is shared across requests).
             self.identity = prior_identity

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -41,9 +42,14 @@ _MAX_AGE_SECONDS = 12 * 60 * 60  # half a work day; sign-in again after that
 _REMEMBER_MAX_AGE_SECONDS = 30 * 24 * 60 * 60  # 'Keep me signed in': 30 days
 
 
-@dataclass(frozen=True)
+@dataclass
 class Identity:
-    """Everything the UI needs about who is signed in right now."""
+    """Everything the UI needs about who is signed in right now.
+
+    ``session`` is populated by the gateway during request resolution: it is the
+    request-scoped tenant RLS session the assistant (and any tool) should reuse
+    instead of opening its own. It is ``None`` until the auth flow attaches it.
+    """
 
     tenant_id: str
     tenant_name: str
@@ -57,6 +63,7 @@ class Identity:
     is_tenant_admin: bool
     role_names: list[str]
     role_label: str
+    session: Any = None
 
 
 class SessionManager:

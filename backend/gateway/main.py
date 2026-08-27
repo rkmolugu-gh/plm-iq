@@ -37,6 +37,26 @@ def create_app() -> FastAPI:
             response.headers["Cache-Control"] = "no-store"
         return response
 
+    @app.middleware("http")
+    async def close_request_session(request, call_next):
+        """Close the request-scoped tenant session attached during auth.
+
+        ``_identity_ctx`` opens one tenant RLS session per request and stores it
+        on ``request.state.session`` (shared with the assistant/tooling). This
+        middleware closes it once the response is produced so connections are
+        never leaked.
+        """
+        try:
+            return await call_next(request)
+        finally:
+            session = getattr(request.state, "session", None)
+            if session is not None:
+                try:
+                    session.close()
+                except Exception:  # noqa: BLE001 - never mask the real response
+                    logging.getLogger(__name__).warning("request.session.close_failed")
+                request.state.session = None
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}

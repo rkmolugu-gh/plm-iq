@@ -117,10 +117,33 @@ def _templates_for(ctx: TenantContext) -> Jinja2Templates:
 
 
 def _identity_ctx(request: Request) -> tuple[Any, auth.Identity | None]:
-    """Signed-in identity wins over host-derived context; None when anonymous."""
+    """Signed-in identity wins over host-derived context; None when anonymous.
+
+    Resolution is cached on ``request.state`` so repeated calls within one
+    request reuse the same ``Identity`` - and the same request-scoped tenant
+    session, which is built here at auth time and attached to the identity as
+    ``session`` so the assistant and tools can reuse it instead of opening
+    their own (closed by the gateway's session middleware).
+    """
+    cached = getattr(request.state, "identity", None)
+    if cached is not None or getattr(request.state, "_identity_resolved", False):
+        return request.state._ctx, request.state.identity
+
     identity = sessions.load_identity(request.cookies.get(sessions.cookie_name))
     if identity is None:
-        return tenant_resolver.resolve(request.headers.get('host')), None
+        ctx = tenant_resolver.resolve(request.headers.get('host'))
+        request.state._ctx = ctx
+        request.state.identity = None
+        request.state._identity_resolved = True
+        return ctx, None
+
+    # Build the request-scoped tenant session at auth time and attach it to the
+    # identity so everything downstream shares one RLS-scoped connection.
+    tid = UUID(identity.tenant_id)
+    session = db.tenant_session_open(tid)
+    request.state.session = session
+    identity.session = session
+
     ctx = TenantContext(
         tenant=identity.subdomain,
         edition=identity.edition_id,
@@ -129,6 +152,9 @@ def _identity_ctx(request: Request) -> tuple[Any, auth.Identity | None]:
         valid=True,
         matched_pattern=True,
     )
+    request.state._ctx = ctx
+    request.state.identity = identity
+    request.state._identity_resolved = True
     return ctx, identity
 
 
@@ -1974,6 +2000,7 @@ async def ai_assistant_chat(request: Request) -> JSONResponse:
         model=model,
         base_url=base_url,
         identity=ident,
+        session=getattr(request.state, "session", None),
     )
     return JSONResponse(result)
 

@@ -59,6 +59,24 @@ def tenant_session(tenant_id: UUID) -> Iterator[Session]:
         yield session
 
 
+def tenant_session_open(tenant_id: UUID) -> Session:
+    """Open a request-scoped Session carrying the RLS tenant GUC.
+
+    Unlike ``tenant_session`` this does NOT manage the transaction lifetime:
+    the caller (the gateway) owns the session for the whole request and must
+    close it (see the gateway's session middleware). Used so the auth flow can
+    build one tenant session and share it with the assistant and other tooling
+    instead of each opening its own.
+    """
+    session = SessionLocal()
+    session.begin()
+    session.execute(
+        text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+        {"tenant_id": str(tenant_id)},
+    )
+    return session
+
+
 @contextmanager
 def admin_session() -> Iterator[Session]:
     """Yield a plain transactional Session without the RLS tenant GUC.
