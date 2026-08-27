@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from . import enums
 from .ai_assistant_service import assistant
+from .llm_provider_service import llm
 from .tools_service import tools
 from .db import admin_session, engine, tenant_session
 from .errors import Conflict, Forbidden, NotFound, ServiceError, ValidationFailed
@@ -45,6 +46,7 @@ __all__ = [
     "ValidationFailed",
     "Forbidden",
     "assistant",
+    "llm",
     "tools",
     "VertexCreate",
     "VertexOut",

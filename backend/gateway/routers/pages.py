@@ -67,7 +67,7 @@ from services.schemas import (
     VertexUpdate,
 )
 from .. import auth, graph_view
-from ..auth import DatabaseUnavailable, sessions
+from ..auth import DatabaseUnavailable, Identity, sessions
 from ..resolver import TenantContext, tenant_resolver
 from ..settings import settings as _gateway_settings
 _EDITIONS = _gateway_settings.editions
@@ -1931,7 +1931,7 @@ def ai_assistant_page(request: Request) -> HTMLResponse:
     chat_url = settings_map.get("llmproviderurl") or DEFAULT_BASE_URL
     context.update(
         show_nav=True,
-        greeting=assistant.greeting,
+        greeting=assistant.build_greeting(ident),
         assistant_warning=not bool(os.getenv("OPENROUTER_API_KEY")),
         chat_model=chat_model,
         chat_url=chat_url,
@@ -1973,6 +1973,7 @@ async def ai_assistant_chat(request: Request) -> JSONResponse:
         tenant=ident.tenant_id if ident else None,
         model=model,
         base_url=base_url,
+        identity=ident,
     )
     return JSONResponse(result)
 
