@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">{{ page_title }}</h1>
+  <p class="hero-sub dash-note">{{ page_sub }}</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+  <p class="cell-anno">This module is under development. Check back later for BOM management features.</p>
+</section>
+{% endblock %}

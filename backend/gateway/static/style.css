@@ -71,7 +71,9 @@ code {
   gap: 0.6rem;
   text-decoration: none;
   color: inherit;
+  transition: color 0.15s, opacity 0.15s;
 }
+.brand:hover { color: var(--accent); opacity: 0.85; }
 
 .brand-mark {
   font-weight: 700;
@@ -186,6 +188,10 @@ code {
   color: var(--accent);
   font-weight: 600;
   background: var(--accent-soft);
+}
+.sidenav .nav-menu-list .nav-item.is-active {
+  background: #cfe0f5;
+  color: #0f4c81;
 }
 
 .nav-item.is-disabled {
@@ -714,6 +720,15 @@ code {
 }
 
 .sidenav .nav-menu { margin-bottom: 0.25rem; }
+
+.sidenav .nav-root {
+  display: block;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
 
 .sidenav .nav-menu-btn {
   width: 100%;

@@ -2834,3 +2834,37 @@ def workflow_template_delete(request: Request, definition_id: UUID) -> RedirectR
         return RedirectResponse("/admin/workflow-templates?msg=" + quote("template deleted"), status_code=303)
     except (ServiceError, ValueError) as exc:
         return RedirectResponse("/admin/workflow-templates?err=" + quote(str(exc)), status_code=303)
+
+
+# ── Function placeholder pages (BOM / Quality) ────────────────────────────────
+
+@router.get("/bom", response_class=HTMLResponse, response_model=None)
+def bom_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+    context.update(
+        page_title="BOM",
+        page_sub="Bill of Materials explorer - coming soon",
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "bom.html", context)
+
+
+@router.get("/quality", response_class=HTMLResponse, response_model=None)
+def quality_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+    context.update(
+        page_title="Quality",
+        page_sub="Quality management - coming soon",
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "quality.html", context)

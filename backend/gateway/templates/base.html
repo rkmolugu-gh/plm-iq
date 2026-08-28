@@ -14,7 +14,7 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="topbar-left">
-        <a class="brand" href="{{ l_brand }}">
+        <a class="brand" href="/dashboard">
           <span class="brand-mark">PLM-IQ The intelligent PLM</span>
           {% if ctx.valid %}
           <span class="edition-badge">{{ ctx.edition_label }}</span>
@@ -61,14 +61,21 @@
     {% if user %}
     <aside class="sidenav">
       <nav aria-label="Workspace">
+        <a class="nav-item nav-root{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
         <details class="nav-menu" open>
           <summary class="nav-menu-btn">Domain <span class="chev">&#9662;</span></summary>
           <div class="nav-menu-list">
-            <a class="nav-item{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
             <a class="nav-item{{ ' is-active' if request.url.path.startswith('/documents') }}" href="/documents">Documents</a>
             <a class="nav-item{{ ' is-active' if request.url.path.startswith('/parts') }}" href="/parts">Parts</a>
-            <a class="nav-item{{ ' is-active' if request.url.path == '/workflow' }}" href="/workflow">Workflow</a>
             <a class="nav-item{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">Graph</a>
+          </div>
+        </details>
+        <details class="nav-menu" open>
+          <summary class="nav-menu-btn">Function <span class="chev">&#9662;</span></summary>
+          <div class="nav-menu-list">
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/bom') }}" href="/bom">BOM</a>
+            <a class="nav-item{{ ' is-active' if request.url.path == '/workflow' }}" href="/workflow">Workflow</a>
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/quality') }}" href="/quality">Quality</a>
           </div>
         </details>
         <details class="nav-menu" open>
