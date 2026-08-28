@@ -31,9 +31,13 @@
       <label>Active<input type="checkbox" name="is_active"{{ ' checked' if editing.is_active }}></label>
       <label>Description<input name="description" value="{{ editing.description }}"></label>
     </div>
-    <label>Definition (JSON)
-      <textarea name="definition" rows="12" style="width:100%;font-family:monospace">{{ editing.definition_text }}</textarea>
-    </label>
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:1rem;">
+      <div style="flex:1;min-width:320px;">
+        <label>Definition (JSON)
+          <textarea name="definition" id="tmplDef" rows="16" style="width:100%;font-family:monospace">{{ editing.definition_text }}</textarea>
+        </label>
+      </div>
+    </div>
   </form>
   {% else %}
   <form class="crud-form" method="post" action="/admin/workflow-templates/create">
@@ -62,6 +66,36 @@
     </label>
   </form>
   {% endif %}
+
+  {% include "workflow/_mermaid.html" %}
+  <div id="tmplDiagramSection" style="display:none;margin-top:1.5rem;">
+    <h3>Diagram Preview</h3>
+    <p class="cell-anno">Live preview of the workflow definition.</p>
+    <div class="mermaid-container">
+      <div id="tmplDiagram"></div>
+    </div>
+  </div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var ta = document.getElementById('tmplDef');
+    if (!ta) return;
+    var section = document.getElementById('tmplDiagramSection');
+    var box = document.getElementById('tmplDiagram');
+    if (!box) return;
+    function tmplRender() {
+      var raw = (ta.value || '').trim();
+      if (!raw) { box.innerHTML = '<div class="cell-anno">Definition is empty.</div>'; return; }
+      var def;
+      try { def = JSON.parse(raw); }
+      catch (e) { box.innerHTML = '<div class="flash flash-err">Invalid JSON: ' + plmEscapeMermaid(e.message) + '</div>'; return; }
+      plmRenderMermaid(box, plmBuildMermaidWithTooltips(def));
+    }
+    if (section) section.style.display = 'block';
+    ta.addEventListener('input', tmplRender);
+    tmplRender();
+  });
+  </script>
 
   <h2>Templates</h2>
   <table class="data-table">

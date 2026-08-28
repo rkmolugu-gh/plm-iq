@@ -62,6 +62,7 @@ class Identity:
     full_name: str
     is_tenant_admin: bool
     role_names: list[str]
+    role_codes: list[str]
     role_label: str
     session: Any = None
 
@@ -135,6 +136,7 @@ class SessionManager:
             return None
 
         role_names = [r.name for r in roles_list]
+        role_codes = [r.code for r in roles_list]
         label = ", ".join(role_names) if role_names else (
             "Tenant Administrator" if user["is_tenant_admin"] else "User"
         )
@@ -154,6 +156,7 @@ class SessionManager:
             full_name=user["full_name"],
             is_tenant_admin=bool(user["is_tenant_admin"]),
             role_names=role_names,
+            role_codes=role_codes,
             role_label=label,
         )
 
@@ -165,7 +168,6 @@ class SessionManager:
         bcrypt hash must match. Accounts without a password hash cannot sign in.
         """
         import bcrypt
-
         from services import db
         from services.tenant_service import tenants
         from services.user_service import users

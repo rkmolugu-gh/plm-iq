@@ -69,6 +69,17 @@
           {% if v.job %}
             <span class="pill">{{ v.job.status }}</span>
             {% if v.job.result_status %}<span class="cell-anno"> &rarr; {{ v.job.result_status }}</span>{% endif %}
+            <button type="button" class="wf-diagram-btn" data-instance="{{ v.job.id }}"
+                    title="Show workflow status" aria-label="Show workflow status for {{ v.label }}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="6" rx="1.2"/>
+                <rect x="14" y="3" width="7" height="6" rx="1.2"/>
+                <rect x="8.5" y="15" width="7" height="6" rx="1.2"/>
+                <path d="M6.5 9v2.5a2 2 0 0 0 2 2h2.5"/>
+                <path d="M17.5 9v2.5a2 2 0 0 1-2 2H13"/>
+                <path d="M12 13.5V15"/>
+              </svg>
+            </button>
           {% else %}
             <span class="cell-anno">&mdash;</span>
           {% endif %}
@@ -93,4 +104,95 @@
     </tbody>
   </table>
 </section>
+
+{# ── Workflow status modal ─────────────────────────────────────────────── #}
+<style>
+  .wf-diagram-btn {
+    margin-left: 0.5rem;
+    padding: 4px 7px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #495057;
+    cursor: pointer;
+    line-height: 1;
+    vertical-align: middle;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .wf-diagram-btn:hover { background: #e9ecef; color: #212529; border-color: #adb5bd; }
+  .wf-modal { position: fixed; inset: 0; z-index: 1000; display: none; }
+  .wf-modal-backdrop {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45);
+  }
+  .wf-modal-box {
+    position: relative; margin: 6vh auto 0; width: min(900px, 92vw);
+    background: #ffffff; border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .wf-modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.9rem 1.2rem; border-bottom: 1px solid #e9ecef;
+  }
+  .wf-modal-head h3 { margin: 0; font-size: 1rem; }
+  .wf-modal-body { padding: 1rem 1.2rem; overflow: auto; }
+</style>
+
+<div id="wfModal" class="wf-modal" role="dialog" aria-modal="true" aria-label="Workflow status">
+  <div class="wf-modal-backdrop" onclick="plmCloseWfModal()"></div>
+  <div class="wf-modal-box">
+    <div class="wf-modal-head">
+      <h3 id="wfModalTitle">Workflow Status</h3>
+      <button class="btn-mini" type="button" onclick="plmCloseWfModal()">Close</button>
+    </div>
+    <div class="wf-modal-body">
+      <p class="cell-anno">
+        <span class="pill" style="background:#0f5132;color:#fff;">approved</span>
+        <span class="pill" style="background:#7f6000;color:#fff;">pending</span>
+        <span class="pill" style="background:#4b5563;color:#fff;">rejected</span>
+      </p>
+      <div class="mermaid-container">
+        <div id="wfModalDiagram"></div>
+      </div>
+      <p style="margin-top:0.75rem;">
+        <a class="btn-mini" id="wfModalLink" href="#">Open full instance &rarr;</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="jobDiagrams">{{ job_diagrams | tojson }}</script>
+{% include "workflow/_mermaid.html" %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var diagrams = {};
+    try { diagrams = JSON.parse(document.getElementById('jobDiagrams').textContent || '{}'); }
+    catch (e) { diagrams = {}; }
+
+    document.querySelectorAll('.wf-diagram-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var iid = btn.getAttribute('data-instance');
+        var data = diagrams[iid];
+        var title = document.getElementById('wfModalTitle');
+        var box = document.getElementById('wfModalDiagram');
+        var link = document.getElementById('wfModalLink');
+        if (title) title.textContent = 'Workflow status';
+        if (link) link.setAttribute('href', '/workflow/instance/' + iid);
+        if (box) {
+          if (data && data.definition && data.definition.stages && data.definition.stages.length) {
+            plmRenderMermaid(box, plmBuildMermaidWithTooltips(data.definition, data.statuses || null));
+          } else {
+            box.className = '';
+            box.innerHTML = '<div class="cell-anno">No workflow definition to visualize.</div>';
+          }
+        }
+        document.getElementById('wfModal').style.display = 'block';
+      });
+    });
+  });
+
+  function plmCloseWfModal() {
+    var modal = document.getElementById('wfModal');
+    if (modal) modal.style.display = 'none';
+  }
+</script>
 {% endblock %}

@@ -95,6 +95,8 @@
     <main class="page">{% block content %}{% endblock %}</main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>if (window.mermaid) mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });</script>
   <footer class="footer">
     <div class="footer-inner">
       {% if ctx.valid %}

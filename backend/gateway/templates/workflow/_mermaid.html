@@ -1,0 +1,262 @@
+{# Shared Mermaid helpers for workflow diagrams. Include this once per page that
+   needs to draw a workflow. Defines globals used by the template form and the
+   instance progress view. #}
+<style>
+  .plm-workflow-legend {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: #495057;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .plm-workflow-legend span { white-space: nowrap; }
+  .mermaid-container {
+    position: relative;
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    background: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .mermaid-container svg { max-width: 100%; height: auto; }
+  .mermaid-container .node.done .nodeLabel,
+  .mermaid-container .node.done .nodeLabel span,
+  .mermaid-container .node.pend .nodeLabel,
+  .mermaid-container .node.pend .nodeLabel span,
+  .mermaid-container .node.rej .nodeLabel,
+  .mermaid-container .node.rej .nodeLabel span {
+    color: #ffffff !important;
+  }
+  .mermaid-container .node.done .nodeLabel span,
+  .mermaid-container .node.pend .nodeLabel span,
+  .mermaid-container .node.rej .nodeLabel span {
+    color: rgba(255, 255, 255, 0.88) !important;
+  }
+  #plm-mermaid-tooltip {
+    position: fixed;
+    background: rgba(33, 37, 41, 0.92);
+    color: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.45;
+    max-width: 320px;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    display: none;
+  }
+</style>
+<script>
+  function plmEscapeMermaid(s) {
+    return String(s == null ? "" : s).replace(/"/g, "'").replace(/[\r\n]+/g, " ");
+  }
+
+  // Build a Mermaid `flowchart TD` string from a workflow definition object.
+  // statusByStepKey (optional) maps step key -> "approved"|"pending"|"rejected"
+  // and color-codes the nodes.
+  function plmBuildMermaid(def, statusByStepKey) {
+    statusByStepKey = statusByStepKey || null;
+    var stages = (def && def.stages) ? def.stages : [];
+    var lines = [
+      '%%{init: {"theme": "neutral", "themeVariables": {"fontSize": "16px", "fontFamily": "ui-sans-serif, system-ui, Segoe UI, sans-serif", "primaryColor": "#ffffff", "primaryTextColor": "#212529", "primaryBorderColor": "#adb5bd", "primaryFontSize": "16px", "lineColor": "#6c757d", "secondaryColor": "#f8f9fa", "tertiaryColor": "#ffffff"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 60, "rankSpacing": 80, "padding": 20, "useMaxWidth": true}}%%',
+      "flowchart TD"
+    ];
+    if (!stages.length) { lines.push('empty["No stages defined"]'); return lines.join("\n"); }
+
+    var stageEntries = [];
+    var stageExits = [];
+    var hasStartNode = false;
+    var hasEndNode = false;
+
+    stages.forEach(function (stage, si) {
+      var steps = stage.steps || [];
+      var sLabel = plmEscapeMermaid(stage.name || ("Stage " + (si + 1)));
+      if (stage.start) { hasStartNode = true; sLabel = "Start"; }
+      if (stage.end) { hasEndNode = true; sLabel = "End"; }
+      if (stage.parallel) {
+        sLabel += " [parallel]";
+        if (stage.threshold) sLabel += " (" + stage.threshold + " of " + steps.length + ")";
+      }
+      lines.push('subgraph S' + si + '["' + sLabel + '"]');
+      var nodeIds = [];
+      steps.forEach(function (step, ti) {
+        var nid = "n" + si + "_" + ti;
+        var name = plmEscapeMermaid(step.name || ("Step " + (ti + 1)));
+        var label = '<b>' + name + '</b>';
+
+        var details = [];
+        if (step.assignee) {
+          var parts = step.assignee.split(":");
+          var aType = parts[0];
+          var aVal = parts.slice(1).join(":");
+          if (aType === "role") {
+            details.push("\uD83D\uDC65 " + plmEscapeMermaid(aVal));
+          } else if (aType === "user") {
+            details.push("\uD83D\uDC64 " + plmEscapeMermaid(aVal));
+          } else if (aType === "system") {
+            details.push("\u2699\uFE0F " + plmEscapeMermaid(aVal));
+          } else {
+            details.push(plmEscapeMermaid(step.assignee));
+          }
+        }
+        if (step.due_days) details.push("\u23F1\uFE0F " + step.due_days + "d");
+        if (step.allowed_actions && step.allowed_actions.length) details.push("\u2705 " + step.allowed_actions.join(","));
+        if (step.notification) details.push("\uD83D\uDCE7 " + plmEscapeMermaid(step.notification));
+        if (details.length) label += '<br/><span style="font-size:13px;color:#495057;">' + details.join(" &nbsp; ") + "</span>";
+
+        var cls = "";
+        var stepKey = step.key || step.name || "";
+        if (statusByStepKey && stepKey && statusByStepKey[stepKey]) {
+          var st = statusByStepKey[stepKey];
+          if (st === "approved" || st === "APPROVED") cls = ":::done";
+          else if (st === "rejected" || st === "REJECTED") cls = ":::rej";
+          else cls = ":::pend";
+        }
+        lines.push(nid + '["' + label + '"]' + cls);
+        nodeIds.push(nid);
+
+        if (step.description) {
+          if (!window.plmNodeDescriptions) window.plmNodeDescriptions = {};
+          window.plmNodeDescriptions[nid] = step.description;
+          lines.push(nid + ':::hasDesc');
+        }
+      });
+      if (!stage.parallel && nodeIds.length > 1) {
+        for (var i = 0; i < nodeIds.length - 1; i++) lines.push(nodeIds[i] + " --> " + nodeIds[i + 1]);
+      }
+      lines.push("end");
+      if (stage.parallel) { stageEntries.push(nodeIds.slice()); stageExits.push(nodeIds.slice()); }
+      else { stageEntries.push(nodeIds.length ? [nodeIds[0]] : []); stageExits.push(nodeIds.length ? [nodeIds[nodeIds.length - 1]] : []); }
+    });
+
+    for (var si = 0; si < stages.length; si++) {
+      var entries = stageEntries[si];
+      var prevExits;
+      if (si === 0) { prevExits = hasStartNode ? [] : ["start"]; }
+      else { prevExits = stageExits[si - 1]; }
+      if (prevExits.length && entries.length) {
+        prevExits.forEach(function (from) { entries.forEach(function (to) { lines.push(from + " --> " + to); }); });
+      } else if (entries.length && !hasStartNode && si === 0) {
+        lines.push("start --> " + entries[0]);
+      }
+    }
+    if (!hasStartNode) lines.push('start(("Start"))');
+    if (!hasEndNode) {
+      stageExits[stageExits.length - 1].forEach(function (nid) { lines.push(nid + " --> finish"); });
+      lines.push('finish(("Done"))');
+    }
+    lines.push('classDef done fill:#0f5132,stroke:#0b3d25,color:#ffffff,font-size:14px;');
+    lines.push('classDef pend fill:#7f6000,stroke:#5a4700,color:#ffffff,font-size:14px;');
+    lines.push('classDef rej fill:#4b5563,stroke:#374151,color:#ffffff,font-size:14px;');
+    lines.push('classDef hasDesc stroke-dasharray: 5 3;');
+    return lines.join("\n");
+  }
+
+  window.plmBuildMermaidWithTooltips = function(def, statusByStepKey) {
+    window.plmNodeDescriptions = {};
+    return plmBuildMermaid(def, statusByStepKey);
+  };
+
+  var plmRenderPending = new Map();
+  async function plmRenderMermaid(containerEl, text, attempt) {
+    if (!containerEl) return;
+    var existingTimer = plmRenderPending.get(containerEl);
+    if (existingTimer) { clearTimeout(existingTimer); plmRenderPending.delete(containerEl); }
+    attempt = attempt || 0;
+    if (typeof mermaid === "undefined") {
+      if (attempt < 120) {
+        containerEl.className = "";
+        containerEl.innerHTML = '<div class="cell-anno">Loading workflow diagram…</div>';
+        var timer = window.setTimeout(function () { plmRenderPending.delete(containerEl); plmRenderMermaid(containerEl, text, attempt + 1); }, 100);
+        plmRenderPending.set(containerEl, timer);
+      } else {
+        containerEl.className = "";
+        containerEl.innerHTML = '<div class="flash flash-err">Mermaid failed to load. Check network or CDN access.</div>';
+      }
+      return;
+    }
+    if (mermaid.initialize && !mermaid._plmInitialized) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'neutral',
+        securityLevel: 'loose',
+        fontFamily: 'ui-sans-serif, system-ui, Segoe UI, sans-serif',
+        themeVariables: {
+          fontSize: '16px',
+          primaryColor: '#ffffff',
+          primaryTextColor: '#212529',
+          primaryBorderColor: '#adb5bd',
+          lineColor: '#6c757d',
+          secondaryColor: '#f8f9fa',
+        },
+        flowchart: { htmlLabels: true, curve: 'basis', nodeSpacing: 60, rankSpacing: 80, useMaxWidth: true },
+      });
+      mermaid._plmInitialized = true;
+    }
+    containerEl.className = "";
+    containerEl.removeAttribute("data-processed");
+    containerEl.textContent = text;
+    try {
+      await mermaid.run({ nodes: [containerEl] });
+      plmAddLegend(containerEl);
+      plmAddHoverTooltips(containerEl);
+    } catch (e) {
+      containerEl.className = "";
+      containerEl.innerHTML = '<div class="flash flash-err">Cannot render diagram: ' + plmEscapeMermaid(e && e.message ? e.message : e) + '</div>';
+    }
+  }
+
+  function plmAddLegend(containerEl) {
+    if (!containerEl) return;
+    var existing = containerEl.parentNode.querySelector('.plm-workflow-legend');
+    if (existing) existing.remove();
+    var legend = document.createElement('div');
+    legend.className = 'plm-workflow-legend';
+    legend.innerHTML = '<span>&#128100;=User</span> <span>&#128101;=Role</span> <span>&#9881;&#65039;=System</span> <span>&#9201;&#65039;=Due</span> <span>&#9989;=Actions</span> <span>&#128231;=Notify</span>';
+    containerEl.parentNode.appendChild(legend);
+  }
+
+  window.plmNodeDescriptions = {};
+  function plmAddHoverTooltips(containerEl) {
+    if (!containerEl) return;
+    var svg = containerEl.querySelector('svg');
+    if (!svg) return;
+    var nodes = svg.querySelectorAll('.hasDesc');
+    nodes.forEach(function(node) {
+      var nodeId = null;
+      var id = node.id || '';
+      var match = id.match(/n\d+_\d+/);
+      if (match) nodeId = match[0];
+      if (nodeId && window.plmNodeDescriptions[nodeId]) {
+        node.addEventListener('mouseenter', function(e) { plmShowHoverTooltip(e, window.plmNodeDescriptions[nodeId]); });
+        node.addEventListener('mouseleave', function() { plmHideHoverTooltip(); });
+      }
+    });
+  }
+
+  function plmShowHoverTooltip(e, description) {
+    var tooltip = document.getElementById('plm-mermaid-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.id = 'plm-mermaid-tooltip';
+      document.body.appendChild(tooltip);
+    }
+    tooltip.textContent = description;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY + 15) + 'px';
+  }
+
+  function plmHideHoverTooltip() {
+    var tooltip = document.getElementById('plm-mermaid-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+  }
+</script>

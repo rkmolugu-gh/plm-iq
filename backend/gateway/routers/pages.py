@@ -40,6 +40,7 @@ from services.file_store import files
 from services.graph_rule_service import rules
 from services.index_service import indexer, watermarks
 from services.jobs import registry
+from services.permission_service import permissions
 from services.role_service import roles
 from services.schema_seed_service import schema_deploy
 from services.schemas import (
@@ -1564,6 +1565,20 @@ def _require_identity(request: Request) -> auth.Identity | RedirectResponse:
     return identity
 
 
+def _require_platform_admin(request: Request) -> auth.Identity | RedirectResponse:
+    """Require a signed-in user holding the platform-admin role.
+
+    Returns the Identity on success, or a RedirectResponse to sign-in when
+    anonymous or lacking the role. Use as the first line of a protected
+    route, mirroring ``_require_identity``."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not permissions.is_platform_admin(ident.role_codes):
+        return RedirectResponse("/dashboard?err=" + quote("platform admin access required"), status_code=303)
+    return ident
+
+
 def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectResponse:
     identity = _require_identity(request)
     if isinstance(identity, RedirectResponse):
@@ -2309,8 +2324,10 @@ def settings_update(request: Request, content: str = Form("")) -> RedirectRespon
 
 @router.get("/developer", response_class=HTMLResponse)
 def developer_page(request: Request, slug: str = "") -> HTMLResponse:
-    """Developer tools page - Elasticsearch internals viewer + schema/seed deploy."""
-    ident = _require_identity(request)
+    """Developer tools page - Elasticsearch internals viewer + schema/seed deploy.
+
+    Restricted to platform-admin role holders."""
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     context = _base_context(request)
@@ -2340,6 +2357,9 @@ def developer_page(request: Request, slug: str = "") -> HTMLResponse:
 def developer_clear_cookies(request: Request) -> RedirectResponse:
     """Clear only the cookies this application sets (session, etc.), then
     bounce to sign-in. Browser cookies belonging to other sites are untouched."""
+    ident = _require_platform_admin(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     response = RedirectResponse("/signin?error=cookies-cleared", status_code=303)
     for name in request.cookies:
         if name == sessions.cookie_name or name.startswith(sessions.cookie_name):
@@ -2354,7 +2374,7 @@ def schema_seed_run(
     actions: str = Form("schema"),
 ) -> RedirectResponse:
     """Start a schema/seed deploy job, then clear cookies (DB changes force logout)."""
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     action_list = [a.strip() for a in actions.split(",") if a.strip()]
@@ -2427,6 +2447,35 @@ def _job_view(job: dict) -> dict:
     }
 
 
+def _workflow_task_statuses(tasks: list[dict]) -> dict[str, str]:
+    """Aggregate task rows (with step_key/status) into a step-key -> status map.
+
+    Mirrors the client-side aggregation on the instance page: any rejected task
+    makes the step rejected; all approved makes it approved; otherwise pending.
+    """
+    agg: dict[str, dict[str, int]] = {}
+    for t in tasks:
+        key = t.get("step_key")
+        if not key:
+            continue
+        entry = agg.setdefault(key, {"total": 0, "approved": 0, "rejected": 0})
+        entry["total"] += 1
+        status = t["status"].value if hasattr(t["status"], "value") else t["status"]
+        if status in ("approved", "APPROVED"):
+            entry["approved"] += 1
+        elif status in ("rejected", "REJECTED"):
+            entry["rejected"] += 1
+    result: dict[str, str] = {}
+    for key, entry in agg.items():
+        if entry["rejected"] > 0:
+            result[key] = "rejected"
+        elif entry["approved"] == entry["total"]:
+            result[key] = "approved"
+        else:
+            result[key] = "pending"
+    return result
+
+
 def _workflow_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
     tid = UUID(ident.tenant_id)
     uid = UUID(ident.user_id)
@@ -2481,9 +2530,19 @@ def _workflow_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
             })
 
         vrows: list[dict] = []
+        job_diagrams: dict[str, dict[str, Any]] = {}
         for v in vpage.items:
             vid = str(v.id)
             job = latest.get(vid)
+            if job is not None:
+                iid = str(job["id"])
+                if iid not in job_diagrams:
+                    defn = workflows.get_definition(session, tid, job["definition_id"])
+                    inst_tasks = workflows.list_tasks(session, tid, instance_id=job["id"])
+                    job_diagrams[iid] = {
+                        "definition": (defn.get("definition") if defn else {}) or {},
+                        "statuses": _workflow_task_statuses(inst_tasks),
+                    }
             vrows.append({
                 "id": vid,
                 "label": f"{v.prefix}-{v.number}" if v.prefix else str(v.number),
@@ -2498,6 +2557,7 @@ def _workflow_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
 
     return {
         "vertices": vrows,
+        "job_diagrams": job_diagrams,
         "templates": [
             {
                 "id": str(t.id),
@@ -2568,6 +2628,72 @@ def workflow_task_action(
         return RedirectResponse("/workflow?msg=" + quote("task updated"), status_code=303)
     except (ServiceError, ValueError) as exc:
         return RedirectResponse("/workflow?err=" + quote(str(exc)), status_code=303)
+
+
+@router.get("/workflow/instance/{instance_id}", response_class=HTMLResponse, response_model=None)
+def workflow_instance_page(request: Request, instance_id: UUID) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    with _request_session(request) as session:
+        inst = workflows.get_instance(session, tid, instance_id)
+        if inst is None:
+            return RedirectResponse("/workflow?err=" + quote("instance not found"), status_code=303)
+        defn = workflows.get_definition(session, tid, inst["definition_id"])
+        tasks = workflows.list_tasks(session, tid, instance_id=instance_id)
+        vertex_row = vertices.get(session, tid, inst["vertex_id"])
+        vertex_label = f"{vertex_row['prefix']}-{vertex_row['number']}" if vertex_row else "?"
+        defn_obj = defn.get("definition") if defn else {}
+        stages = (defn_obj or {}).get("stages") or []
+
+        def stage_name_for(idx):
+            if 0 <= idx < len(stages):
+                return stages[idx].get("name", "")
+            return ""
+
+        user_cache: dict[str, str] = {}
+        def user_email(uid):
+            if uid is None:
+                return None
+            uid_str = str(uid)
+            if uid_str not in user_cache:
+                u = users.get(session, tid, UUID(uid_str))
+                user_cache[uid_str] = u["email"] if u else uid_str
+            return user_cache[uid_str]
+
+        task_rows = []
+        tasks_json = []
+        for t in tasks:
+            status_str = t["status"].value if hasattr(t["status"], "value") else t["status"]
+            task_rows.append({
+                "stage_name": stage_name_for(t["stage_index"]),
+                "step_name": t["step_name"],
+                "assigned_role": t["assigned_role"],
+                "assigned_to_email": user_email(t["assigned_to"]),
+                "status": status_str,
+                "action": t["action"],
+                "completed_on": str(t["completed_on"])[:10] if t["completed_on"] else None,
+            })
+            tasks_json.append({
+                "key": t["step_key"],
+                "status": status_str,
+            })
+
+    context = _base_context(request)
+    context.update(
+        instance={
+            "id": str(inst["id"]),
+            "status": inst["status"].value if hasattr(inst["status"], "value") else inst["status"],
+            "started_on": str(inst["started_on"])[:19] if inst["started_on"] else None,
+            "vertex_id": str(inst["vertex_id"]),
+        },
+        vertex_label=vertex_label,
+        definition_json=json.dumps(defn_obj, ensure_ascii=False),
+        tasks_json=json.dumps(tasks_json, ensure_ascii=False),
+        tasks=task_rows,
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "workflow_instance.html", context)
 
 
 # ── Workflow templates (Admin ▸ WF Template) ────────────────────────────────

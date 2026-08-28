@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Workflow Instance · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Workflow Instance</h1>
+  <p class="hero-sub dash-note">Instance {{ instance.id | truncate(8, True, '') }} on vertex {{ vertex_label }} &mdash; {{ instance.status }}</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+  <h2>Diagram</h2>
+  <p class="cell-anno">Workflow progress. <span class="pill" style="background:#0f5132;color:#fff;">approved</span>
+    <span class="pill" style="background:#7f6000;color:#fff;">pending</span>
+    <span class="pill" style="background:#4b5563;color:#fff;">rejected</span></p>
+  <div class="mermaid-container">
+    <div id="instDiagram"></div>
+  </div>
+</section>
+
+<section class="module-card table-card" style="margin-top:1.5rem;">
+  <h2>Tasks</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>Stage</th><th>Step</th><th>Assigned Role</th><th>Assignee</th><th>Status</th><th>Action</th><th>Completed</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>{{ t.stage_name }}</td>
+        <td>{{ t.step_name }}</td>
+        <td>{{ t.assigned_role or '—' }}</td>
+        <td>{{ t.assigned_to_email or '—' }}</td>
+        <td><span class="pill">{{ t.status }}</span></td>
+        <td>{{ t.action }}</td>
+        <td>{{ t.completed_on or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="cell-anno">No tasks yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div style="margin-top:1rem;">
+  <a class="btn-mini" href="/workflow">&larr; Back to Workflow</a>
+</div>
+
+<script type="application/json" id="wfDef">{{ definition_json | safe }}</script>
+<script type="application/json" id="wfTasks">{{ tasks_json | safe }}</script>
+
+{% include "workflow/_mermaid.html" %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var box = document.getElementById("instDiagram");
+    if (!box) return;
+    var def, tasks;
+    try { def = JSON.parse(document.getElementById("wfDef").textContent); }
+    catch (e) { def = {}; }
+    try { tasks = JSON.parse(document.getElementById("wfTasks").textContent); }
+    catch (e) { tasks = []; }
+    if (!def || !def.stages || !def.stages.length) {
+      box.className = "";
+      box.innerHTML = '<div class="cell-anno">No workflow definition to visualize.</div>';
+      return;
+    }
+    var agg = {};
+    (tasks || []).forEach(function (t) {
+      if (!t.key) return;
+      if (!agg[t.key]) agg[t.key] = { total: 0, approved: 0, rejected: 0 };
+      agg[t.key].total++;
+      if (t.status === "approved" || t.status === "APPROVED") agg[t.key].approved++;
+      else if (t.status === "rejected" || t.status === "REJECTED") agg[t.key].rejected++;
+    });
+    var statusByKey = {};
+    Object.keys(agg).forEach(function (k) {
+      var a = agg[k];
+      if (a.rejected > 0) statusByKey[k] = "rejected";
+      else if (a.approved === a.total && a.total > 0) statusByKey[k] = "approved";
+      else statusByKey[k] = "pending";
+    });
+    plmRenderMermaid(box, plmBuildMermaidWithTooltips(def, statusByKey));
+  });
+</script>
+{% endblock %}
