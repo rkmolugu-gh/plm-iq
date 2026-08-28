@@ -11,7 +11,7 @@ capabilities (see document_service.DocumentService).
 
 Benefits
 --------
-* A new business type (ItemService, ECService, ...) is a ~20-line subclass:
+* A new business type (PartService, ECService, ...) is a ~20-line subclass:
   pin ``kind``/DTOs/extension table and you get full CRUD + numbering.
 * Numbering pools are scoped automatically: an instance with ``kind`` set
   never draws from (or leaks into) another kind's pool; the shared
@@ -22,11 +22,11 @@ How to extend (future scenarios)
 --------------------------------
 ::
 
-    class ItemService(VertexCoreService):
-        kind = VertexKind.NODE
-        out_model = ItemOut                      # DocumentOut-style subclass
-        create_model = ItemCreate
-        extension_table = tables.foundation_item  # TSE extension table
+    class PartService(VertexCoreService):
+        kind = VertexKind.PART
+        out_model = PartOut                      # DocumentOut-style subclass
+        create_model = PartCreate
+        extension_table = tables.foundation_part  # TSE extension table
         ext_columns = [func.coalesce(...)...]     # flat-row projection
 
 Reads become LEFT JOINs over the extension table with COALESCEd defaults, so

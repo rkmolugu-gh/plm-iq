@@ -15,7 +15,7 @@ PostgreSQL is the authoritative source for:
 - permissions
 - document records
 
-Original PDF/DOCX/XLSX/etc. binaries are stored in object storage such as S3/MinIO.
+Original PDF/DOCX/XLSX/etc. binaries are stored in object storage
 
 Elasticsearch is a DERIVED SEARCH PROJECTION only. It must never become the authoritative source for PLM relationships or business data.
 
@@ -341,7 +341,7 @@ Prefer simple, explicit components over unnecessary frameworks.
 
 Use:
 - PostgreSQL for authoritative PLM data and graph relationships
-- S3/MinIO/object storage for original documents
+- storage for original documents
 - Docling for document extraction/structure
 - HybridChunker for document chunking
 - Elasticsearch for BM25/full-text and later vector retrieval

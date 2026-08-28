@@ -19,7 +19,7 @@ Benefits of the class model here
 * Reads need ZERO code: pinning ``extension_table`` + ``ext_columns`` gives
   LEFT-JOIN-with-defaults semantics for find/get/list from the base.
 * ``self.kind`` scoping is inherited, so numbering pools can never cross
-  into Item/EC sequences.
+  into Part/EC sequences.
 * Future document features (folder trees, effectivity, approval workflow)
   land as new methods on this class without touching the core.
 

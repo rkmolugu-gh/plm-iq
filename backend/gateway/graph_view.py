@@ -2,7 +2,7 @@
 
 DASHBOARD = {
     "stats": [
-        ("Items total", 148),
+        ("Parts total", 148),
         ("Released", 112),
         ("In review", 7),
         ("Pending approvals", 9),
@@ -26,8 +26,8 @@ DASHBOARD = {
         {"number": "ASM-1000", "name": "Electric Drive Unit"},
     ],
     "quality": [
-        ("Items with no linked documents", 6),
-        ("Items missing key attributes", 11),
+        ("Parts with no linked documents", 6),
+        ("Parts missing key attributes", 11),
         ("Orphaned parts (unused anywhere)", 4),
     ],
 }

@@ -6,9 +6,15 @@ from enum import Enum
 
 class VertexKind(str, Enum):
     VERTEX = "Vertex"
-    NODE = "Item"
+    PART = "Part"
     DOCUMENT = "Document"
     EC = "EC"
+
+
+class PartRole(str, Enum):
+    COMPONENT = "component"
+    ASSEMBLY = "assembly"
+    PRODUCT = "product"
 
 
 class EditionId(str, Enum):

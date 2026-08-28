@@ -123,8 +123,8 @@
           <td><code>curl -s "http://localhost:9200/{{ es }}/_count?pretty"</code></td>
         </tr>
         <tr>
-          <td>Search by kind=Item</td>
-          <td><code>curl -s "http://localhost:9200/{{ vs }}/_search?pretty" -H 'Content-Type: application/json' -d '{"query":{"match":{"kind":"Item"}}}'</code></td>
+          <td>Search by kind=Part</td>
+          <td><code>curl -s "http://localhost:9200/{{ vs }}/_search?pretty" -H 'Content-Type: application/json' -d '{"query":{"match":{"kind":"Part"}}}'</code></td>
         </tr>
       </tbody>
     </table>

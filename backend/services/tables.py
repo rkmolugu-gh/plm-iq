@@ -62,6 +62,17 @@ foundation_document = Table(
     Column("storage_key", Text, nullable=False),
 )
 
+# TSE extension table for kind=Part vertices (strategy Section 8). Same shape as
+# foundation_document: only Part-specific attributes, joined to the core row by
+# primary key. The single 'part_role' classification drives BOM/product reporting.
+foundation_part = Table(
+    "foundation_part",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("part_role", _enum(enums.PartRole, "part_role"), nullable=False),
+)
+
 foundation_graph_rule = Table(
     "foundation_graph_rule",
     metadata,

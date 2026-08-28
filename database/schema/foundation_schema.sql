@@ -26,7 +26,7 @@ SET LOCAL search_path = plmiqdb;
 
 -- ── Enums ───────────────────────────────────────────────────────────────────
 
-CREATE TYPE vertex_kind AS ENUM ('Vertex', 'Item', 'Document', 'EC');
+CREATE TYPE vertex_kind AS ENUM ('Vertex', 'Part', 'Document', 'EC');
 
 CREATE TYPE edition_id AS ENUM ('foundation', 'discrete', 'process', 'food');
 
@@ -235,7 +235,7 @@ CREATE POLICY edge_tenant_isolation ON foundation_edge
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
--- Rules: tenants read platform/edition rules, but manage only their own.
+-- Rules: tenants read platform rules, but manage only their own.
 CREATE POLICY graph_rule_read ON foundation_graph_rule FOR SELECT
     USING (scope <> 'tenant' OR tenant_id = current_tenant_id());
 
@@ -270,7 +270,7 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA plmiqdb TO plmiq_app, plmiq_migrator;
 -- RLS policy below keys on the extension's own tenant_id, so even a buggy
 -- write can never leak across tenants.
 
-ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Item';
+ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Part';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Change';
 ALTER TYPE vertex_kind ADD VALUE IF NOT EXISTS 'Release';
 
@@ -330,6 +330,54 @@ CREATE POLICY document_extension_tenant_isolation ON foundation_document
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_document TO plmiq_app;
 GRANT ALL ON foundation_document TO plmiq_migrator;
+
+-- ── Part subtype extension (TSE pattern) ──────────────────────────────────
+-- Mirrors foundation_document: kind=Part vertices get a NARROW extension table
+-- carrying only Part-specific attributes. Same id as the core vertex row; the
+-- two-phase write lives in one transaction in part_service, RLS keys on the
+-- extension's own tenant_id (see the invariant comment on foundation_document).
+
+CREATE TYPE part_role AS ENUM ('component', 'assembly', 'product');
+
+CREATE TABLE foundation_part (
+    -- Same id as the core row. ON DELETE CASCADE removes extension data with
+    -- the vertex; absence of an extension row means subtype attributes are at
+    -- their defaults.
+    id          uuid PRIMARY KEY REFERENCES foundation_vertex (id) ON DELETE CASCADE,
+    tenant_id   uuid NOT NULL,   -- mirrored from core for RLS; see invariant above
+    part_role   part_role NOT NULL DEFAULT 'component',
+
+    CONSTRAINT ck_part_tenant CHECK (tenant_id IS NOT NULL)
+);
+
+COMMENT ON TABLE foundation_part IS 'Part subtype extension: part role classification for kind=Part vertices (TSE pattern, strategy Section 8)';
+COMMENT ON COLUMN foundation_part.id        IS 'Same uuid as the foundation_vertex row this extends';
+COMMENT ON COLUMN foundation_part.tenant_id IS 'Mirror of the core row tenant; enables independent RLS enforcement';
+COMMENT ON COLUMN foundation_part.part_role IS 'Part classification: component, assembly, or product';
+
+-- Reporting surface: core + extension joined into one flat, fully typed row.
+CREATE VIEW v_part WITH (security_invoker = true) AS
+SELECT
+    v.id, v.tenant_id, v.edition_id, v.kind, v.classification_id,
+    v.prefix, v.number, v.name, v.description, v.revision,
+    v.lifecycle_state, v.release_on, v.marked_for_deletion, v.version,
+    v.created_by, v.created_on, v.modified_by, v.modified_on,
+    v.solution_attributes, v.tenant_attributes,
+    p.part_role
+FROM foundation_vertex v
+JOIN foundation_part p ON p.id = v.id;
+
+CREATE INDEX idx_part_tenant ON foundation_part (tenant_id);
+
+ALTER TABLE foundation_part ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_part FORCE  ROW LEVEL SECURITY;
+
+CREATE POLICY part_extension_tenant_isolation ON foundation_part
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON foundation_part TO plmiq_app;
+GRANT ALL ON foundation_part TO plmiq_migrator;
 
 -- ── Setting ─────────────────────────────────────────────────────────
 -- .env-style configuration resolved at three scopes. Effective value for a

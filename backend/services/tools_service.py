@@ -73,7 +73,7 @@ _LIST_VERTICES_SCHEMA = {
             "properties": {
                 "kind": {
                     "type": "string",
-                    "enum": ["Vertex", "Item", "Document", "EC"],
+                    "enum": ["Vertex", "Part", "Document", "EC"],
                     "description": "Filter by vertex kind.",
                 },
                 "lifecycle_state": {
@@ -121,7 +121,7 @@ _CREATE_VERTEX_SCHEMA = {
     "function": {
         "name": "create_vertex",
         "description": (
-            "Create a new vertex in the workspace. Specify kind (Item, Document, EC), "
+            "Create a new vertex in the workspace. Specify kind (Part, Document, EC), "
             "number, name, and optional attributes."
         ),
         "parameters": {
@@ -129,7 +129,7 @@ _CREATE_VERTEX_SCHEMA = {
             "properties": {
                 "kind": {
                     "type": "string",
-                    "enum": ["Item", "Document", "EC"],
+                    "enum": ["Part", "Document", "EC"],
                     "description": "The vertex kind.",
                 },
                 "number": {
@@ -536,11 +536,11 @@ _RESOLVE_RULE_SCHEMA = {
                 },
                 "source_kind": {
                     "type": "string",
-                    "description": "Source vertex kind (e.g., Item, Document).",
+                    "description": "Source vertex kind (e.g., Part, Document).",
                 },
                 "target_kind": {
                     "type": "string",
-                    "description": "Target vertex kind (e.g., Item, Document).",
+                    "description": "Target vertex kind (e.g., Part, Document).",
                 },
             },
             "required": ["edge_kind", "source_kind", "target_kind"],

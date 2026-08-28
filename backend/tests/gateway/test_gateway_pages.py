@@ -343,11 +343,11 @@ def suite_gateway_help(tid=None):
 
 GRAPH_FIXTURE = {
     "vertices": [
-        {"number": "PRT-1001", "kind": "Item", "name": "Motor Housing, Machined", "revision": "A", "lifecycle": "released"},
-        {"number": "ASM-1000", "kind": "Item", "name": "Electric Drive Unit", "revision": "B", "lifecycle": "approved"},
+        {"number": "PRT-1001", "kind": "Part", "name": "Motor Housing, Machined", "revision": "A", "lifecycle": "released"},
+        {"number": "ASM-1000", "kind": "Part", "name": "Electric Drive Unit", "revision": "B", "lifecycle": "approved"},
         {"number": "DOC-3010", "kind": "Document", "name": "Aluminum 6061 Material Specification", "revision": "A", "lifecycle": "released"},
         {"number": "DOC-3009", "kind": "Document", "name": "Aluminum 6061 Material Specification (superseded)", "revision": "A", "lifecycle": "obsolete"},
-        {"number": "MAT-4001", "kind": "Item", "name": "Aluminum 6061 Raw Stock", "revision": "", "lifecycle": "released"},
+        {"number": "MAT-4001", "kind": "Part", "name": "Aluminum 6061 Raw Stock", "revision": "", "lifecycle": "released"},
         {"number": "EC-0007", "kind": "EC", "name": "Supplier swap proposal", "revision": "", "lifecycle": "draft"},
     ],
     "edges": [
@@ -429,7 +429,7 @@ def suite_gateway_graph(tid=None):
         'PRT1001 -->|"REFDOCS"| DOC3010',
     ):
         assert pair in m, f"traversal edge missing from diagram: {pair}"
-    assert '"PRT-1001/A · Item · Motor Housing, Machined"' in m, \
+    assert '"PRT-1001/A · Part · Motor Housing, Machined"' in m, \
         "diagram label missing revision or kind"
     assert 'click ASM1000 "/graph/view/ASM-1000"' in m, "node click traversal missing"
 

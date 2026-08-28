@@ -251,9 +251,9 @@ def expect_error(label: str, exc_type, fn: Callable[[], object]) -> None:
 def mk_vertex(session, tenant_id, number, **kw):
     payload = {
         "edition_id": enums.EditionId.FOUNDATION,
-        "kind": enums.VertexKind.NODE,
+        "kind": enums.VertexKind.PART,
         "number": number,
-        "name": f"Node {number}",
+        "name": f"Part {number}",
     }
     payload.update(kw)
     return create_vertex(session, tenant_id, VertexCreate(**payload), ACTOR)
@@ -269,8 +269,8 @@ def mk_bom_node_rule(tenant_id):
                 scope=enums.RuleScope.TENANT,
                 tenant_id=tenant_id,
                 edge_kind=enums.EdgeKind.BOM,
-                source_vertex_kind=enums.VertexKind.NODE,
-                target_vertex_kind=enums.VertexKind.NODE,
+                source_vertex_kind=enums.VertexKind.PART,
+                target_vertex_kind=enums.VertexKind.PART,
                 source_lifecycle_states=[enums.LifecycleState.DRAFT],
                 duplicate_edges_allowed=False,
                 required_edge_attributes=["quantity"],
@@ -404,7 +404,7 @@ def suite_graph_rule_service(tid):
                     scope=enums.RuleScope.TENANT,
                     tenant_id=tid,
                     edge_kind=enums.EdgeKind.REFDOCS,
-                    source_vertex_kind=enums.VertexKind.NODE,
+                    source_vertex_kind=enums.VertexKind.PART,
                     target_vertex_kind=enums.VertexKind.DOCUMENT,
                     required_edge_attributes=["referenceCategory"],
                 ),
@@ -438,8 +438,8 @@ def suite_graph_rule_service(tid):
                 GraphRuleCreate(
                     scope=enums.RuleScope.PLATFORM,
                     edge_kind=enums.EdgeKind.BOM,
-                    source_vertex_kind=enums.VertexKind.NODE,
-                    target_vertex_kind=enums.VertexKind.NODE,
+                    source_vertex_kind=enums.VertexKind.PART,
+                    target_vertex_kind=enums.VertexKind.PART,
                 ),
                 ACTOR,
             ),
@@ -464,8 +464,8 @@ def suite_rule_engine(tid):
         return {
             "edition_id": enums.EditionId.FOUNDATION,
             "edge_kind": enums.EdgeKind.BOM,
-            "source_kind": enums.VertexKind.NODE,
-            "target_kind": enums.VertexKind.NODE,
+            "source_kind": enums.VertexKind.PART,
+            "target_kind": enums.VertexKind.PART,
         }
 
     mine = mk_bom_node_rule(tid)
@@ -501,8 +501,8 @@ def suite_rule_engine(tid):
                 scope=enums.RuleScope.TENANT,
                 tenant_id=other_tenant,
                 edge_kind=enums.EdgeKind.BOM,
-                source_vertex_kind=enums.VertexKind.NODE,
-                target_vertex_kind=enums.VertexKind.NODE,
+                source_vertex_kind=enums.VertexKind.PART,
+                target_vertex_kind=enums.VertexKind.PART,
             ),
             ACTOR,
         ),
@@ -525,9 +525,9 @@ def suite_edge_service(tid):
             "kind": enums.EdgeKind.BOM,
             "name": "Has component",
             "source_vertex_id": a.id,
-            "source_vertex_kind": enums.VertexKind.NODE,
+            "source_vertex_kind": enums.VertexKind.PART,
             "target_vertex_id": b.id,
-            "target_vertex_kind": enums.VertexKind.NODE,
+            "target_vertex_kind": enums.VertexKind.PART,
         }
         payload.update(kw)
         return op(tid, lambda s: create_edge(s, tid, EdgeCreate(**payload), ACTOR))
@@ -582,8 +582,8 @@ def suite_graph_query_service(tid):
                     scope=enums.RuleScope.TENANT,
                     tenant_id=tid,
                     edge_kind=enums.EdgeKind.BOM,
-                    source_vertex_kind=enums.VertexKind.NODE,
-                    target_vertex_kind=enums.VertexKind.NODE,
+                    source_vertex_kind=enums.VertexKind.PART,
+                    target_vertex_kind=enums.VertexKind.PART,
                     duplicate_edges_allowed=True,
                 ),
                 ACTOR,
@@ -604,9 +604,9 @@ def suite_graph_query_service(tid):
                         kind=enums.EdgeKind.BOM,
                         name="Has component",
                         source_vertex_id=src.id,
-                        source_vertex_kind=enums.VertexKind.NODE,
+                        source_vertex_kind=enums.VertexKind.PART,
                         target_vertex_id=dst.id,
-                        target_vertex_kind=enums.VertexKind.NODE,
+                        target_vertex_kind=enums.VertexKind.PART,
                     ),
                     ACTOR,
                 )

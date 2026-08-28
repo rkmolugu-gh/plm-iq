@@ -84,7 +84,7 @@ class EsDevService:
     # -- search convenience ------------------------------------------------------
 
     def search_by_kind(self, index_name: str, kind: str, size: int = 10) -> list[dict]:
-        """Search an index by vertex kind (Item, Document, EC)."""
+        """Search an index by vertex kind (Part, Document, EC)."""
         body = f'{{"query":{{"match":{{"kind":"{kind}"}}}}, "_source": true}}'
         query = f"?size={size}&pretty"
         status, payload = self.es.request(
