@@ -37,6 +37,7 @@ from services.errors import ServiceError
 from services.es_client import es
 from services.es_ingest_service import ingest
 from services.file_store import files
+from services.graph_query_service import queries
 from services.graph_rule_service import rules
 from services.index_service import indexer, watermarks
 from services.jobs import registry
@@ -2838,20 +2839,191 @@ def workflow_template_delete(request: Request, definition_id: UUID) -> RedirectR
 
 # ── Function placeholder pages (BOM / Quality) ────────────────────────────────
 
+_BOM_ANNOTATION_FIELDS = ("quantity", "findNumber", "unitOfMeasure")
+
+
+def _bom_redirect(*, root: str = "", msg: str = "", err: str = "") -> RedirectResponse:
+    target = "/bom"
+    qs = []
+    if root:
+        qs.append(f"root={quote(root)}")
+    if msg:
+        qs.append(f"msg={quote(msg)}")
+    if err:
+        qs.append(f"err={quote(err)}")
+    if qs:
+        target += "?" + "&".join(qs)
+    return RedirectResponse(target, status_code=303)
+
+
+def _bom_annotation(payload: dict[str, Any]) -> dict[str, Any]:
+    """Pick the fixed BOM attribute columns out of a row payload.
+
+    Quantity is coerced to a number when possible so it sorts/rolls up like
+    one; the other two attributes stay free-text (find number, unit of
+    measure). Blank fields are omitted so the JSONB annotation stays tidy.
+    """
+    annotation: dict[str, Any] = {}
+    qty = str(payload.get("quantity") or "").strip()
+    if qty:
+        try:
+            annotation["quantity"] = int(qty) if qty.isdigit() else float(qty)
+        except ValueError:
+            annotation["quantity"] = qty
+    find_number = str(payload.get("findNumber") or "").strip()
+    if find_number:
+        annotation["findNumber"] = find_number
+    uom = str(payload.get("unitOfMeasure") or "").strip()
+    if uom:
+        annotation["unitOfMeasure"] = uom
+    return annotation
+
+
+def _bom_parts_options(session, tenant_id: UUID) -> list[dict[str, str]]:
+    page = parts.list(session, tenant_id, limit=500, sort="number", direction="asc")
+    return [
+        {"id": str(p.id), "label": f"{_vertex_label(p.model_dump())} \u00b7 {p.name}"}
+        for p in page.items
+        if not p.marked_for_deletion
+    ]
+
+
 @router.get("/bom", response_class=HTMLResponse, response_model=None)
-def bom_page(request: Request) -> HTMLResponse | RedirectResponse:
+def bom_page(request: Request, root: str = "") -> HTMLResponse | RedirectResponse:
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return ident
+    tid = UUID(ident.tenant_id)
     context = _base_context(request)
     params = request.query_params
     context.update(
         page_title="BOM",
-        page_sub="Bill of Materials explorer - coming soon",
+        page_sub="Build the bill of materials as a source-part -> BOM edge -> target-part structure, "
+                  "flattened into an editable table.",
         flash_msg=params.get("msg") or "",
         flash_err=params.get("err") or "",
+        root_id=root,
+        root_vertex=None,
+        bom_rows=[],
+        part_options=[],
+        auto_loaded=False,
     )
+    root_id = _safe_uuid(root)
+    try:
+        with _request_session(request) as session:
+            part_opts = _bom_parts_options(session, tid)
+            context["part_options"] = part_opts
+            if root_id is None and part_opts:
+                root_id = UUID(part_opts[0]["id"])
+                context["auto_loaded"] = True
+            if root_id is not None:
+                root_row = vertices.get(session, tid, root_id)
+                if enums.VertexKind(root_row["kind"]) != enums.VertexKind.PART:
+                    raise ValueError("the BOM root must be a Part vertex")
+                context["root_vertex"] = {
+                    "id": str(root_row["id"]),
+                    "label": _vertex_label(root_row),
+                    "name": root_row["name"],
+                    "lifecycle_state": getattr(root_row["lifecycle_state"], "value", root_row["lifecycle_state"]),
+                }
+                tree = queries.bom_tree(session, tenant_id=tid, root_id=root_id)
+                labels: dict[str, str] = {str(root_row["id"]): context["root_vertex"]["label"]}
+                rows = []
+                for r in tree:
+                    vid = str(r["vertexId"])
+                    label = f"{r['prefix']}-{r['number']}/{r['revision']}"
+                    labels[vid] = label
+                    annotation = r["annotation"] or {}
+                    rows.append({
+                        "edge_id": str(r["edgeId"]),
+                        "edge_version": r["edgeVersion"],
+                        "parent_id": str(r["parentVertexId"]),
+                        "parent_label": labels.get(str(r["parentVertexId"]), str(r["parentVertexId"])),
+                        "vertex_id": vid,
+                        "label": label,
+                        "name": r["name"],
+                        "depth": r["depth"],
+                        "quantity": annotation.get("quantity", ""),
+                        "find_number": annotation.get("findNumber", ""),
+                        "unit_of_measure": annotation.get("unitOfMeasure", ""),
+                        "edge_state": r["edgeState"],
+                    })
+                context["bom_rows"] = rows
+    except (ServiceError, ValueError) as exc:
+        context["flash_err"] = str(exc)
+        context["root_id"] = ""
     return _templates_for(context["ctx"]).TemplateResponse(request, "bom.html", context)
+
+
+@router.post("/bom/save", response_model=None)
+async def bom_save(request: Request) -> JSONResponse:
+    """Reconcile a flattened BOM edit back into ``foundation_edge`` (kind=BOM).
+
+    The client owns row identity: unedited rows carry their existing edge id
+    and version so a save only touches what changed; brand-new rows arrive
+    with no edge id and become ``edges.create`` calls; rows the user removed
+    arrive flagged ``deleted`` and become ``edges.delete`` calls. Nothing
+    cascades - removing one relationship never touches the rows beneath it.
+    """
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return JSONResponse({"ok": False, "error": "sign-in required"}, status_code=401)
+    tid = UUID(ident.tenant_id)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "invalid request body"}, status_code=400)
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return JSONResponse({"ok": False, "error": "expected a 'rows' array"}, status_code=400)
+    created = updated = deleted = 0
+    try:
+        with _request_session(request) as session:
+            for i, r in enumerate(rows, start=1):
+                if not isinstance(r, dict):
+                    return JSONResponse({"ok": False, "error": f"row {i}: malformed"}, status_code=400)
+                edge_id = _safe_uuid(r.get("edgeId") or "")
+                if r.get("deleted"):
+                    if edge_id is None:
+                        continue
+                    edges.delete(session, tid, edge_id, actor=_actor(request))
+                    deleted += 1
+                    continue
+                parent_id = _safe_uuid(r.get("parentId") or "")
+                vertex_id = _safe_uuid(r.get("vertexId") or "")
+                if parent_id is None or vertex_id is None:
+                    return JSONResponse(
+                        {"ok": False, "error": f"row {i}: choose a target part"}, status_code=400
+                    )
+                annotation = _bom_annotation(r)
+                if edge_id is not None:
+                    current = edges.get(session, tid, edge_id)
+                    if current["annotation"] != annotation:
+                        version = int(r.get("version") or current["version"])
+                        edges.update(
+                            session, tid, edge_id,
+                            EdgeUpdate(version=version, annotation=annotation),
+                            actor=_actor(request),
+                        )
+                        updated += 1
+                    continue
+                parent = vertices.get(session, tid, parent_id)
+                child = vertices.get(session, tid, vertex_id)
+                data = EdgeCreate(
+                    edition_id=_edition_id(ident.edition_id),
+                    kind=enums.EdgeKind.BOM,
+                    name="Has component",
+                    source_vertex_id=parent_id,
+                    source_vertex_kind=parent["kind"],
+                    target_vertex_id=vertex_id,
+                    target_vertex_kind=child["kind"],
+                    annotation=annotation,
+                )
+                edges.create(session, tid, data, actor=_actor(request))
+                created += 1
+    except (ServiceError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    return JSONResponse({"ok": True, "created": created, "updated": updated, "deleted": deleted})
 
 
 @router.get("/quality", response_class=HTMLResponse, response_model=None)

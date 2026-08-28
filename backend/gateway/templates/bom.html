@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ page_title }} · {{ ctx.tenant }}{% endblock %}
+{% block title %}{{ page_title }} &middot; {{ ctx.tenant }}{% endblock %}
 {% block content %}
 <section class="dash-head">
-  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <p class="hero-eyebrow">{{ ctx.tenant }} &middot; PLM-IQ {{ ctx.edition_label }} Edition</p>
   <h1 class="hero-title dash-title">{{ page_title }}</h1>
   <p class="hero-sub dash-note">{{ page_sub }}</p>
 </section>
@@ -11,6 +11,326 @@
 {% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
 
 <section class="module-card table-card">
-  <p class="cell-anno">This module is under development. Check back later for BOM management features.</p>
+
+  <form class="table-toolbar" method="get" action="/bom" id="bom-root-form">
+    <label class="cell-anno" for="bom-root-select">Root part</label>
+    <select id="bom-root-select" name="root" required>
+      <option value="">Select a part&hellip;</option>
+      {% for opt in part_options %}
+      <option value="{{ opt.id }}"{{ ' selected' if opt.id == root_id else '' }}>{{ opt.label }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn-mini" type="submit">Load</button>
+    {% if root_vertex %}
+    <span class="pill bom-root-pill">{{ root_vertex.label }} &middot; {{ root_vertex.name }}</span>
+    <button class="btn-mini" type="button" id="bom-add-root-child" data-parent-id="{{ root_vertex.id }}" data-parent-label="{{ root_vertex.label }}">+ Add component</button>
+    {% endif %}
+    <span class="bom-tooltip-icon" title="A source part (parent) connects to a target part (child) through a BOM edge. Quantity, find number, and unit of measure live on the edge. The table is one row per edge; indentation shows depth.">?</span>
+  </form>
+
+  {% if root_vertex %}
+  {% if auto_loaded %}<div class="flash flash-ok">Auto-loaded first available part. Pick a different root above to change.</div>{% endif %}
+  <div style="overflow-x:auto">
+  <table class="data-table bom-table" id="bom-table">
+    <colgroup>
+      <col style="width:4.5rem">
+      <col>
+      <col style="width:8.5rem">
+      <col style="width:4.5rem">
+      <col style="width:5rem">
+      <col style="width:5.5rem">
+      <col style="width:5rem">
+      <col style="width:4.5rem">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Level</th>
+        <th>Target part (child)</th>
+        <th>Source part (parent)</th>
+        <th>Qty</th>
+        <th>Find number</th>
+        <th>Unit of measure</th>
+        <th>State</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="bom-tbody">
+      {% for r in bom_rows %}
+      <tr data-row="existing" data-edge-id="{{ r.edge_id }}" data-version="{{ r.edge_version }}"
+          data-parent-id="{{ r.parent_id }}" data-parent-label="{{ r.parent_label }}"
+          data-vertex-id="{{ r.vertex_id }}" data-vertex-label="{{ r.label }}" data-depth="{{ r.depth }}">
+        <td><span class="pill">L{{ r.depth }}</span></td>
+        <td class="bom-indent" style="padding-left:{{ r.depth * 16 }}px" title="{{ r.name }}">{{ r.label }} <span class="cell-anno">&middot; {{ r.name | short }}</span></td>
+        <td class="cell-mono">{{ r.parent_label }}</td>
+        <td><input class="bom-input bom-qty" type="text" value="{{ r.quantity if r.quantity else 1 }}" placeholder="1" aria-label="Quantity"></td>
+        <td><input class="bom-input bom-find" type="text" value="{{ r.find_number }}" placeholder="010" aria-label="Find number"></td>
+        <td><input class="bom-input bom-uom" type="text" value="{{ r.unit_of_measure if r.unit_of_measure else 'EA' }}" placeholder="EA" aria-label="Unit of measure"></td>
+        <td><span class="pill lc-{{ r.edge_state }}">{{ r.edge_state.replace('_', ' ') }}</span></td>
+        <td class="row-actions">
+          <button class="btn-pill bom-add" type="button" title="Add a component below this row, sourced from this part">+</button>
+          <button class="btn-pill btn-pill-danger bom-remove" type="button" title="Remove this BOM relationship">&minus;</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr id="bom-empty-row"><td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <div class="bom-save-bar">
+    <button class="btn btn-primary btn-sm" type="button" id="bom-save">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width="16" height="16" style="vertical-align:-3px;margin-right:4px"><path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM15 9H6V5h9v4z"/></svg>
+      Save BOM
+    </button>
+    <span class="cell-anno" id="bom-save-status" role="status" aria-live="polite"></span>
+    <button class="btn-mini" type="button" id="bom-clear-draft">Clear draft</button>
+  </div>
+
+  <template id="bom-row-template">
+    <tr data-row="new">
+      <td><span class="pill bom-level-pill">L?</span></td>
+      <td class="bom-indent">
+        <select class="bom-target-select" required>
+          <option value="">Select target part&hellip;</option>
+        </select>
+      </td>
+      <td class="cell-mono bom-parent-label"></td>
+      <td><input class="bom-input bom-qty" type="text" value="1" placeholder="1" aria-label="Quantity"></td>
+      <td><input class="bom-input bom-find" type="text" placeholder="010" aria-label="Find number"></td>
+      <td><input class="bom-input bom-uom" type="text" placeholder="EA" aria-label="Unit of measure"></td>
+      <td><span class="pill">new</span></td>
+      <td class="row-actions">
+        <button class="btn-pill bom-add" type="button" title="Add a component below this row, sourced from this part">+</button>
+        <button class="btn-pill btn-pill-danger bom-remove" type="button" title="Remove this row">&minus;</button>
+      </td>
+    </tr>
+  </template>
+
+  <script id="bom-part-options" type="application/json">{{ part_options | tojson }}</script>
+  <script id="bom-root-id" type="hidden">{{ root_vertex.id if root_vertex else '' }}</script>
+  <script>
+  (function () {
+    var ROOT_ID = '{{ root_vertex.id if root_vertex else '' }}';
+    var partOptions = JSON.parse(document.getElementById('bom-part-options').textContent || '[]');
+    var partById = {};
+    partOptions.forEach(function (o) { partById[o.id] = o; });
+
+    var tbody = document.getElementById('bom-tbody');
+    var rowTemplate = document.getElementById('bom-row-template');
+    var emptyRow = document.getElementById('bom-empty-row');
+    var status = document.getElementById('bom-save-status');
+
+    function say(message, isError) {
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = isError ? 'var(--danger, #c0392b)' : '';
+    }
+
+    function depthOf(row) {
+      return row.dataset.depth ? parseInt(row.dataset.depth, 10) : 1;
+    }
+
+    function ancestorIds(row) {
+      var ids = [];
+      var cur = row;
+      while (cur && cur.dataset && cur.dataset.parentId) {
+        ids.push(cur.dataset.parentId);
+        cur = cur.parentElement;
+        while (cur && cur.tagName !== 'TR') cur = cur.parentElement;
+      }
+      return ids;
+    }
+
+    function currentVertex(row) {
+      if (row.dataset.row === 'existing') {
+        return { id: row.dataset.vertexId, label: row.dataset.vertexLabel };
+      }
+      var select = row.querySelector('.bom-target-select');
+      var opt = select && select.options[select.selectedIndex];
+      return opt && opt.value ? { id: opt.value, label: opt.textContent } : null;
+    }
+
+    function populateSelect(select) {
+      partOptions.forEach(function (opt) {
+        var el = document.createElement('option');
+        el.value = opt.id;
+        el.textContent = opt.label;
+        select.appendChild(el);
+      });
+    }
+
+    function rowPayload(row) {
+      var v = currentVertex(row);
+      return {
+        edgeId: row.dataset.row === 'existing' ? row.dataset.edgeId : '',
+        version: row.dataset.version ? parseInt(row.dataset.version, 10) : null,
+        parentId: row.dataset.parentId,
+        vertexId: v ? v.id : row.dataset.vertexId,
+        quantity: row.querySelector('.bom-qty').value,
+        findNumber: row.querySelector('.bom-find').value,
+        unitOfMeasure: row.querySelector('.bom-uom').value,
+        deleted: row.dataset.deleted === 'true',
+      };
+    }
+
+    function allRows() {
+      var rows = [];
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row]'), function (row) {
+        rows.push(rowPayload(row));
+      });
+      return rows;
+    }
+
+    function saveDraft() {
+      try {
+        var rows = allRows();
+        if (rows.length) {
+          localStorage.setItem('bom-draft-' + ROOT_ID, JSON.stringify(rows));
+        }
+      } catch (e) {}
+    }
+
+    function loadDraft() {
+      try {
+        var raw = localStorage.getItem('bom-draft-' + ROOT_ID);
+        if (!raw) return false;
+        var draft = JSON.parse(raw);
+        if (!Array.isArray(draft) || !draft.length) return false;
+        tbody.innerHTML = '';
+        draft.forEach(function (d) {
+          var frag = rowTemplate.content.cloneNode(true);
+          var row = frag.querySelector('tr');
+          row.dataset.parentId = d.parentId;
+          row.dataset.parentLabel = partById[d.parentId] ? partById[d.parentId].label : d.parentId;
+          row.dataset.depth = '1';
+          row.querySelector('.bom-level-pill').textContent = 'L1';
+          row.querySelector('.bom-parent-label').textContent = row.dataset.parentLabel;
+          row.querySelector('.bom-indent').style.paddingLeft = '16px';
+          var sel = row.querySelector('.bom-target-select');
+          populateSelect(sel);
+          if (d.vertexId) sel.value = d.vertexId;
+          row.querySelector('.bom-qty').value = d.quantity || '1';
+          row.querySelector('.bom-find').value = d.findNumber || '';
+          row.querySelector('.bom-uom').value = d.unitOfMeasure || 'EA';
+          tbody.appendChild(row);
+          wireRow(row);
+        });
+        say('Draft restored (' + draft.length + ' rows).');
+        return true;
+      } catch (e) { return false; }
+    }
+
+    function addChildRow(afterRow, parentId, parentLabel, depth, prefill) {
+      if (emptyRow) { emptyRow.remove(); }
+      var frag = rowTemplate.content.cloneNode(true);
+      var row = frag.querySelector('tr');
+      row.dataset.parentId = parentId;
+      row.dataset.parentLabel = parentLabel;
+      row.dataset.depth = String(depth);
+      row.querySelector('.bom-level-pill').textContent = 'L' + depth;
+      row.querySelector('.bom-parent-label').textContent = parentLabel;
+      row.querySelector('.bom-indent').style.paddingLeft = (depth * 16) + 'px';
+      var sel = row.querySelector('.bom-target-select');
+      populateSelect(sel);
+      if (prefill && prefill.id) {
+        sel.value = prefill.id;
+      }
+      afterRow.parentNode.insertBefore(row, afterRow.nextSibling);
+      wireRow(row);
+      sel.focus();
+      saveDraft();
+    }
+
+    function wireRow(row) {
+      row.querySelector('.bom-add').addEventListener('click', function () {
+        var v = currentVertex(row);
+        if (!v) { say('Pick a target part on this row before adding a component under it.', true); return; }
+        var ancestors = ancestorIds(row);
+        if (ancestors.indexOf(v.id) >= 0 || v.id === ROOT_ID) {
+          say('Cannot add this part: it would create a cycle in the BOM.', true); return;
+        }
+        addChildRow(row, v.id, v.label, depthOf(row) + 1);
+      });
+      row.querySelector('.bom-remove').addEventListener('click', function () {
+        if (row.dataset.row === 'existing') {
+          var deleted = row.dataset.deleted === 'true';
+          row.dataset.deleted = deleted ? '' : 'true';
+          row.classList.toggle('bom-deleted', !deleted);
+          row.querySelectorAll('.bom-input').forEach(function (i) { i.disabled = !deleted; });
+          row.querySelector('.bom-remove').textContent = deleted ? '\u2212' : '\u21ba';
+          row.querySelector('.bom-remove').title = deleted ? 'Remove this BOM relationship' : 'Undo removal';
+        } else {
+          row.remove();
+          if (!tbody.querySelector('tr')) {
+            var tr = document.createElement('tr');
+            tr.id = 'bom-empty-row';
+            tr.innerHTML = '<td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
+            tbody.appendChild(tr);
+          }
+        }
+        saveDraft();
+      });
+      row.querySelectorAll('.bom-input').forEach(function (inp) {
+        inp.addEventListener('input', saveDraft);
+      });
+      row.querySelector('.bom-target-select').addEventListener('change', saveDraft);
+    }
+
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row]'), wireRow);
+
+    var addRootChild = document.getElementById('bom-add-root-child');
+    if (addRootChild) {
+      addRootChild.addEventListener('click', function () {
+        var last = tbody.querySelector('tr:last-child');
+        var anchor = last || tbody;
+        addChildRow(anchor, addRootChild.dataset.parentId, addRootChild.dataset.parentLabel, 1);
+      });
+    }
+
+    document.getElementById('bom-save').addEventListener('click', function () {
+      var rows = [];
+      var bad = false;
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row]'), function (row) {
+        var v = currentVertex(row);
+        if (!v && row.dataset.deleted !== 'true') { bad = true; return; }
+        rows.push(rowPayload(row));
+      });
+      if (bad) { say('Every new row needs a target part before saving.', true); return; }
+      say('Saving\u2026');
+      fetch('/bom/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rows }),
+      }).then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          if (result.ok && result.data.ok) {
+            try { localStorage.removeItem('bom-draft-' + ROOT_ID); } catch (e) {}
+            window.location.href = '/bom?root=' + encodeURIComponent(ROOT_ID) +
+              '&msg=' + encodeURIComponent('BOM saved (' + result.data.created + ' added, ' +
+                result.data.updated + ' updated, ' + result.data.deleted + ' removed)');
+          } else {
+            say(result.data.error || 'Save failed.', true);
+          }
+        })
+        .catch(function () { say('Save failed - check your connection and try again.', true); });
+    });
+
+    document.getElementById('bom-clear-draft').addEventListener('click', function () {
+      try { localStorage.removeItem('bom-draft-' + ROOT_ID); } catch (e) {}
+      say('Draft cleared.');
+    });
+
+    if (!tbody.querySelector('tr[data-row]') && ROOT_ID) {
+      var restored = loadDraft();
+      if (!restored) {
+        var last = tbody.querySelector('tr:last-child');
+        var anchor = last || tbody;
+        addChildRow(anchor, ROOT_ID, '{{ root_vertex.label }}', 1);
+      }
+    }
+  })();
+  </script>
+  {% endif %}
 </section>
 {% endblock %}

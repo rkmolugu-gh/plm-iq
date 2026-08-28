@@ -83,6 +83,43 @@ LIMIT :limit
 """
 
 
+_BOM_TREE_SQL = """
+WITH RECURSIVE bom AS (
+    SELECT e.id AS edge_id, e.source_vertex_id AS parent_vertex_id,
+           e.target_vertex_id AS vertex_id, e.name AS edge_name,
+           e.lifecycle_state::text AS edge_state, e.annotation AS annotation,
+           e.version AS edge_version, 1 AS depth,
+           ARRAY[e.target_vertex_id] AS path
+    FROM plmiqdb.foundation_edge e
+    WHERE e.source_vertex_id = :root_id
+      AND e.tenant_id = :tenant_id
+      AND e.kind = 'BOM'
+      AND e.lifecycle_state <> 'inactive'
+    UNION ALL
+    SELECT e.id, e.source_vertex_id, e.target_vertex_id, e.name,
+           e.lifecycle_state::text, e.annotation, e.version, bom.depth + 1,
+           bom.path || e.target_vertex_id
+    FROM plmiqdb.foundation_edge e
+    JOIN bom ON e.source_vertex_id = bom.vertex_id
+    WHERE e.tenant_id = :tenant_id
+      AND e.kind = 'BOM'
+      AND e.lifecycle_state <> 'inactive'
+      AND NOT e.target_vertex_id = ANY(bom.path)
+      AND bom.depth < :max_depth
+)
+SELECT b.edge_id AS "edgeId", b.parent_vertex_id AS "parentVertexId",
+       b.vertex_id AS "vertexId", b.depth AS "depth",
+       b.edge_name AS "edgeName", b.edge_state AS "edgeState",
+       b.edge_version AS "edgeVersion", b.annotation AS "annotation",
+       v.prefix AS "prefix", v.number AS "number", v.name AS "name",
+       v.revision AS "revision", v.lifecycle_state::text AS "lifecycleState"
+FROM bom b
+JOIN plmiqdb.foundation_vertex v ON v.id = b.vertex_id
+ORDER BY b.path
+LIMIT :limit
+"""
+
+
 class GraphQueryService:
     def neighbors(
         self,
@@ -149,6 +186,35 @@ class GraphQueryService:
             max_depth=max_depth,
             limit=limit,
         )
+
+    def bom_tree(
+        self,
+        session: Session,
+        *,
+        tenant_id: UUID,
+        root_id: UUID,
+        max_depth: int = 12,
+        limit: int = 1000,
+    ) -> list[dict]:
+        """Flatten the BOM (kind='BOM') structure rooted at ``root_id``.
+
+        Each row is one parent->child relationship (edge), not a vertex, so a
+        multi-use child appears once per place it is used - the flattened
+        table a BOM editor needs. ``depth`` starts at 1 for the root's direct
+        children; the caller renders the root itself as a separate header
+        row. Carries the edge id/version/annotation so the gateway can update
+        or delete the exact relationship a row represents.
+        """
+        rows = session.execute(
+            text(_BOM_TREE_SQL),
+            {
+                "root_id": str(root_id),
+                "tenant_id": str(tenant_id),
+                "max_depth": max(1, max_depth),
+                "limit": min(max(limit, 1), 5000),
+            },
+        ).all()
+        return [dict(r._mapping) for r in rows]
 
     def _traverse(
         self,
