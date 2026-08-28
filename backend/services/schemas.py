@@ -119,6 +119,42 @@ class DocumentOut(VertexOut):
     storage_key: str = ""
 
 
+class PartCreate(VertexCreate):
+    """Creation payload for kind=Part vertices (TSE composition).
+
+    The kind is pinned: part_service routes the core write plus the
+    foundation_part extension row, and both halves agree on the kind by
+    construction. ``part_role`` classifies the part
+    (component/assembly/product).
+    """
+
+    kind: enums.VertexKind = enums.VertexKind.PART
+    part_role: enums.PartRole = enums.PartRole.COMPONENT
+
+    @model_validator(mode="after")
+    def _kind_is_part(self) -> PartCreate:
+        if self.kind != enums.VertexKind.PART:
+            raise ValueError("partService creates kind='Part' vertices only")
+        return self
+
+
+class PartUpdate(VertexUpdate):
+    """Core-field updates for a part, plus the optional part_role extension value."""
+
+
+    part_role: enums.PartRole | None = None
+
+
+class PartOut(VertexOut):
+    """Full part view: core vertex columns plus the extension column.
+
+    Mirrors one row of the ``v_part`` reporting view - the TSE promise:
+    consumers see a single flat, fully typed object.
+    """
+
+    part_role: enums.PartRole = enums.PartRole.COMPONENT
+
+
 # ── Edge ────────────────────────────────────────────────────────────────────
 
 

@@ -42,14 +42,14 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import enums, tables
 from .base import BaseService
 from .errors import Conflict, NotFound, ValidationFailed
-from .schemas import Page, VertexCreate, VertexOut, VertexUpdate
+from .schemas import Page, PartCreate, PartOut, PartUpdate, VertexCreate, VertexOut, VertexUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -384,3 +384,77 @@ class VertexCoreService(BaseService):
 #: Shared, kind-neutral instance: the graph explorer and cross-kind tooling
 #: use this one. Subtypes expose their own pinned instances.
 vertices = VertexCoreService()
+
+# ── Part subtype ───────────────────────────────────────────────────────────────
+# kind=Part vertices: a single extension column (part_role) carries the
+# component/assembly/product classification that drives BOM and product reporting.
+
+_PART_EXT = tables.foundation_part
+
+
+class PartService(VertexCoreService):
+    kind = enums.VertexKind.PART
+    out_model = PartOut
+    create_model = PartCreate
+    update_model = PartUpdate
+    extension_table = _PART_EXT
+    ext_columns = (
+        func.coalesce(_PART_EXT.c.part_role, enums.PartRole.COMPONENT).label("part_role"),
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.sortable.update({"part_role": _PART_EXT.c.part_role})
+
+    def create(self, session: Session, tenant_id: UUID, data: PartCreate, actor: str) -> PartOut:
+        """Create the core row + the foundation_part extension row.
+
+        ``part_role`` is an extension-column only; it must not reach the core
+        vertex INSERT, so the core half is built from the base VertexCreate view.
+        """
+        part_role = data.part_role
+        core = VertexCreate(
+            edition_id=data.edition_id,
+            kind=data.kind,
+            number=data.number,
+            name=data.name,
+            prefix=data.prefix,
+            revision=data.revision,
+            description=data.description,
+            classification_id=data.classification_id,
+            release_on=data.release_on,
+            solution_attributes=data.solution_attributes,
+            tenant_attributes=data.tenant_attributes,
+        )
+        created = super().create(session, tenant_id, core, actor=actor)
+        session.execute(insert(_PART_EXT).values(
+            id=created.id,
+            tenant_id=tenant_id,
+            part_role=part_role,
+        ))
+        return self._to_out(self.get(session, tenant_id, created.id))
+
+    def update(
+        self,
+        session: Session,
+        tenant_id: UUID,
+        vertex_id: UUID,
+        data: PartUpdate,
+        actor: str,
+    ) -> PartOut:
+        """Update core fields; also persist a changed part_role extension value."""
+        dumped = data.model_dump(exclude_unset=True)
+        role = dumped.get("part_role")
+        core = VertexUpdate(**{
+            k: v for k, v in dumped.items() if k not in ("part_role", "version")
+        })
+        super().update(session, tenant_id, vertex_id, core, actor=actor)
+        if role is not None:
+            session.execute(
+                update(_PART_EXT).where(_PART_EXT.c.id == vertex_id).values(part_role=role)
+            )
+        return self._to_out(self.get(session, tenant_id, vertex_id))
+
+
+#: Pinned singleton used by the gateway; kind-scoped to Parts.
+parts = PartService()

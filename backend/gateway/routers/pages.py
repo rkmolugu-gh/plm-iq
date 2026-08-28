@@ -49,7 +49,7 @@ from services import setting_service
 from services.search_service import searcher
 from services.tenant_service import tenants
 from services.user_service import users
-from services.vertex_service import vertices
+from services.vertex_service import vertices, parts
 from services.ai_assistant_service import assistant, DEFAULT_MODEL, DEFAULT_BASE_URL
 from services.errors import ServiceError
 from services.schemas import (
@@ -60,6 +60,8 @@ from services.schemas import (
     GraphRuleUpdate,
     PermissionCreate,
     PermissionUpdate,
+    PartCreate,
+    PartUpdate,
     RoleCreate,
     RoleUpdate,
     TenantCreate,
@@ -1048,6 +1050,7 @@ _TENANT_TABS = ("tenants", "users", "roles", "permissions")
 # deleted after commit, so a failed request can never dangle a pointer.
 
 _DOCUMENT_SORTS = {"number", "name", "revision", "state", "file_name", "size", "modified"}
+_PART_SORTS = {"number", "name", "revision", "state", "modified", "part_role"}
 
 
 def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
@@ -1114,6 +1117,67 @@ def _documents_context(ident: auth.Identity, request: Request) -> dict[str, Any]
         "doc_revising": doc_revising,
         "lifecycle_states": [s.value for s in enums.LifecycleState],
     }
+
+
+def _parts_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
+    """Listing, edit target, and sort-link helpers for /parts."""
+    params = request.query_params
+    sort = params.get("sort") if params.get("sort") in _PART_SORTS else "number"
+    direction = "desc" if params.get("dir") == "desc" else "asc"
+    q = (params.get("q") or "").strip()
+    tid = UUID(ident.tenant_id)
+
+    with _request_session(request) as session:
+        page = parts.list(
+            session,
+            tid,
+            number_like=q or None,
+            sort=sort,
+            direction=direction,
+        )
+        editing = None
+        edit_id = _safe_uuid(params.get("edit") or "")
+        if edit_id:
+            editing = parts.find(session, tid, edit_id)
+
+    def _sort_link(col: str) -> str:
+        next_dir = "desc" if (col == sort and direction == "asc") else "asc"
+        query = f"sort={col}&dir={next_dir}"
+        if q:
+            query += f"&q={quote(q)}"
+        return f"/parts?{query}"
+
+    def _sort_icon(col: str) -> str:
+        if col != sort:
+            return ""
+        return " &#9662;" if direction == "desc" else " &#9652;"
+
+    return {
+        "parts": page.items,
+        "total_parts": page.total,
+        "part_q": q,
+        "part_sort": sort,
+        "part_dir": direction,
+        "sort_link": _sort_link,
+        "sort_icon": _sort_icon,
+        "editing_part": editing,
+        "part_roles": [r.value for r in enums.PartRole],
+        "lifecycle_states": [s.value for s in enums.LifecycleState],
+    }
+
+
+def _parts_redirect(msg: str = "", err: str = "", edit: str = "") -> RedirectResponse:
+    target = "/parts"
+    pieces = []
+    if edit:
+        pieces.append(f"edit={edit}")
+    if msg:
+        pieces.append(f"msg={quote(msg)}")
+    if err:
+        pieces.append(f"err={quote(err)}")
+    if pieces:
+        target += "?" + "&".join(pieces)
+    return RedirectResponse(target, status_code=303)
 
 
 def _documents_redirect(msg: str = "", err: str = "", edit: str = "") -> RedirectResponse:
@@ -1347,6 +1411,149 @@ def document_download_action(request: Request, vertex_id: UUID) -> StreamingResp
 
 
 
+
+
+@router.get("/parts", response_class=HTMLResponse, response_model=None)
+def parts_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    params = request.query_params
+    context.update(
+        _parts_context(ident, request),
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(request, "part.html", context)
+
+
+@router.post("/parts/create")
+def part_create_action(
+    request: Request,
+    number: str = Form(...),
+    name: str = Form(...),
+    part_role: str = Form("component"),
+    prefix: str = Form("PRT"),
+    revision: str = Form("A"),
+    description: str = Form(""),
+    release_on: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        data = PartCreate(
+            edition_id=_edition_id(ident.edition_id),
+            # Explicit despite the DTO default: create_vertex dumps
+            # exclude_unset=True, so a defaulted kind would be dropped from
+            # the INSERT and violate the core table's NOT NULL.
+            kind=enums.VertexKind.PART,
+            prefix=prefix.strip() or "PRT",
+            number=number.strip(),
+            name=name.strip(),
+            part_role=enums.PartRole(part_role),
+            revision=revision.strip() or "A",
+            description=description.strip(),
+            release_on=_opt_date(release_on),
+        )
+        with _request_session(request) as session:
+            created = parts.create(session, tid, data, actor=_actor(request))
+        msg = f"part {created.prefix}-{created.number}/{created.revision} created"
+        return _parts_redirect(msg=msg)
+    except (ServiceError, ValueError) as exc:
+        return _parts_redirect(err=str(exc))
+
+
+@router.post("/parts/{vertex_id}/update")
+def part_update_action(
+    request: Request,
+    vertex_id: UUID,
+    version: int = Form(...),
+    name: str = Form(""),
+    description: str = Form(""),
+    revision: str = Form(""),
+    part_role: str = Form(""),
+    lifecycle_state: str = Form(""),
+    release_on: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    actor = _actor(request)
+    try:
+        changes: dict[str, Any] = {"version": version}
+        with _request_session(request) as session:
+            current = parts.get(session, tid, vertex_id)
+            if name and name != current["name"]:
+                changes["name"] = name.strip()
+            if description != "" and description != current["description"]:
+                changes["description"] = description
+            if revision and revision != current["revision"]:
+                changes["revision"] = revision.strip()
+            if part_role and part_role != getattr(current["part_role"], "value", current["part_role"]):
+                changes["part_role"] = enums.PartRole(part_role)
+            if lifecycle_state and lifecycle_state != getattr(current["lifecycle_state"], "value", current["lifecycle_state"]):
+                changes["lifecycle_state"] = enums.LifecycleState(lifecycle_state)
+            new_release = _opt_date(release_on)
+            if new_release and new_release != current["release_on"]:
+                changes["release_on"] = new_release
+
+            parts.update(session, tid, vertex_id, PartUpdate(**changes), actor=actor)
+        msg = f"part {current['prefix']}-{current['number']}/{current['revision']} saved"
+        return _parts_redirect(msg=msg)
+    except (ServiceError, ValueError) as exc:
+        return _parts_redirect(err=str(exc), edit=str(vertex_id))
+
+
+@router.post("/parts/{vertex_id}/delete")
+def part_delete_action(request: Request, vertex_id: UUID, version: int = Form(...)) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    try:
+        with _request_session(request) as session:
+            parts.soft_delete(session, tid, vertex_id, version=version, actor=_actor(request))
+        return _parts_redirect(msg="part marked for deletion")
+    except (ServiceError, ValueError) as exc:
+        return _parts_redirect(err=str(exc))
+
+
+@router.get("/parts/next-number", response_model=None)
+def part_next_number(request: Request, prefix: str = "PRT") -> JSONResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    clean = re.sub(r"[^A-Za-z0-9_-]", "", prefix.strip())
+    with db.tenant_session(UUID(ident.tenant_id)) as session:
+        number = parts.next_number(session, UUID(ident.tenant_id), prefix=clean)
+    return JSONResponse({"number": number})
+
+
+@router.get("/parts/next-revision", response_model=None)
+def part_next_revision(
+    request: Request,
+    prefix: str = "PRT",
+    number: str = "",
+) -> JSONResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    clean_prefix = re.sub(r"[^A-Za-z0-9_-]", "", prefix.strip())
+    clean_number = number.strip()
+    if not clean_number:
+        return JSONResponse({"revision": "A"})
+    try:
+        with db.tenant_session(UUID(ident.tenant_id)) as session:
+            revision = parts.next_revision(
+                session, UUID(ident.tenant_id), prefix=clean_prefix, number=clean_number
+            )
+    except ServiceError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=400)
+    return JSONResponse({"revision": revision})
 
 
 def _require_identity(request: Request) -> auth.Identity | RedirectResponse:

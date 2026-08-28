@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Parts · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Parts</h1>
+  <p class="hero-sub dash-note">Manufactured and purchased parts of the workspace &mdash; each is a shared-core
+    vertex tagged with a part role (component, assembly, or product) that drives BOM and product reporting.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+
+{% if editing_part %}
+  {# ── Edit form (mandatory fields first) ─────────────────────────────── #}
+  <form class="crud-form" method="post" action="/parts/{{ editing_part.id }}/update">
+    <h2>Edit part {{ editing_part.prefix }}-{{ editing_part.number }}{% if editing_part.revision %}/{{ editing_part.revision }}{% endif %}</h2>
+    <input type="hidden" name="version" value="{{ editing_part.version }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/parts">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Name<input name="name" value="{{ editing_part.name }}" required></label>
+      <label>Revision<input name="revision" value="{{ editing_part.revision }}" required></label>
+      <label>Part role
+        <select name="part_role">
+          {% for r in part_roles %}<option value="{{ r }}"{{ ' selected' if r == editing_part.part_role.value else '' }}>{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Lifecycle
+        <select name="lifecycle_state">
+          {% for s in lifecycle_states %}<option value="{{ s }}"{{ ' selected' if s == editing_part.lifecycle_state.value else '' }}>{{ s.replace('_', ' ') }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Release date<input name="release_on" type="date" value="{{ editing_part.release_on or '' }}"></label>
+      <label>Description<input name="description" value="{{ editing_part.description }}"></label>
+    </div>
+  </form>
+{% else %}
+
+  {# ── Create form (mandatory fields first) ───────────────────────────── #}
+  <div class="table-toolbar">
+    <p class="table-desc">Every part is a shared-core vertex with a typed extension row carrying its part role.</p>
+  </div>
+  <form class="crud-form" method="post" action="/parts/create">
+    <h2>Create a part</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create part</button></div>
+    <p class="cell-anno" id="part-gen-status" role="status" aria-live="polite"></p>
+    <div class="form-grid">
+      <label>Number
+        <span class="input-gen">
+          <input name="number" id="part-number" placeholder="1001" required>
+          <button class="btn-icon" type="button" id="gen-part-number" title="Generate next part number" aria-label="Generate next part number">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+        </span>
+      </label>
+      <label>Name<input name="name" id="part-name" placeholder="Motor Housing" required></label>
+      <label>Part role
+        <select name="part_role">
+          {% for r in part_roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Revision
+        <span class="input-gen">
+          <input name="revision" id="part-revision" value="A" required>
+          <button class="btn-icon" type="button" id="gen-part-revision" title="Increment from the latest revision in the database" aria-label="Generate next revision">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+          </button>
+        </span>
+      </label>
+      <label>Prefix<input name="prefix" id="part-prefix" value="PRT"></label>
+      <label>Release date<input name="release_on" type="date"></label>
+      <label>Description<input name="description"></label>
+    </div>
+  </form>
+  <script>
+  (function () {
+    var form = document.querySelector('form[action="/parts/create"]');
+    if (!form) return;
+    var numberInput = form.querySelector('#part-number');
+    var revisionInput = form.querySelector('#part-revision');
+    var prefixInput = form.querySelector('#part-prefix');
+    var status = document.getElementById('part-gen-status');
+
+    // Generation must never die silently: any failure lands in #part-gen-status,
+    // and an expired session gets an actionable hint instead of a silent no-op.
+    function say(message) { if (status) status.textContent = message; }
+    function currentPrefix() { return (prefixInput.value || 'PRT').trim() || 'PRT'; }
+    function fetchJson(url) {
+      return fetch(url, { headers: { Accept: 'application/json' } }).then(function (res) {
+        var type = res.headers.get('content-type') || '';
+        if (!res.ok || type.indexOf('application/json') === -1) {
+          throw { expired: res.redirected || !type, status: res.status };
+        }
+        return res.json();
+      });
+    }
+    function fail(error, what) {
+      say((error && error.expired) ? ('Your session has expired - ' + what + ' unavailable.') : ('Could not generate ' + what + ' (server error).'));
+    }
+
+    // Next free numeric number for the current prefix; the server derives the
+    // pool from kind=Part vertices only, so other entity types never consume a part number.
+    document.getElementById('gen-part-number').addEventListener('click', function () {
+      fetchJson('/parts/next-number?prefix=' + encodeURIComponent(currentPrefix()))
+        .then(function (data) {
+          if (data.number) {
+            numberInput.value = data.number;
+            numberInput.classList.add('is-generated');
+            say('Next free number for ' + currentPrefix() + ': ' + data.number);
+          } else { fail(data, 'a number'); }
+        })
+        .catch(function (error) { fail(error, 'a number'); });
+    });
+    numberInput.addEventListener('input', function () { numberInput.classList.remove('is-generated'); });
+
+    // Revision successor of the highest revision already stored for {prefix}-{number}.
+    document.getElementById('gen-part-revision').addEventListener('click', function () {
+      var number = (numberInput.value || '').trim();
+      if (!number) { say('Enter or generate a part number first.'); numberInput.focus(); return; }
+      fetchJson('/parts/next-revision?prefix=' + encodeURIComponent(currentPrefix()) +
+                '&number=' + encodeURIComponent(number))
+        .then(function (data) {
+          if (data.revision) {
+            revisionInput.value = data.revision;
+            say('Next revision for ' + currentPrefix() + '-' + number + ': ' + data.revision);
+          } else { fail(data, 'a revision'); }
+        })
+        .catch(function (error) { fail(error, 'a revision'); });
+    });
+  })();
+  </script>
+{% endif %}
+
+{# ── Listing (all columns orderable) ──────────────────────────────────── #}
+<form class="table-toolbar toolbar-search" method="get" action="/parts">
+  <input type="search" name="q" value="{{ part_q }}" placeholder="Filter by number&hellip;" aria-label="Filter parts">
+  {% if part_sort %}<input type="hidden" name="sort" value="{{ part_sort }}"><input type="hidden" name="dir" value="{{ part_dir }}">{% endif %}
+  <button class="btn-mini" type="submit">Filter</button>
+  {% if part_q %}<a class="btn-mini" href="/parts?sort={{ part_sort }}&amp;dir={{ part_dir }}">Clear</a>{% endif %}
+  <span class="cell-anno">{{ total_parts }} part{{ '' if total_parts == 1 else 's' }}</span>
+</form>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th><a href="{{ sort_link('number') }}">Number{{ sort_icon('number') | safe }}</a></th>
+      <th><a href="{{ sort_link('name') }}">Name{{ sort_icon('name') | safe }}</a></th>
+      <th><a href="{{ sort_link('part_role') }}">Role{{ sort_icon('part_role') | safe }}</a></th>
+      <th><a href="{{ sort_link('revision') }}">Rev{{ sort_icon('revision') | safe }}</a></th>
+      <th><a href="{{ sort_link('state') }}">State{{ sort_icon('state') | safe }}</a></th>
+      <th><a href="{{ sort_link('modified') }}">Modified{{ sort_icon('modified') | safe }}</a></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in parts %}
+    <tr>
+      <td class="cell-mono">{{ p.prefix }}-{{ p.number }}{% if p.revision %}/{{ p.revision }}{% endif %}</td>
+      <td title="{{ p.name }}">{{ p.name | short }}</td>
+      <td><span class="pill">{{ p.part_role.value }}</span></td>
+      <td>{{ p.revision }}</td>
+      <td>{{ p.lifecycle_state.value }}</td>
+      <td>{{ p.modified_on.strftime("%Y-%m-%d %H:%M") if p.modified_on else "" }}</td>
+      <td class="row-actions">
+        <a class="btn-mini" href="/parts?edit={{ p.id }}">Edit</a>
+        <form class="inline-form" method="post" action="/parts/{{ p.id }}/delete">
+          <input type="hidden" name="version" value="{{ p.version }}">
+          <button class="btn-mini btn-danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="cell-anno">No parts yet &mdash; create the first one above.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+</section>
+{% endblock %}

@@ -50,7 +50,8 @@ from services.role_service import roles as _roles_svc  # noqa: E402
 from services.rule_engine import validator as _validator  # noqa: E402
 from services.tenant_service import tenants as _tenants_svc  # noqa: E402
 from services.user_service import users as _users_svc  # noqa: E402
-from services.vertex_service import VertexCoreService, vertices as _vertices  # noqa: E402
+from services.vertex_service import VertexCoreService, vertices as _vertices, parts as _parts  # noqa: E402
+from services.schemas import PartCreate, PartUpdate, PartOut  # noqa: E402
 
 _core = VertexCoreService()
 
@@ -221,6 +222,27 @@ def soft_delete_vertex(*a, **k):
 
 def update_vertex(*a, **k):
     return _core.update(*a, **k)
+
+
+# ── Part subtype adapters (TSE: kind=Part, part_role extension column) ────────
+def create_part(*a, **k):
+    return _parts.create(*a, **k)
+
+
+def get_part(*a, **k):
+    return _parts.get(*a, **k)
+
+
+def list_parts(*a, **k):
+    return _parts.list(*a, **k)
+
+
+def update_part(*a, **k):
+    return _parts.update(*a, **k)
+
+
+def soft_delete_part(*a, **k):
+    return _parts.soft_delete(*a, **k)
 
 
 from sqlalchemy import delete  # noqa: E402
