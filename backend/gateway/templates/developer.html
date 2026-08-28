@@ -146,6 +146,66 @@
   <div style="margin-top:1.5rem;padding:0.75rem 1rem;background:var(--accent-soft);border-radius:var(--radius);font-size:0.85rem;color:var(--ink-soft);">
     <strong>Note:</strong> All commands target <code>http://localhost:9200</code>. Ensure Elasticsearch is running. For Kibana GUI access, visit <code>http://localhost:5601</code>.
   </div>
+   {% endif %}
+</section>
+
+<section class="module-card table-card" style="margin-top:1.5rem;">
+  <h2>Schema / Seed Deploy</h2>
+  <p class="table-desc">Deploy database schema and seed data. Runs in the background; you are signed out on start
+    so the new schema takes effect on your next login. <strong>delta</strong> applies only new files;
+    <strong>fresh</strong> drops the schema first and replays everything.</p>
+
+  <form class="crud-form" method="post" action="/developer/schema-seed">
+    <div class="form-grid">
+      <label>Mode
+        <select name="mode">
+          <option value="delta">delta (apply pending files only)</option>
+          <option value="fresh">fresh (drop schema, reapply all)</option>
+        </select>
+      </label>
+      <label>Actions
+        <select name="actions">
+          <option value="schema">schema only</option>
+          <option value="seed">seed (schema first if needed)</option>
+          <option value="schema,seed">schema then seed</option>
+        </select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit"
+              onclick="return confirm('This will modify the database schema and sign you out. Continue?');">
+        Run Deploy
+      </button>
+    </div>
+  </form>
+
+  {% if schema_jobs %}
+  <h3 style="margin-top:1.5rem;">Recent Jobs</h3>
+  <table class="data-table">
+    <thead><tr><th>Job</th><th>Mode</th><th>Actions</th><th>Status</th><th>Applied</th><th>Skipped</th><th>Errors</th></tr></thead>
+    <tbody>
+      {% for j in schema_jobs %}
+      <tr>
+        <td class="cell-mono">{{ j.id }}</td>
+        <td>{{ j.mode or '—' }}</td>
+        <td>{{ j.actions|join(', ') if j.actions else '—' }}</td>
+        <td><span class="pill {{ 'lc-released' if j.status == 'done' else 'lc-obsolete' if j.status == 'failed' else 'lc-in_review' }}">{{ j.status }}</span></td>
+        <td>{{ j.applied|length }}</td>
+        <td>{{ j.skipped|length }}</td>
+        <td>{{ j.errors|length }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if schema_log %}
+  <h3 style="margin-top:1.5rem;">Latest Log</h3>
+  <pre style="overflow:auto;max-height:320px;font-size:0.82rem;background:var(--bg);padding:1rem;border-radius:8px;">{{ schema_log }}</pre>
   {% endif %}
 </section>
+
+{% if schema_active %}
+<script>setTimeout(function () { location.reload(); }, 3000);</script>
+{% endif %}
 {% endblock %}

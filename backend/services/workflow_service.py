@@ -22,7 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import func, insert, select, update as sa_update
+from sqlalchemy import func, insert, or_, select, update as sa_update
 
 from . import db, enums, errors, tables
 from .schemas import (
@@ -40,15 +40,24 @@ _TASK = tables.workflow_task
 
 
 def _def_out(row: dict) -> WorkflowDefinitionOut:
-    return WorkflowDefinitionOut.model_validate(dict(row._mapping))
+    values = dict(row._mapping)
+    return WorkflowDefinitionOut.model_validate(
+        {k: values[k] for k in WorkflowDefinitionOut.model_fields}
+    )
 
 
 def _inst_out(row: dict) -> WorkflowInstanceOut:
-    return WorkflowInstanceOut.model_validate(dict(row._mapping))
+    values = dict(row._mapping)
+    return WorkflowInstanceOut.model_validate(
+        {k: values[k] for k in WorkflowInstanceOut.model_fields}
+    )
 
 
 def _task_out(row: dict) -> WorkflowTaskOut:
-    return WorkflowTaskOut.model_validate(dict(row._mapping))
+    values = dict(row._mapping)
+    return WorkflowTaskOut.model_validate(
+        {k: values[k] for k in WorkflowTaskOut.model_fields}
+    )
 
 
 def _users_in_role(session, tenant_id: UUID, role_code: str) -> list[UUID]:
@@ -122,7 +131,7 @@ class WorkflowService:
             conditions.append(
                 _DEF.c.object_type.is_(None) | (_DEF.c.object_type == object_type)
             )
-        rows = session.execute(select(_DEF).where(*conditions)).mappings().all()
+        rows = session.execute(select(_DEF).where(*conditions)).all()
         return [_def_out(r) for r in rows]
 
     def update_definition(
@@ -340,15 +349,20 @@ class WorkflowService:
     def pending_tasks_for_user(self, session, tenant_id: UUID, user_id: UUID) -> list[dict]:
         """Tasks assigned to the user (directly or via one of their roles)."""
         role_codes = _user_role_codes(session, tenant_id, user_id)
+        match = _TASK.c.assigned_to == user_id
+        # Role-based tasks are claimable by any holder of the step's role; only
+        # add the role branch when the user actually holds roles, otherwise
+        # Postgres rejects the empty `IN ()`.
+        if role_codes:
+            match = or_(
+                match,
+                _TASK.c.assigned_to.is_(None) & _TASK.c.assigned_role.in_(role_codes),
+            )
         conditions = [
             _TASK.c.tenant_id == tenant_id,
             _TASK.c.status == enums.WorkflowTaskStatus.PENDING,
-            _TASK.c.assigned_to == user_id,
+            match,
         ]
-        # Only add the role match when the user actually holds roles, otherwise
-        # Postgres rejects the empty `IN ()`.
-        if role_codes:
-            conditions.append(_TASK.c.assigned_to.is_(None) & _TASK.c.assigned_role.in_(role_codes))
         rows = session.execute(select(_TASK).where(*conditions)).mappings().all()
         return [dict(r) for r in rows]
 

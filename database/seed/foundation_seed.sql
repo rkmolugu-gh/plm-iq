@@ -496,5 +496,158 @@ VALUES ('60000000-0000-4000-8000-000000000001', 'platform', NULL, NULL,
         false, 'seed', 'seed')
 ON CONFLICT (id) DO NOTHING;
 
+-- ══ Stage 2c: release workflow (templates + instances + tasks) ══════════════
+-- Templates mirror the reference repo's seeded release-approval graphs, adapted
+-- to the current schema: definition JSON uses the stage/step shape the workflow
+-- service reads ({"result_status","stages":[{name,parallel,threshold,steps:
+-- [{key,name,assignee,description,due_days,action}]}]}). Templates are seeded
+-- tenant-scoped (tenant_id NOT NULL) because workflow_service.list_definitions
+-- only returns tenant-owned rows, so a NULL tenant_id would hide them from the
+-- Admin ▸ WF Template and Domain ▸ Workflow pages.
+-- Instances attach to seeded demo vertices and fan out one task per step; tasks
+-- are assigned to the seeded user holding the step's role where one exists,
+-- otherwise left as a role placeholder (assigned_to NULL, claimable by role).
+
+INSERT INTO workflow_definition (id, tenant_id, name, object_type, description, definition, is_active,
+                                 created_by, modified_by)
+VALUES
+('50000000-0000-4000-8000-000000000001',
+ '11111111-1111-1111-1111-111111111111', 'Standard Part Release', 'Part',
+ 'Standard workflow for releasing a new part',
+ '{"result_status": "released", "stages": [{"name": "Engineering", "parallel": false, "steps": [{"key": "eng", "name": "Engineering Review", "assignee": "contributor", "description": "Review CAD data, specifications, and BOM for manufacturability and compliance", "due_days": 3, "action": "approve"}]}, {"name": "Approvals", "parallel": true, "threshold": 2, "steps": [{"key": "qa", "name": "Quality Approval", "assignee": "viewer", "description": "Verify quality standards, tolerances, and inspection requirements", "due_days": 5, "action": "approve"}, {"key": "mfg", "name": "Manufacturing Approval", "assignee": "viewer", "description": "Verify manufacturability, process capability, and production cost", "due_days": 5, "action": "approve"}]}, {"name": "Release", "parallel": false, "steps": [{"key": "RELEASED", "name": "Release Authorization", "assignee": "tenant-admin", "description": "Final release authorization - verify all approvals complete and part is ready for production", "due_days": 2, "action": "release"}]}]}',
+ true, 'seed', 'seed'),
+
+('50000000-0000-4000-8000-000000000002',
+ '11111111-1111-1111-1111-111111111111', 'ECO Approval', 'EC',
+ 'Workflow for approving engineering change orders',
+ '{"result_status": "approved", "stages": [{"name": "Review", "parallel": false, "steps": [{"key": "rev", "name": "Change Review", "assignee": "contributor", "description": "Review the change description, impact analysis, and technical feasibility", "due_days": 3, "action": "approve"}]}, {"name": "Approvals", "parallel": true, "threshold": 2, "steps": [{"key": "qa", "name": "Quality Approval", "assignee": "viewer", "description": "Verify quality impact, test requirements, and compliance changes", "due_days": 5, "action": "approve"}, {"key": "mfg", "name": "Manufacturing Approval", "assignee": "viewer", "description": "Verify manufacturing impact, process changes, and cost implications", "due_days": 5, "action": "approve"}]}, {"name": "Release", "parallel": false, "steps": [{"key": "APPROVED", "name": "Change Release", "assignee": "tenant-admin", "description": "Final change release authorization - verify all approvals and implementation plan", "due_days": 2, "action": "release"}]}]}',
+ true, 'seed', 'seed'),
+
+('50000000-0000-4000-8000-000000000003',
+ '11111111-1111-1111-1111-111111111111', 'Unrelease', NULL,
+ 'Generic workflow to move any released/approved object back to Draft status',
+ '{"result_status": "draft", "stages": [{"name": "Approval", "parallel": false, "steps": [{"key": "author_approval", "name": "Author Approval", "assignee": "contributor", "description": "Approve the request to move the released object back to Draft status", "due_days": 2, "action": "approve"}]}, {"name": "Unrelease", "parallel": false, "steps": [{"key": "DRAFT", "name": "Change Status to Draft", "assignee": "tenant-admin", "description": "Move the object back to Draft status", "due_days": 1, "action": "release"}]}]}',
+ true, 'seed', 'seed');
+
+-- ── Workflow instances ────────────────────────────────────────────────────────
+-- 1. ECO Approval in_progress on EC-0042 (vertex ...005, in_review)
+-- 2. Standard Part Release in_progress on ASM-1000 (vertex ...007, approved;
+--    gates that part's release until the workflow completes)
+-- 3. Standard Part Release completed on PRT-1001 (vertex ...006, released)
+-- 4. ECO Approval rejected on EC-0007 (vertex ...011, draft)
+
+INSERT INTO workflow_instance (id, tenant_id, vertex_id, vertex_kind, definition_id, status, current_stage,
+                               started_by, started_on, completed_on, result_status, due_date,
+                               created_by, modified_by)
+VALUES
+('51000000-0000-4000-8000-000000000001',
+ '11111111-1111-1111-1111-111111111111',
+ '00000000-0000-4000-8000-000000000005', 'EC',
+ '50000000-0000-4000-8000-000000000002',
+ 'in_progress', 0, 'dane', '2026-08-20 09:00:00+00', NULL, 'approved', '2026-09-15',
+ 'seed', 'seed'),
+
+('51000000-0000-4000-8000-000000000002',
+ '11111111-1111-1111-1111-111111111111',
+ '00000000-0000-4000-8000-000000000007', 'Part',
+ '50000000-0000-4000-8000-000000000001',
+ 'in_progress', 0, 'dane', '2026-08-21 10:30:00+00', NULL, 'released', '2026-09-18',
+ 'seed', 'seed'),
+
+('51000000-0000-4000-8000-000000000003',
+ '11111111-1111-1111-1111-111111111111',
+ '00000000-0000-4000-8000-000000000006', 'Part',
+ '50000000-0000-4000-8000-000000000001',
+ 'completed', 2, 'dane', '2026-07-01 08:00:00+00', '2026-07-10 16:45:00+00', 'released', '2026-07-15',
+ 'seed', 'seed'),
+
+('51000000-0000-4000-8000-000000000004',
+ '11111111-1111-1111-1111-111111111111',
+ '00000000-0000-4000-8000-000000000011', 'EC',
+ '50000000-0000-4000-8000-000000000002',
+ 'rejected', 0, 'dane', '2026-08-15 14:00:00+00', '2026-08-18 11:20:00+00', NULL, '2026-08-30',
+ 'seed', 'seed');
+
+-- ── Workflow tasks ────────────────────────────────────────────────────────────
+-- One row per definition step. assigned_to points at the seeded user holding the
+-- step's assignee role where one exists (contributor -> priya, tenant-admin ->
+-- dane); viewer-assignee steps stay role placeholders (assigned_to NULL).
+
+INSERT INTO workflow_task (id, tenant_id, instance_id, stage_index, step_key, step_name,
+                           assigned_role, assigned_to, status, action, comment, due_date, completed_on,
+                           created_by, modified_by)
+VALUES
+-- Instance 1: ECO Approval on EC-0042 (in_progress)
+('52000000-0000-4000-8000-000000000001', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000001', 0, 'rev', 'Change Review',
+ 'contributor', '20000000-0000-4000-8000-000000000003', 'pending', 'approve',
+ 'Review the change description, impact analysis, and technical feasibility', '2026-08-25', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000002', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000001', 1, 'qa', 'Quality Approval',
+ 'viewer', NULL, 'pending', 'approve',
+ 'Verify quality impact, test requirements, and compliance changes', '2026-08-27', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000003', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000001', 1, 'mfg', 'Manufacturing Approval',
+ 'viewer', NULL, 'pending', 'approve',
+ 'Verify manufacturing impact, process changes, and cost implications', '2026-08-27', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000004', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000001', 2, 'APPROVED', 'Change Release',
+ 'tenant-admin', '20000000-0000-4000-8000-000000000001', 'pending', 'release',
+ 'Final change release authorization - verify all approvals and implementation plan', '2026-09-01', NULL, 'seed', 'seed'),
+
+-- Instance 2: Standard Part Release on ASM-1000 (in_progress)
+('52000000-0000-4000-8000-000000000005', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000002', 0, 'eng', 'Engineering Review',
+ 'contributor', '20000000-0000-4000-8000-000000000003', 'pending', 'approve',
+ 'Review CAD data, specifications, and BOM for manufacturability and compliance', '2026-08-26', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000006', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000002', 1, 'qa', 'Quality Approval',
+ 'viewer', NULL, 'pending', 'approve',
+ 'Verify quality standards, tolerances, and inspection requirements', '2026-08-28', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000007', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000002', 1, 'mfg', 'Manufacturing Approval',
+ 'viewer', NULL, 'pending', 'approve',
+ 'Verify manufacturability, process capability, and production cost', '2026-08-28', NULL, 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000008', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000002', 2, 'RELEASED', 'Release Authorization',
+ 'tenant-admin', '20000000-0000-4000-8000-000000000001', 'pending', 'release',
+ 'Final release authorization - verify all approvals complete and part is ready for production', '2026-09-03', NULL, 'seed', 'seed'),
+
+-- Instance 3: Standard Part Release on PRT-1001 (completed)
+('52000000-0000-4000-8000-000000000009', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000003', 0, 'eng', 'Engineering Review',
+ 'contributor', '20000000-0000-4000-8000-000000000003', 'approved', 'approve',
+ 'CAD, spec, and BOM verified for release', '2026-07-03', '2026-07-03 10:00:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000010', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000003', 1, 'qa', 'Quality Approval',
+ 'viewer', NULL, 'approved', 'approve',
+ 'Quality standards and tolerances met', '2026-07-06', '2026-07-06 09:30:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000011', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000003', 1, 'mfg', 'Manufacturing Approval',
+ 'viewer', NULL, 'approved', 'approve',
+ 'Manufacturable with existing process capability', '2026-07-06', '2026-07-06 14:10:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000012', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000003', 2, 'RELEASED', 'Release Authorization',
+ 'tenant-admin', '20000000-0000-4000-8000-000000000001', 'approved', 'release',
+ 'All approvals complete; part released', '2026-07-10', '2026-07-10 16:45:00+00', 'seed', 'seed'),
+
+-- Instance 4: ECO Approval on EC-0007 (rejected)
+('52000000-0000-4000-8000-000000000013', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000004', 0, 'rev', 'Change Review',
+ 'contributor', '20000000-0000-4000-8000-000000000003', 'rejected', 'approve',
+ 'Insufficient impact analysis for the proposed supplier swap', '2026-08-18', '2026-08-18 11:20:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000014', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000004', 1, 'qa', 'Quality Approval',
+ 'viewer', NULL, 'rejected', 'approve',
+ 'Workflow stopped after review rejection', '2026-08-18', '2026-08-18 11:20:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000015', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000004', 1, 'mfg', 'Manufacturing Approval',
+ 'viewer', NULL, 'rejected', 'approve',
+ 'Workflow stopped after review rejection', '2026-08-18', '2026-08-18 11:20:00+00', 'seed', 'seed'),
+('52000000-0000-4000-8000-000000000016', '11111111-1111-1111-1111-111111111111',
+ '51000000-0000-4000-8000-000000000004', 2, 'APPROVED', 'Change Release',
+ 'tenant-admin', '20000000-0000-4000-8000-000000000001', 'rejected', 'release',
+ 'Workflow stopped after review rejection', '2026-08-18', '2026-08-18 11:20:00+00', 'seed', 'seed');
+
 COMMIT;
 

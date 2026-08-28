@@ -12,12 +12,11 @@ Resolution order per request: active edition first, then common.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
-
+import json
 import logging
 import os
-import json
 import re
+from contextlib import contextmanager
 from datetime import date, timezone
 from datetime import datetime as dt
 from pathlib import Path
@@ -26,44 +25,33 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError, ProgrammingError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
-from starlette.concurrency import run_in_threadpool
-from services import db, edge_service, enums, es_client, graph_rule_service, index_service
+from services import db, edge_service, enums, index_service, setting_service
+from services.ai_assistant_service import DEFAULT_BASE_URL, DEFAULT_MODEL, assistant
 from services.bulk_file_upload_service import bulk_uploads
 from services.document_service import documents
-from services.es_client import es
-from services.es_dev_service import es_dev
 from services.edge_service import edges
+from services.errors import ServiceError
+from services.es_client import es
 from services.es_ingest_service import ingest
 from services.file_store import files
-from services.graph_query_service import queries
 from services.graph_rule_service import rules
 from services.index_service import indexer, watermarks
 from services.jobs import registry
 from services.role_service import roles
-from services.rule_engine import validator
-from services import setting_service
-from services.search_service import searcher
-from services.tenant_service import tenants
-from services.user_service import users
-from services.vertex_service import vertices, parts
-from services.workflow_service import workflows
-from services.ai_assistant_service import assistant, DEFAULT_MODEL, DEFAULT_BASE_URL
-from services.errors import ServiceError
+from services.schema_seed_service import schema_deploy
 from services.schemas import (
     DocumentCreate,
     EdgeCreate,
     EdgeUpdate,
     GraphRuleCreate,
     GraphRuleUpdate,
-    PermissionCreate,
-    PermissionUpdate,
     PartCreate,
     PartUpdate,
+    PermissionCreate,
+    PermissionUpdate,
     RoleCreate,
     RoleUpdate,
     TenantCreate,
@@ -74,10 +62,20 @@ from services.schemas import (
     VertexUpdate,
     WorkflowDefinitionCreate,
 )
+from services.search_service import searcher
+from services.tenant_service import tenants
+from services.user_service import users
+from services.vertex_service import parts, vertices
+from services.workflow_service import workflows
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
+from starlette.concurrency import run_in_threadpool
+
 from .. import auth, graph_view
-from ..auth import DatabaseUnavailable, Identity, sessions
+from ..auth import DatabaseUnavailable, sessions
 from ..resolver import TenantContext, tenant_resolver
 from ..settings import settings as _gateway_settings
+
 _EDITIONS = _gateway_settings.editions
 
 logger = logging.getLogger(__name__)
@@ -2311,7 +2309,7 @@ def settings_update(request: Request, content: str = Form("")) -> RedirectRespon
 
 @router.get("/developer", response_class=HTMLResponse)
 def developer_page(request: Request, slug: str = "") -> HTMLResponse:
-    """Developer tools page - Elasticsearch internals viewer."""
+    """Developer tools page - Elasticsearch internals viewer + schema/seed deploy."""
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return ident
@@ -2324,7 +2322,15 @@ def developer_page(request: Request, slug: str = "") -> HTMLResponse:
             s = index_service.slug_for(tenant_row["subdomain"]) if tenant_row else ""
         except Exception:
             pass
-    context.update(slug=s)
+    params = request.query_params
+    context.update(
+        slug=s,
+        schema_jobs=[_schema_seed_job_view(j) for j in schema_deploy.recent_jobs()],
+        schema_log=schema_deploy.latest_log_tail(),
+        schema_active=registry.any_active(),
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
     return _templates_for(context["ctx"]).TemplateResponse(
         request, "developer.html", context, status_code=200
     )
@@ -2341,10 +2347,51 @@ def developer_clear_cookies(request: Request) -> RedirectResponse:
     return response
 
 
-    context = _base_context(request)
-    if not context["ctx"].matched_pattern:
-        return _render_default(request)
-    return _render_not_found(request, path=f"/{rest}")
+@router.post("/developer/schema-seed")
+def schema_seed_run(
+    request: Request,
+    mode: str = Form("delta"),
+    actions: str = Form("schema"),
+) -> RedirectResponse:
+    """Start a schema/seed deploy job, then clear cookies (DB changes force logout)."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    action_list = [a.strip() for a in actions.split(",") if a.strip()]
+    try:
+        job_id = schema_deploy.start(mode, action_list, actor=ident.email)
+    except (ServiceError, ValueError) as exc:
+        msg = quote(str(exc))
+        return _redirect_clearing_cookies(request, f"/developer?err={msg}")
+    return _redirect_clearing_cookies(
+        request, f"/signin?msg=schema-seed+job+{job_id}+started"
+    )
+
+
+def _redirect_clearing_cookies(request: Request, url: str) -> RedirectResponse:
+    """Redirect to ``url`` after deleting every PLM-IQ session cookie."""
+    response = RedirectResponse(url, status_code=303)
+    for name in request.cookies:
+        if name == sessions.cookie_name or name.startswith(sessions.cookie_name):
+            response.delete_cookie(name)
+    return response
+
+
+def _schema_seed_job_view(record: dict) -> dict:
+    result = record.get("result")
+    return {
+        "id": record["id"],
+        "name": record["name"],
+        "status": record["status"],
+        "started_at": record.get("started_at"),
+        "finished_at": record.get("finished_at"),
+        "mode": result.get("mode") if result else None,
+        "actions": result.get("actions") if result else None,
+        "applied": result.get("applied", []) if result else [],
+        "skipped": result.get("skipped", []) if result else [],
+        "errors": result.get("errors", []) if result else [],
+        "error": record.get("error"),
+    }
 
 
 def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
