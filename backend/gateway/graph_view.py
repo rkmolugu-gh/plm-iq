@@ -99,8 +99,17 @@ def build_graph_view(
         node_set.add(number)  # focus always visible for context
         found_map = {(e["source"], e["target"], e["kind"]): e for e in drawn_list}
         node_order = sorted(node_set)
+        # Dropdowns scope to every edge the filter actually drew.
+        option_edges = found_map
     else:
         node_order, found_map = walk(lambda edge: True)
+        # Dropdowns scope to the focus's DIRECT (one-hop) neighborhood even
+        # though the diagram itself walks deeper for context.
+        option_edges = {
+            (e["source"], e["target"], e["kind"]): e
+            for e in edges
+            if e["source"] == number or e["target"] == number
+        }
 
     def nid(n: str) -> str:
         return n.replace("-", "")
@@ -144,14 +153,15 @@ def build_graph_view(
         shown["target_label"] = disp(edge["target"])
         drawn_out.append(shown)
 
-    # A vertex cannot relate to itself: once a Source (or Target) is picked,
-    # that vertex is removed from the opposite dropdown's choices.
+    # A vertex cannot relate to itself: the focused vertex never appears as a
+    # Source option, and once a Source (or Target) is picked, that vertex is
+    # removed from the opposite dropdown's choices.
     all_option_vertices = sorted(
-        {e["source"] for e in found_map.values()}
-        | {e["target"] for e in found_map.values()}
+        {e["source"] for e in option_edges.values()}
+        | {e["target"] for e in option_edges.values()}
         | {number}
     )
-    source_options = [v for v in all_option_vertices if v != target]
+    source_options = [v for v in all_option_vertices if v != target and v != number]
     target_options = [v for v in all_option_vertices if v != source]
 
     return {
@@ -164,7 +174,7 @@ def build_graph_view(
         "options": {
             "source": source_options,
             "target": target_options,
-            "relations": sorted({e["kind"] for e in found_map.values()}),
+            "relations": sorted({e["kind"] for e in option_edges.values()}),
         },
         "filters": {"source": source, "relation": relation, "target": target},
         "filtered": filters_active,

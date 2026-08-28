@@ -49,6 +49,7 @@
       {% if e == 'invalid' %}Unknown tenant, account, or wrong password.
       {% elif e == 'missing' %}Tenant, username and password are required.
       {% elif e == 'db' %}The database is currently unavailable &mdash; please try again later or contact support.
+      {% elif e == 'cookies-cleared' %}App cookies cleared &mdash; please sign in again.
       {% else %}Your session has expired &mdash; please sign in again.{% endif %}
     </p>
     {% endif %}

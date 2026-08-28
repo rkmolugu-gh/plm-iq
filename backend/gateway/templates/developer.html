@@ -11,6 +11,19 @@
 {% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
 
 <section class="module-card table-card" style="margin-top:1.5rem;">
+  <h2>Session &amp; Cookies</h2>
+  <p class="table-desc">Cookies set by this application (<code>plmiq_session</code>, plus any
+    <code>plmiq_session_*</code> variants). Clearing them only removes the app's own cookies &mdash;
+    cookies belonging to other sites are left untouched. You will be signed out.</p>
+  <form method="post" action="/developer/clear-cookies" style="display:inline-block;">
+    <button class="btn btn-primary btn-sm" type="submit"
+            onclick="return confirm('Clear all PLM-IQ app cookies? You will be signed out.');">
+      Clear Cookies
+    </button>
+  </form>
+</section>
+
+<section class="module-card table-card" style="margin-top:1.5rem;">
   <h2>Elasticsearch Internals</h2>
   <p class="table-desc">Browse ES indices, mappings, and data directly. Replace <code>&lt;slug&gt;</code> with your tenant subdomain (e.g. <code>plm-iq</code>).</p>
 

@@ -2330,6 +2330,17 @@ def developer_page(request: Request, slug: str = "") -> HTMLResponse:
     )
 
 
+@router.post("/developer/clear-cookies")
+def developer_clear_cookies(request: Request) -> RedirectResponse:
+    """Clear only the cookies this application sets (session, etc.), then
+    bounce to sign-in. Browser cookies belonging to other sites are untouched."""
+    response = RedirectResponse("/signin?error=cookies-cleared", status_code=303)
+    for name in request.cookies:
+        if name == sessions.cookie_name or name.startswith(sessions.cookie_name):
+            response.delete_cookie(name)
+    return response
+
+
     context = _base_context(request)
     if not context["ctx"].matched_pattern:
         return _render_default(request)

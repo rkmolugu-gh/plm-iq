@@ -93,7 +93,7 @@ def suite_gateway_dashboard(tid=None):
 
     ok = client.post(
         "/signin",
-        data={"tenant": "plm-iq", "username": "platformadmin@plm-iq.site", "password": "19691969"},
+        data={"tenant": "plm-iq", "username": "dane@plm-iq.site", "password": "19691969"},
         headers={"host": "plm-iq.foundation.localhost.com"},
         follow_redirects=False,
     )
@@ -114,7 +114,7 @@ def suite_gateway_dashboard(tid=None):
 
     # profile dropdown shows the real signed-in user and assigned role
     assert 'class="profile"' in dash.text, "profile dropdown missing"
-    assert "PLM-IQ Service Login" in dash.text, "real user name missing from profile"
+    assert "Dane" in dash.text, "real user name missing from profile"
     assert "Tenant Administrator" in dash.text, "assigned role missing from profile"
     assert 'href="/help"' in dash.text, "help link missing from signed-in profile menu"
 
@@ -137,7 +137,7 @@ def suite_gateway_tenant_admin(tid=None):
 
     login = client.post(
         "/signin",
-        data={"tenant": "plm-iq", "username": "platformadmin@plm-iq.site", "password": "19691969"},
+        data={"tenant": "plm-iq", "username": "dane@plm-iq.site", "password": "19691969"},
         headers={"host": "plm-iq.foundation.localhost.com"},
         follow_redirects=False,
     )
@@ -157,7 +157,7 @@ def suite_gateway_tenant_admin(tid=None):
 
     ro = get("/admin/tenant?tab=roles", "plm-iq.foundation.localhost.com")
     assert ro.status_code == 200
-    for marker in ("Create a tenant role", "tenant-admin", "read-only"):
+    for marker in ("Create a tenant role", "tenant-admin", "viewer"):
         assert marker in ro.text, f"missing on roles tab: {marker}"
 
     pm = get("/admin/tenant?tab=permissions", "plm-iq.foundation.localhost.com")
@@ -369,8 +369,17 @@ GRAPH_FIXTURE = {
 
 
 def suite_gateway_graph(tid=None):
+    # nav link only appears on the signed-in dashboard; the rest of this suite
+    # exercises the anonymous /graph shell (no sample data, no live rows)
+    client.post(
+        "/signin",
+        data={"tenant": "plm-iq", "username": "dane@plm-iq.site", "password": "19691969"},
+        headers={"host": "plm-iq.foundation.localhost.com"},
+        follow_redirects=False,
+    )
     assert 'href="/graph"' in get("/dashboard", "plm-iq.foundation.localhost.com").text, \
         "Graph nav item missing on dashboard"
+    client.get("/signout", headers={"host": "plm-iq.foundation.localhost.com"})
 
     v = get("/graph", "plm-iq.foundation.localhost.com")
     assert v.status_code == 200, v.status_code
