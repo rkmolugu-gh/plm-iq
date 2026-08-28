@@ -16,7 +16,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .routers.pages import router as pages_router
@@ -60,6 +61,25 @@ def create_app() -> FastAPI:
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.exception_handler(404)
+    async def not_found_handler(request: Request, exc):
+        from .routers.pages import _COMMON, _base_context, _render_default
+        host = request.headers.get("host", "")
+        if host.startswith("127.0.0.1"):
+            return _render_default(request)
+        context = _base_context(request)
+        context["path"] = request.url.path
+        context["message"] = (
+            "The address you opened could not be matched to a PLM-IQ workspace. "
+            "Please contact your system administrator."
+        )
+        return _COMMON.TemplateResponse(
+            request,
+            "not_found.html",
+            context,
+            status_code=404,
+        )
 
     app.include_router(pages_router)
     return app

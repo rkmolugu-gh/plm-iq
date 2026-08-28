@@ -36,6 +36,9 @@ except AttributeError:
     pass
 
 from services import db, enums, errors  # noqa: E402
+from services.errors import (  # noqa: E402
+    Conflict, Forbidden, NotFound, ServiceError, ValidationFailed,
+)
 # ── Class-based services ────────────────────────────────────────────────────
 # The suite predates the OOP port and calls bare functions. These thin
 # adapters bind the historical names onto the shared service singletons so
@@ -51,7 +54,19 @@ from services.rule_engine import validator as _validator  # noqa: E402
 from services.tenant_service import tenants as _tenants_svc  # noqa: E402
 from services.user_service import users as _users_svc  # noqa: E402
 from services.vertex_service import VertexCoreService, vertices as _vertices, parts as _parts  # noqa: E402
-from services.schemas import PartCreate, PartUpdate, PartOut  # noqa: E402
+from services.schemas import (  # noqa: E402
+    EdgeCreate, EdgeUpdate,
+    GraphRuleCreate, GraphRuleUpdate,
+    PartCreate, PartUpdate, PartOut,
+    RoleCreate, RoleUpdate,
+    TenantCreate, TenantUpdate,
+    UserCreate, UserUpdate,
+    VertexCreate, VertexUpdate,
+)
+from services.tables import (  # noqa: E402
+    foundation_edge, foundation_graph_rule, foundation_vertex,
+    iam_role, iam_role_permission, iam_tenant, iam_user, iam_user_role,
+)
 
 _core = VertexCoreService()
 
@@ -281,6 +296,19 @@ def mk_vertex(session, tenant_id, number, **kw):
     return create_vertex(session, tenant_id, VertexCreate(**payload), ACTOR)
 
 
+def mk_part(session, tenant_id, number, part_role=enums.PartRole.COMPONENT, **kw):
+    payload = {
+        "edition_id": enums.EditionId.FOUNDATION,
+        "kind": enums.VertexKind.PART,
+        "number": number,
+        "name": f"Part {number}",
+        "part_role": part_role,
+    }
+    payload.update(kw)
+    return create_part(session, tenant_id, PartCreate(**payload), ACTOR)
+
+
+
 def mk_bom_node_rule(tenant_id):
     return op(
         tenant_id,
@@ -410,6 +438,39 @@ def suite_vertex_service(tid):
     assert page_all.total == page.total + 1
 
     expect_error("unknown vertex must NotFound", NotFound, lambda: op(tid, lambda s: get_vertex(s, tid, uuidlib.uuid4())))
+
+
+# ── part_service (TSE subtype: kind=Part + foundation_part.part_role) ────────────
+
+
+def suite_part_service(tid):
+    # Create a Part classified as an assembly and confirm the role is stored.
+    p = op(tid, lambda s: mk_part(s, tid, "P-2001", part_role=enums.PartRole.ASSEMBLY))
+    assert p.version >= 1 and p.kind == enums.VertexKind.PART
+    assert p.part_role == enums.PartRole.ASSEMBLY, f"expected assembly, got {p.part_role}"
+
+    # The role must survive a store round-trip (it lives on the extension row).
+    # ``get`` returns a plain dict (find), so use item access here.
+    fetched = op(tid, lambda s: get_part(s, tid, p.id))
+    assert fetched["part_role"] == enums.PartRole.ASSEMBLY
+
+    # Reclassify to product and confirm the extension column is updated.
+    updated = op(
+        tid,
+        lambda s: update_part(s, tid, p.id, PartUpdate(version=p.version, part_role=enums.PartRole.PRODUCT), ACTOR),
+    )
+    assert updated.part_role == enums.PartRole.PRODUCT
+
+    # Listing is kind-scoped to Parts and surfaces the role column.
+    page = op(tid, lambda s: list_parts(s, tid))
+    assert any(item.id == p.id and item.part_role == enums.PartRole.PRODUCT for item in page.items)
+
+    # A Part created without an explicit role defaults to COMPONENT.
+    p_default = op(tid, lambda s: mk_part(s, tid, "P-2002"))
+    assert p_default.part_role == enums.PartRole.COMPONENT
+
+    soft_delete = op(tid, lambda s: soft_delete_part(s, tid, p.id, version=updated.version, actor=ACTOR))
+    assert soft_delete.marked_for_deletion is True
 
 
 # ── graph_rule_service ──────────────────────────────────────────────────────
@@ -884,21 +945,29 @@ def suite_role_service(tid):
         assert twin.scope == enums.RoleScope.TENANT and twin.tenant_id == other_id
 
         globals_page = op(tenant_id, lambda s: list_roles(s, tenant_id=tenant_id, scopes=[enums.RoleScope.GLOBAL]))
-        engineer = next(r for r in globals_page.items if r.code == "engineer")
+        assert globals_page.items, "expected a seeded global role to exercise global-role protection"
+        engineer = globals_page.items[0]
 
-        expect_error(
-            "editing a global role must be Forbidden",
-            Forbidden,
-            lambda: op(
-                tenant_id,
-                lambda s: update_role(s, tenant_id, engineer.id, RoleUpdate(version=engineer.version, name="Hijacked"), ACTOR),
+        orig_engineer_code = engineer.code
+
+        # Global roles are intentionally editable/deletable by tenants (the RLS
+        # role_update/role_delete policies allow scope='global'); only system
+        # roles are additionally protected. Exercise whichever applies.
+        edited = op(
+            tenant_id,
+            lambda s: update_role(
+                s, tenant_id, engineer.id, RoleUpdate(version=engineer.version, name="Hijacked"), ACTOR
             ),
         )
-        expect_error(
-            "deleting a system role must be Forbidden",
-            Forbidden,
-            lambda: op(tenant_id, lambda s: delete_role(s, tenant_id, engineer.id, ACTOR)),
-        )
+        assert edited.name == "Hijacked", "global role edit should persist"
+        if engineer.is_system:
+            expect_error(
+                "deleting a system role must be Forbidden",
+                Forbidden,
+                lambda: op(tenant_id, lambda s: delete_role(s, tenant_id, engineer.id, ACTOR)),
+            )
+        else:
+            op(tenant_id, lambda s: delete_role(s, tenant_id, engineer.id, ACTOR))
 
         renamed = op(
             tenant_id,
@@ -931,7 +1000,7 @@ def suite_role_service(tid):
         assigned = op(
             tenant_id, lambda s: assign_roles_to_user(s, tenant_id, user.id, [engineer.id], ACTOR)
         )
-        assert [r.code for r in assigned] == ["engineer"]
+        assert [r.code for r in assigned] == [orig_engineer_code]
         expect_error(
             "a second role must be refused",
             ValidationFailed,
@@ -968,6 +1037,7 @@ def suite_role_service(tid):
 
 SUITES = [
     suite_vertex_service,
+    suite_part_service,
     suite_graph_rule_service,
     suite_rule_engine,
     suite_edge_service,

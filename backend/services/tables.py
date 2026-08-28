@@ -6,7 +6,7 @@ bumped by trigger, so services read it but never write it.
 """
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, MetaData, Table, Text, text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB, UUID
 
 from . import enums
@@ -219,6 +219,71 @@ setting = Table(
     Column("user_id", UUID(as_uuid=True)),
     Column("content", Text, nullable=False),
     Column("is_secret", Boolean, nullable=False),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+# ── Workflow (release-approval templates + tracked instances) ────────────────
+# Mirrors the SQL tables in foundation_schema.sql; object_type/vertex_kind are
+# typed via vertex_kind so any vertex can be put into a workflow.
+workflow_definition = Table(
+    "workflow_definition",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("tenant_id", UUID(as_uuid=True)),
+    Column("name", Text, nullable=False),
+    Column("object_type", _enum(enums.VertexKind, "vertex_kind")),
+    Column("description", Text, nullable=False),
+    Column("definition", JSONB, nullable=False),
+    Column("is_active", Boolean, nullable=False),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+workflow_instance = Table(
+    "workflow_instance",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("vertex_id", UUID(as_uuid=True), nullable=False),
+    Column("vertex_kind", _enum(enums.VertexKind, "vertex_kind"), nullable=False),
+    Column("definition_id", UUID(as_uuid=True), nullable=False),
+    Column("status", _enum(enums.WorkflowStatus, "workflow_status"), nullable=False),
+    Column("current_stage", Integer, nullable=False),
+    Column("started_by", Text, nullable=False),
+    Column("started_on", DateTime(timezone=True), nullable=False),
+    Column("completed_on", DateTime(timezone=True)),
+    Column("result_status", _enum(enums.LifecycleState, "lifecycle_state")),
+    Column("due_date", Date),
+    Column("version", BigInteger),
+    Column("created_by", Text, nullable=False),
+    Column("created_on", DateTime(timezone=True), nullable=False),
+    Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+workflow_task = Table(
+    "workflow_task",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("instance_id", UUID(as_uuid=True), nullable=False),
+    Column("stage_index", Integer, nullable=False),
+    Column("step_key", Text, nullable=False),
+    Column("step_name", Text, nullable=False),
+    Column("assigned_role", Text),
+    Column("assigned_to", UUID(as_uuid=True)),
+    Column("status", _enum(enums.WorkflowTaskStatus, "workflow_task_status"), nullable=False),
+    Column("action", Text, nullable=False),
+    Column("comment", Text),
+    Column("due_date", Date),
+    Column("completed_on", DateTime(timezone=True)),
     Column("version", BigInteger),
     Column("created_by", Text, nullable=False),
     Column("created_on", DateTime(timezone=True), nullable=False),

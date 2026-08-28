@@ -16,6 +16,7 @@ from contextlib import contextmanager
 
 import logging
 import os
+import json
 import re
 from datetime import date, timezone
 from datetime import datetime as dt
@@ -50,6 +51,7 @@ from services.search_service import searcher
 from services.tenant_service import tenants
 from services.user_service import users
 from services.vertex_service import vertices, parts
+from services.workflow_service import workflows
 from services.ai_assistant_service import assistant, DEFAULT_MODEL, DEFAULT_BASE_URL
 from services.errors import ServiceError
 from services.schemas import (
@@ -70,6 +72,7 @@ from services.schemas import (
     UserUpdate,
     VertexCreate,
     VertexUpdate,
+    WorkflowDefinitionCreate,
 )
 from .. import auth, graph_view
 from ..auth import DatabaseUnavailable, Identity, sessions
@@ -2348,3 +2351,303 @@ def _render_not_found(request: Request, path: str = "") -> HTMLResponse:
 def _render_default(request: Request) -> HTMLResponse:
     context = _base_context(request)
     return _templates_for(context["ctx"]).TemplateResponse(request, "default.html", context)
+
+
+# ── Workflow (Domain ▸ Workflow) ────────────────────────────────────────────
+# Entirely self-contained: new routes + new templates (workflow.html,
+# workflow_templates.html). No existing page template or route is touched, so
+# the feature cannot regress the rest of the UI.
+
+def _job_view(job: dict) -> dict:
+    return {
+        "id": str(job["id"]),
+        "status": job["status"].value if hasattr(job["status"], "value") else job["status"],
+        "current_stage": job["current_stage"],
+        "result_status": (
+            job["result_status"].value if hasattr(job["result_status"], "value") else job["result_status"]
+        ),
+    }
+
+
+def _workflow_context(ident: auth.Identity, request: Request) -> dict[str, Any]:
+    tid = UUID(ident.tenant_id)
+    uid = UUID(ident.user_id)
+    params = request.query_params
+    with _request_session(request) as session:
+        vpage = vertices.list(session, tid, limit=200)
+        templates = workflows.list_definitions(session, tid)
+        instances = workflows.list_instances(session, tid)
+        tasks = workflows.pending_tasks_for_user(session, tid, uid)
+
+        # Most recent (or in-progress) workflow job per vertex.
+        latest: dict[str, dict] = {}
+        for inst in instances:
+            vid = str(inst["vertex_id"])
+            cur = latest.get(vid)
+            if cur is None or inst["started_on"] > cur["started_on"]:
+                latest[vid] = inst
+
+        def vertex_label(vid: str) -> str:
+            for v in vpage.items:
+                if str(v.id) == vid:
+                    return f"{v.prefix}-{v.number}" if v.prefix else str(v.number)
+            return vid
+
+        enriched_tasks: list[dict] = []
+        inst_cache: dict[str, dict | None] = {}
+        def_cache: dict[str, dict] = {}
+        for t in tasks:
+            iid = str(t["instance_id"])
+            inst = inst_cache.get(iid)
+            if inst is None and iid not in inst_cache:
+                inst = workflows.get_instance(session, tid, t["instance_id"])
+                inst_cache[iid] = inst
+            stage_name = ""
+            if inst is not None:
+                defn = def_cache.get(str(inst["definition_id"]))
+                if defn is None:
+                    defn = workflows.get_definition(session, tid, inst["definition_id"])
+                    if defn:
+                        def_cache[str(inst["definition_id"])] = defn
+                stages = (defn.get("definition") or {}).get("stages") or [] if defn else []
+                if 0 <= t["stage_index"] < len(stages):
+                    stage_name = stages[t["stage_index"]].get("name", "")
+            enriched_tasks.append({
+                "id": str(t["id"]),
+                "vertex_label": vertex_label(str(inst["vertex_id"])) if inst else "?",
+                "stage_name": stage_name,
+                "step_name": t["step_name"],
+                "assigned_role": t["assigned_role"],
+                "status": t["status"].value if hasattr(t["status"], "value") else t["status"],
+                "instance_id": iid,
+            })
+
+        vrows: list[dict] = []
+        for v in vpage.items:
+            vid = str(v.id)
+            job = latest.get(vid)
+            vrows.append({
+                "id": vid,
+                "label": f"{v.prefix}-{v.number}" if v.prefix else str(v.number),
+                "kind": v.kind.value if hasattr(v.kind, "value") else v.kind,
+                "name": v.name,
+                "lifecycle": (
+                    v.lifecycle_state.value if hasattr(v.lifecycle_state, "value") else v.lifecycle_state
+                ),
+                "version": v.version,
+                "job": _job_view(job) if job else None,
+            })
+
+    return {
+        "vertices": vrows,
+        "templates": [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "object_type": (t.object_type.value if t.object_type else "any"),
+                "description": t.description,
+                "is_active": t.is_active,
+                "stages": len((t.definition or {}).get("stages") or []),
+            }
+            for t in templates
+        ],
+        "tasks": enriched_tasks,
+        "flash_msg": params.get("msg") or "",
+        "flash_err": params.get("err") or "",
+        "vertex_kinds": [k.value for k in enums.VertexKind],
+    }
+
+
+@router.get("/workflow", response_class=HTMLResponse, response_model=None)
+def workflow_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    context = _base_context(request)
+    context.update(_workflow_context(ident, request))
+    return _templates_for(context["ctx"]).TemplateResponse(request, "workflow.html", context)
+
+
+@router.post("/workflow/start")
+def workflow_start_action(
+    request: Request,
+    vertex_id: str = Form(...),
+    definition_id: str = Form(...),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    vid = _safe_uuid(vertex_id)
+    did = _safe_uuid(definition_id)
+    if vid is None or did is None:
+        return RedirectResponse("/workflow?err=" + quote("invalid vertex or template"), status_code=303)
+    try:
+        with _request_session(request) as session:
+            v = vertices.get(session, tid, vid)
+            kind = enums.VertexKind(getattr(v["kind"], "value", v["kind"]))
+            workflows.start_instance(session, tid, vid, kind, did, actor=_actor(request))
+        return RedirectResponse("/workflow?msg=" + quote("workflow started"), status_code=303)
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse("/workflow?err=" + quote(str(exc)), status_code=303)
+
+
+@router.post("/workflow/tasks/{task_id}/act")
+def workflow_task_action(
+    request: Request,
+    task_id: UUID,
+    decision: str = Form(...),
+    comment: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    tid = UUID(ident.tenant_id)
+    uid = UUID(ident.user_id)
+    try:
+        with _request_session(request) as session:
+            workflows.act_on_task(session, tid, task_id, uid, decision, comment or None, actor=_actor(request))
+        return RedirectResponse("/workflow?msg=" + quote("task updated"), status_code=303)
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse("/workflow?err=" + quote(str(exc)), status_code=303)
+
+
+# ── Workflow templates (Admin ▸ WF Template) ────────────────────────────────
+
+@router.get("/admin/workflow-templates", response_class=HTMLResponse, response_model=None)
+def workflow_templates_page(request: Request) -> HTMLResponse | RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse("/dashboard?err=" + quote("admin access required"), status_code=303)
+    context = _base_context(request)
+    tid = UUID(ident.tenant_id)
+    params = request.query_params
+    edit_id = _safe_uuid(params.get("edit") or "")
+    with _request_session(request) as session:
+        defs = workflows.list_definitions(session, tid)
+        editing = None
+        if edit_id is not None:
+            d = workflows.get_definition(session, tid, edit_id)
+            if d is not None:
+                editing = {
+                    "id": str(d["id"]),
+                    "name": d["name"],
+                    "object_type": d["object_type"].value if d["object_type"] else "",
+                    "description": d["description"],
+                    "is_active": d["is_active"],
+                    "definition_text": json.dumps(d["definition"], indent=2),
+                    "version": d["version"],
+                }
+    context.update(
+        templates=[
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "object_type": (t.object_type.value if t.object_type else "any"),
+                "description": t.description,
+                "is_active": t.is_active,
+                "stages": len((t.definition or {}).get("stages") or []),
+                "is_global": t.tenant_id is None,
+                "version": t.version,
+            }
+            for t in defs
+        ],
+        editing=editing,
+        vertex_kinds=[k.value for k in enums.VertexKind],
+        flash_msg=params.get("msg") or "",
+        flash_err=params.get("err") or "",
+    )
+    return _templates_for(context["ctx"]).TemplateResponse(
+        request, "workflow_templates.html", context
+    )
+
+
+@router.post("/admin/workflow-templates/create")
+def workflow_template_create(
+    request: Request,
+    name: str = Form(...),
+    object_type: str = Form(""),
+    description: str = Form(""),
+    is_active: str = Form(""),
+    definition: str = Form(""),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse("/dashboard?err=" + quote("admin access required"), status_code=303)
+    tid = UUID(ident.tenant_id)
+    try:
+        defn = json.loads(definition or "{}")
+    except json.JSONDecodeError as exc:
+        return RedirectResponse(
+            "/admin/workflow-templates?err=" + quote("invalid JSON: " + str(exc)), status_code=303
+        )
+    obj_type = enums.VertexKind(object_type) if object_type else None
+    try:
+        data = WorkflowDefinitionCreate(
+            name=name.strip(), object_type=obj_type, description=description,
+            definition=defn, is_active=(is_active == "on"),
+        )
+        with _request_session(request) as session:
+            workflows.create_definition(session, tid, data, actor=_actor(request))
+        return RedirectResponse("/admin/workflow-templates?msg=" + quote("template created"), status_code=303)
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse("/admin/workflow-templates?err=" + quote(str(exc)), status_code=303)
+
+
+@router.post("/admin/workflow-templates/{definition_id}/update")
+def workflow_template_update(
+    request: Request,
+    definition_id: UUID,
+    name: str = Form(...),
+    object_type: str = Form(""),
+    description: str = Form(""),
+    is_active: str = Form(""),
+    definition: str = Form(""),
+    version: int = Form(...),
+) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse("/dashboard?err=" + quote("admin access required"), status_code=303)
+    tid = UUID(ident.tenant_id)
+    try:
+        defn = json.loads(definition or "{}")
+    except json.JSONDecodeError as exc:
+        return RedirectResponse(
+            "/admin/workflow-templates?err=" + quote("invalid JSON: " + str(exc)), status_code=303
+        )
+    obj_type = enums.VertexKind(object_type) if object_type else None
+    try:
+        data = WorkflowDefinitionCreate(
+            name=name.strip(), object_type=obj_type, description=description,
+            definition=defn, is_active=(is_active == "on"),
+        )
+        with _request_session(request) as session:
+            workflows.update_definition(session, tid, definition_id, data, actor=_actor(request))
+        return RedirectResponse("/admin/workflow-templates?msg=" + quote("template saved"), status_code=303)
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse(
+            "/admin/workflow-templates?err=" + quote(str(exc)) + "&edit=" + str(definition_id),
+            status_code=303,
+        )
+
+
+@router.post("/admin/workflow-templates/{definition_id}/delete")
+def workflow_template_delete(request: Request, definition_id: UUID) -> RedirectResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse("/dashboard?err=" + quote("admin access required"), status_code=303)
+    tid = UUID(ident.tenant_id)
+    try:
+        with _request_session(request) as session:
+            workflows.delete_definition(session, tid, definition_id, actor=_actor(request))
+        return RedirectResponse("/admin/workflow-templates?msg=" + quote("template deleted"), status_code=303)
+    except (ServiceError, ValueError) as exc:
+        return RedirectResponse("/admin/workflow-templates?err=" + quote(str(exc)), status_code=303)

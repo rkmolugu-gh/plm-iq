@@ -50,6 +50,7 @@ from . import enums, tables
 from .base import BaseService
 from .errors import Conflict, NotFound, ValidationFailed
 from .schemas import Page, PartCreate, PartOut, PartUpdate, VertexCreate, VertexOut, VertexUpdate
+from .workflow_service import workflows  # noqa: E402  (workflow_service does not import this module)
 
 logger = logging.getLogger(__name__)
 
@@ -293,10 +294,16 @@ class VertexCoreService(BaseService):
                 "route through change management"
             )
         if "lifecycle_state" in changes:
+            new_state = changes["lifecycle_state"]
             self._check_transition(
-                row_id=vertex_id, old=current["lifecycle_state"], new=changes["lifecycle_state"]
+                row_id=vertex_id, old=current["lifecycle_state"], new=new_state
             )
-            if changes["lifecycle_state"] == enums.LifecycleState.RELEASED and changes.get("release_on") is None:
+            # A vertex with an in-progress workflow may not be released until the
+            # workflow is approved; the workflow's own completion drives the
+            # release transition instead.
+            if new_state == enums.LifecycleState.RELEASED:
+                workflows.assert_releasable(session, tenant_id, vertex_id)
+            if new_state == enums.LifecycleState.RELEASED and changes.get("release_on") is None:
                 changes["release_on"] = date.today()
         if not changes:
             return self._to_out(current)
@@ -446,7 +453,7 @@ class PartService(VertexCoreService):
         dumped = data.model_dump(exclude_unset=True)
         role = dumped.get("part_role")
         core = VertexUpdate(**{
-            k: v for k, v in dumped.items() if k not in ("part_role", "version")
+            k: v for k, v in dumped.items() if k != "part_role"
         })
         super().update(session, tenant_id, vertex_id, core, actor=actor)
         if role is not None:

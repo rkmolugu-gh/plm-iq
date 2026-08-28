@@ -155,6 +155,63 @@ class PartOut(VertexOut):
     part_role: enums.PartRole = enums.PartRole.COMPONENT
 
 
+# ── Workflow (release-approval templates + tracked instances) ────────────────
+
+
+class WorkflowDefinitionCreate(CamelModel):
+    name: str
+    object_type: enums.VertexKind | None = None
+    description: str = ""
+    definition: dict[str, Any] = {}
+    is_active: bool = True
+
+
+class WorkflowDefinitionOut(CamelModel):
+    id: UUID
+    tenant_id: UUID | None
+    name: str
+    object_type: enums.VertexKind | None
+    description: str
+    definition: dict[str, Any]
+    is_active: bool
+    version: int
+    created_on: datetime
+    modified_on: datetime
+
+
+class WorkflowInstanceOut(CamelModel):
+    id: UUID
+    tenant_id: UUID
+    vertex_id: UUID
+    vertex_kind: enums.VertexKind
+    definition_id: UUID
+    status: enums.WorkflowStatus
+    current_stage: int
+    started_by: str
+    started_on: datetime
+    completed_on: datetime | None
+    result_status: enums.LifecycleState | None
+    due_date: date | None
+    version: int
+
+
+class WorkflowTaskOut(CamelModel):
+    id: UUID
+    tenant_id: UUID
+    instance_id: UUID
+    stage_index: int
+    step_key: str
+    step_name: str
+    assigned_role: str | None
+    assigned_to: UUID | None
+    status: enums.WorkflowTaskStatus
+    action: str
+    comment: str | None
+    due_date: date | None
+    completed_on: datetime | None
+    version: int
+
+
 # ── Edge ────────────────────────────────────────────────────────────────────
 
 

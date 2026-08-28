@@ -650,5 +650,112 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON iam_tenant, iam_user, iam_role,
 GRANT ALL ON iam_tenant, iam_user, iam_role, iam_permission,
     iam_role_permission, iam_user_role TO plmiq_migrator;
 
+-- ══ Stage 2b: workflow (release-approval templates + tracked instances) ════
+-- Any vertex (Part/Document/EC/...) can be put into a workflow instantiated
+-- from a reusable definition. An in-progress instance gates the vertex's
+-- release until the workflow is approved/completed (see workflow_service).
+
+CREATE TYPE workflow_status AS ENUM ('draft', 'in_progress', 'approved', 'rejected', 'completed');
+CREATE TYPE workflow_task_status AS ENUM ('pending', 'approved', 'rejected');
+
+CREATE TABLE workflow_definition (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id    uuid REFERENCES iam_tenant (id),     -- NULL = global template
+    name         text NOT NULL,
+    object_type  vertex_kind,                          -- NULL = applies to any vertex kind
+    description  text NOT NULL DEFAULT '',
+    definition   jsonb NOT NULL DEFAULT '{}',          -- {"stages":[{"name","parallel","threshold","steps":[{"key","name","assignee_role","action","description","due_days"}]}]}
+    is_active    boolean NOT NULL DEFAULT true,
+    version      bigint GENERATED ALWAYS AS IDENTITY,
+    created_by   text NOT NULL,
+    created_on   timestamptz NOT NULL DEFAULT now(),
+    modified_by  text NOT NULL,
+    modified_on  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT uq_wf_def_name UNIQUE (tenant_id, name)
+);
+
+COMMENT ON TABLE workflow_definition IS 'Reusable release-approval templates; a JSON stage/step graph instantiated per vertex.';
+
+CREATE TABLE workflow_instance (
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      uuid NOT NULL REFERENCES iam_tenant (id),
+    vertex_id      uuid NOT NULL REFERENCES foundation_vertex (id) ON DELETE CASCADE,
+    vertex_kind    vertex_kind NOT NULL,
+    definition_id  uuid NOT NULL REFERENCES workflow_definition (id),
+    status         workflow_status NOT NULL DEFAULT 'in_progress',
+    current_stage  integer NOT NULL DEFAULT 0,
+    started_by     text NOT NULL,
+    started_on     timestamptz NOT NULL DEFAULT now(),
+    completed_on   timestamptz,
+    result_status  lifecycle_state,                    -- target lifecycle state on completion
+    due_date       date,
+    version        bigint GENERATED ALWAYS AS IDENTITY,
+    created_by     text NOT NULL,
+    created_on     timestamptz NOT NULL DEFAULT now(),
+    modified_by    text NOT NULL,
+    modified_on    timestamptz NOT NULL DEFAULT now()
+);
+
+-- At most one ACTIVE (in_progress) workflow per vertex.
+CREATE UNIQUE INDEX uq_active_wf_instance ON workflow_instance (vertex_id) WHERE status = 'in_progress';
+
+COMMENT ON TABLE workflow_instance IS 'A tracked workflow applied to a vertex; gates release until approved.';
+
+CREATE TABLE workflow_task (
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id      uuid NOT NULL REFERENCES iam_tenant (id),
+    instance_id    uuid NOT NULL REFERENCES workflow_instance (id) ON DELETE CASCADE,
+    stage_index    integer NOT NULL,
+    step_key       text NOT NULL,
+    step_name      text NOT NULL,
+    assigned_role  text,                                -- role code the task is assigned to
+    assigned_to    uuid REFERENCES iam_user (id),       -- resolved user (nullable until claimed)
+    status         workflow_task_status NOT NULL DEFAULT 'pending',
+    action         text NOT NULL DEFAULT 'approve',     -- approve | release
+    comment        text,
+    due_date       date,
+    completed_on   timestamptz,
+    version        bigint GENERATED ALWAYS AS IDENTITY,
+    created_by     text NOT NULL,
+    created_on     timestamptz NOT NULL DEFAULT now(),
+    modified_by    text NOT NULL,
+    modified_on    timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE workflow_task IS 'One approval assignment; the unit a user acts on to advance a workflow.';
+
+CREATE INDEX idx_wf_def_tenant    ON workflow_definition (tenant_id);
+CREATE INDEX idx_wf_inst_vertex  ON workflow_instance (vertex_id);
+CREATE INDEX idx_wf_inst_tenant   ON workflow_instance (tenant_id);
+CREATE INDEX idx_wf_task_instance ON workflow_task (instance_id);
+CREATE INDEX idx_wf_task_assignee ON workflow_task (assigned_to, status);
+
+ALTER TABLE workflow_definition ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workflow_definition FORCE  ROW LEVEL SECURITY;
+ALTER TABLE workflow_instance   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workflow_instance   FORCE  ROW LEVEL SECURITY;
+ALTER TABLE workflow_task       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE workflow_task       FORCE  ROW LEVEL SECURITY;
+
+-- Global definitions are readable by every tenant; tenant rows are isolated.
+CREATE POLICY wf_definition_isolation ON workflow_definition
+    USING      (tenant_id IS NULL OR tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+
+CREATE POLICY wf_instance_isolation ON workflow_instance
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+
+CREATE POLICY wf_task_isolation ON workflow_task
+    USING      (tenant_id = current_tenant_id())
+    WITH CHECK (tenant_id = current_tenant_id());
+
+CREATE TRIGGER trg_wf_definition_bump_version BEFORE UPDATE ON workflow_definition FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_wf_instance_bump_version   BEFORE UPDATE ON workflow_instance   FOR EACH ROW EXECUTE FUNCTION bump_version();
+CREATE TRIGGER trg_wf_task_bump_version       BEFORE UPDATE ON workflow_task       FOR EACH ROW EXECUTE FUNCTION bump_version();
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON workflow_definition, workflow_instance, workflow_task TO plmiq_app;
+GRANT ALL ON workflow_definition, workflow_instance, workflow_task TO plmiq_migrator;
+
 COMMIT;
 

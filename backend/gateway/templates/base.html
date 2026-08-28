@@ -67,6 +67,7 @@
             <a class="nav-item{{ ' is-active' if request.url.path == '/dashboard' }}" href="/dashboard">Dashboard</a>
             <a class="nav-item{{ ' is-active' if request.url.path.startswith('/documents') }}" href="/documents">Documents</a>
             <a class="nav-item{{ ' is-active' if request.url.path.startswith('/parts') }}" href="/parts">Parts</a>
+            <a class="nav-item{{ ' is-active' if request.url.path == '/workflow' }}" href="/workflow">Workflow</a>
             <a class="nav-item{{ ' is-active' if request.url.path == '/graph' }}" href="/graph">Graph</a>
           </div>
         </details>
@@ -85,6 +86,7 @@
             <span class="nav-item is-disabled">Audit Trail <span class="nav-soon">soon</span></span>
             <a class="nav-item{{ ' is-active' if request.url.path == '/settings' }}" href="/settings">Settings</a>
             <a class="nav-item{{ ' is-active' if request.url.path == '/developer' }}" href="/developer">Developer</a>
+            <a class="nav-item{{ ' is-active' if request.url.path.startswith('/admin/workflow-templates') }}" href="/admin/workflow-templates">WF Template</a>
           </div>
         </details>
       </nav>

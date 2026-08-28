@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Workflow · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">Workflow</h1>
+  <p class="hero-sub dash-note">Put any vertex into a release-approval workflow. Start a workflow from a
+    template, track its job, and act on the tasks assigned to you.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+{# ── My tasks ──────────────────────────────────────────────────────────── #}
+<section class="module-card table-card">
+  <h2>My tasks</h2>
+  <p class="cell-anno">Approvals and releases assigned to you (directly or via one of your roles).</p>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Vertex</th><th>Stage</th><th>Step</th><th>Role</th><th>Status</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td class="cell-mono">{{ t.vertex_label }}</td>
+        <td>{{ t.stage_name }}</td>
+        <td>{{ t.step_name }}</td>
+        <td>{{ t.assigned_role or "—" }}</td>
+        <td><span class="pill">{{ t.status }}</span></td>
+        <td class="row-actions">
+          <form class="inline-form" method="post" action="/workflow/tasks/{{ t.id }}/act">
+            <input type="hidden" name="decision" value="approve">
+            <button class="btn-mini btn-primary" type="submit">Approve</button>
+          </form>
+          <form class="inline-form" method="post" action="/workflow/tasks/{{ t.id }}/act">
+            <input type="hidden" name="decision" value="reject">
+            <button class="btn-mini btn-danger" type="submit">Reject</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="cell-anno">No pending tasks assigned to you.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# ── Vertices ──────────────────────────────────────────────────────────── #}
+<section class="module-card table-card">
+  <h2>Vertices</h2>
+  <p class="cell-anno">Start a workflow on any vertex. A vertex with an active workflow cannot be
+    released until the workflow is approved.</p>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Label</th><th>Kind</th><th>Name</th><th>Lifecycle</th><th>Workflow</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vertices %}
+      <tr>
+        <td class="cell-mono">{{ v.label }}</td>
+        <td>{{ v.kind }}</td>
+        <td title="{{ v.name }}">{{ v.name | short }}</td>
+        <td>{{ v.lifecycle }}</td>
+        <td>
+          {% if v.job %}
+            <span class="pill">{{ v.job.status }}</span>
+            {% if v.job.result_status %}<span class="cell-anno"> &rarr; {{ v.job.result_status }}</span>{% endif %}
+          {% else %}
+            <span class="cell-anno">&mdash;</span>
+          {% endif %}
+        </td>
+        <td class="row-actions">
+          {% if v.job %}
+            <span class="cell-anno">in workflow</span>
+          {% else %}
+          <form class="inline-form" method="post" action="/workflow/start">
+            <input type="hidden" name="vertex_id" value="{{ v.id }}">
+            <select name="definition_id" required aria-label="Template for {{ v.label }}">
+              {% for t in templates %}<option value="{{ t.id }}">{{ t.name }} ({{ t.object_type }})</option>{% endfor %}
+            </select>
+            <button class="btn-mini btn-primary" type="submit">Start</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="cell-anno">No vertices yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}WF Templates · {{ ctx.tenant }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <p class="hero-eyebrow">{{ ctx.tenant }} · PLM-IQ {{ ctx.edition_label }} Edition</p>
+  <h1 class="hero-title dash-title">WF Templates</h1>
+  <p class="hero-sub dash-note">Reusable release-approval templates. A template is a JSON stage/step graph
+    instantiated against any vertex.</p>
+</section>
+
+{% if flash_msg %}<div class="flash flash-ok">{{ flash_msg }}</div>{% endif %}
+{% if flash_err %}<div class="flash flash-err">{{ flash_err }}</div>{% endif %}
+
+<section class="module-card table-card">
+  {% if editing %}
+  <form class="crud-form" method="post" action="/admin/workflow-templates/{{ editing.id }}/update">
+    <h2>Edit template {{ editing.name }}</h2>
+    <input type="hidden" name="version" value="{{ editing.version }}">
+    <div class="form-actions">
+      <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      <a class="btn-mini" href="/admin/workflow-templates">Cancel</a>
+    </div>
+    <div class="form-grid">
+      <label>Name<input name="name" value="{{ editing.name }}" required></label>
+      <label>Applies to
+        <select name="object_type">
+          <option value=""{{ ' selected' if not editing.object_type }}>Any vertex</option>
+          {% for k in vertex_kinds %}<option value="{{ k }}"{{ ' selected' if k == editing.object_type }}>{{ k }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Active<input type="checkbox" name="is_active"{{ ' checked' if editing.is_active }}></label>
+      <label>Description<input name="description" value="{{ editing.description }}"></label>
+    </div>
+    <label>Definition (JSON)
+      <textarea name="definition" rows="12" style="width:100%;font-family:monospace">{{ editing.definition_text }}</textarea>
+    </label>
+  </form>
+  {% else %}
+  <form class="crud-form" method="post" action="/admin/workflow-templates/create">
+    <h2>Create a template</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create template</button></div>
+    <div class="form-grid">
+      <label>Name<input name="name" required></label>
+      <label>Applies to
+        <select name="object_type">
+          <option value="">Any vertex</option>
+          {% for k in vertex_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Active<input type="checkbox" name="is_active" checked></label>
+      <label>Description<input name="description"></label>
+    </div>
+    <label>Definition (JSON)
+      <textarea name="definition" rows="12" style="width:100%;font-family:monospace">{
+  "version": 2,
+  "result_status": "released",
+  "stages": [
+    {"name": "Engineering", "parallel": false, "steps": [{"key": "eng", "name": "Engineering Review", "assignee_type": "role", "assignee": "design_engineer", "action": "approve", "due_days": 3}]},
+    {"name": "Release", "parallel": false, "steps": [{"key": "RELEASED", "name": "Release", "assignee_type": "role", "assignee": "release_engineer", "action": "release", "due_days": 2}]}
+  ]
+}</textarea>
+    </label>
+  </form>
+  {% endif %}
+
+  <h2>Templates</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Name</th><th>Applies to</th><th>Stages</th><th>Active</th><th>Scope</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in templates %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td>{{ t.object_type }}</td>
+        <td>{{ t.stages }}</td>
+        <td>{% if t.is_active %}yes{% else %}no{% endif %}</td>
+        <td>{% if t.is_global %}<span class="pill">global</span>{% else %}tenant{% endif %}</td>
+        <td class="row-actions">
+          <a class="btn-mini" href="/admin/workflow-templates?edit={{ t.id }}">Edit</a>
+          {% if not t.is_global %}
+          <form class="inline-form" method="post" action="/admin/workflow-templates/{{ t.id }}/delete">
+            <button class="btn-mini btn-danger" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="cell-anno">No templates yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

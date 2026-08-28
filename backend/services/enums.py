@@ -100,3 +100,17 @@ class SettingLevel(str, Enum):
     PLATFORM = "platform"
     TENANT = "tenant"
     USER = "user"
+
+
+class WorkflowStatus(str, Enum):
+    DRAFT = "draft"
+    IN_PROGRESS = "in_progress"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    COMPLETED = "completed"
+
+
+class WorkflowTaskStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
