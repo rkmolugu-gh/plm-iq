@@ -153,14 +153,14 @@
   <h2>Schema / Seed Deploy</h2>
   <p class="table-desc">Deploy database schema and seed data. Runs in the background; you are signed out on start
     so the new schema takes effect on your next login. <strong>delta</strong> applies only new files;
-    <strong>fresh</strong> drops the schema first and replays everything.</p>
+    <strong>fresh</strong> stops the gateway, drops the schema, replays everything, then restarts the gateway.</p>
 
   <form class="crud-form" method="post" action="/developer/schema-seed">
     <div class="form-grid">
       <label>Mode
         <select name="mode">
           <option value="delta">delta (apply pending files only)</option>
-          <option value="fresh">fresh (drop schema, reapply all)</option>
+          <option value="fresh">fresh (stop server, drop schema, reapply, restart)</option>
         </select>
       </label>
       <label>Actions
@@ -173,7 +173,7 @@
     </div>
     <div class="form-actions">
       <button class="btn btn-primary btn-sm" type="submit"
-              onclick="return confirm('This will modify the database schema and sign you out. Continue?');">
+              onclick="return confirm('This stops the server, modifies the database schema, and signs you out. Continue?');">
         Run Deploy
       </button>
     </div>

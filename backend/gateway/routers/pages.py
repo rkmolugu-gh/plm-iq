@@ -370,20 +370,6 @@ def _effective_label(e: dict) -> str:
     return "-"
 
 
-def _readonly_graph_context(tab: str, msg: str, err: str) -> dict[str, Any]:
-    """Shell rendering for anonymous visitors: empty tables, sign-in prompts."""
-    return {
-        "graph_live": False,
-        "gv_vertices": [],
-        "gv_edges": [],
-        "gv_rules": [],
-        "tab": tab,
-        "show_nav": True,
-        "flash_msg": msg,
-        "flash_err": err,
-    }
-
-
 def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: str) -> dict[str, Any]:
     """Live explorer context for signed-in users: rows, edit targets, options."""
     params = request.query_params
@@ -614,41 +600,39 @@ def _live_graph_view(request: Request, tenant_id: UUID, number: str, source: str
 
 @router.get("/graph", response_class=HTMLResponse)
 def graph(request: Request, tab: str = "vertex", vertex: str = "") -> HTMLResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _base_context(request)
     ctx = context["ctx"]
-    if ctx.valid:
-        tab = tab if tab in _GRAPH_TABS else "vertex"
-        identity = context.get("identity")
-        if identity is not None:
-            context.update(_graph_workspace(UUID(identity.tenant_id), identity.edition_id, request, tab))
-            if tab == "view":
-                params = request.query_params
-                selected = (vertex or "").strip()
-                view = None
-                if selected:
-                    view = _live_graph_view(
-                        request, UUID(identity.tenant_id), selected,
-                        params.get("source") or "",
-                        params.get("relation") or "",
-                        params.get("target") or "",
-                    )
-                context.update(view=view, view_vertex=selected)
-            elif tab == "graph":
-                src = (request.query_params.get("src") or "").strip()
-                if src:
-                    match = next((v for v in context["gv_vertices"] if v["number"] == src), None)
-                    if match:
-                        context["auth_source"] = {
-                            "id": match["id"], "kind": match["kind"],
-                            "label": match["label"], "name": match["name"],
-                        }
-        else:
-            context.update(_readonly_graph_context(tab, request.query_params.get("msg") or "",
-                                                   request.query_params.get("err") or ""))
-        return _templates_for(ctx).TemplateResponse(request, "graph.html", context)
-    if not ctx.matched_pattern:
-        return _render_default(request)
-    return _render_not_found(request, path="/graph")
+    if not ctx.valid:
+        if not ctx.matched_pattern:
+            return _render_default(request)
+        return _render_not_found(request, path="/graph")
+    tab = tab if tab in _GRAPH_TABS else "vertex"
+    context.update(_graph_workspace(UUID(ident.tenant_id), ident.edition_id, request, tab))
+    if tab == "view":
+        params = request.query_params
+        selected = (vertex or "").strip()
+        view = None
+        if selected:
+            view = _live_graph_view(
+                request, UUID(ident.tenant_id), selected,
+                params.get("source") or "",
+                params.get("relation") or "",
+                params.get("target") or "",
+            )
+        context.update(view=view, view_vertex=selected)
+    elif tab == "graph":
+        src = (request.query_params.get("src") or "").strip()
+        if src:
+            match = next((v for v in context["gv_vertices"] if v["number"] == src), None)
+            if match:
+                context["auth_source"] = {
+                    "id": match["id"], "kind": match["kind"],
+                    "label": match["label"], "name": match["name"],
+                }
+    return _templates_for(ctx).TemplateResponse(request, "graph.html", context)
 
 
 @router.get("/graph/view/{number}", response_class=HTMLResponse)
@@ -660,6 +644,9 @@ def graph_view_page(
     target: str = "",
 ) -> HTMLResponse:
     """Legacy deep links move to the explorer's Graph view tab, filters intact."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _base_context(request)
     ctx = context["ctx"]
     if not ctx.matched_pattern:
@@ -675,15 +662,14 @@ def graph_view_page(
 @router.get("/graph/vertices/search")
 def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
     """BM25 vertex suggestions for the graph builder palette."""
-    context = _base_context(request)
-    identity = context.get("identity") if context["ctx"].valid else None
-    if identity is None:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
         return JSONResponse({"results": [], "error": "sign-in required"}, status_code=401)
     query = (q or "").strip()
     if len(query) < 2:
         return JSONResponse({"query": query, "results": []})
     try:
-        outcome = searcher.search(UUID(identity.tenant_id), query, limit=12)
+        outcome = searcher.search(UUID(ident.tenant_id), query, limit=12)
     except ServiceError as exc:
         return JSONResponse({"query": query, "results": [], "error": str(exc)})
     results = [
@@ -702,14 +688,13 @@ def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
 @router.get("/search", response_class=HTMLResponse, response_model=None)
 def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectResponse:
     """BM25 search over the signed-in tenant's Elasticsearch indices."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _base_context(request)
     ctx = context["ctx"]
-    if not ctx.valid or context.get("identity") is None:
-        if ctx.valid:
-            return RedirectResponse("/signin?error=session", status_code=303)
-        if not ctx.matched_pattern:
-            return _render_default(request)
-        return _render_not_found(request, path="/search")
+    if not ctx.matched_pattern:
+        return _render_default(request) if not ctx.valid else _render_not_found(request, path="/search")
 
     query = (q or "").strip()
     es_status = es.cluster_status()
@@ -1579,6 +1564,19 @@ def _require_platform_admin(request: Request) -> auth.Identity | RedirectRespons
     return ident
 
 
+def _require_tenant_admin(request: Request) -> auth.Identity | RedirectResponse:
+    """Require a signed-in user flagged as tenant administrator.
+
+    Returns the Identity on success, or a RedirectResponse when anonymous or
+    lacking the tenant-admin flag."""
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
+    if not ident.is_tenant_admin:
+        return RedirectResponse("/dashboard?err=" + quote("tenant admin access required"), status_code=303)
+    return ident
+
+
 def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectResponse:
     identity = _require_identity(request)
     if isinstance(identity, RedirectResponse):
@@ -1670,6 +1668,9 @@ def _admin_context(request: Request, tab: str) -> dict[str, Any] | RedirectRespo
 
 @router.get("/admin/tenant", response_class=HTMLResponse, response_model=None)
 def tenant_admin(request: Request, tab: str = "tenants") -> HTMLResponse | RedirectResponse:
+    ident = _require_platform_admin(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _admin_context(request, tab)
     if isinstance(context, RedirectResponse):
         return context
@@ -1685,7 +1686,7 @@ def tenant_create_action(
     secret: str = Form(...),
     edition_id: str = Form("foundation"),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -1711,7 +1712,7 @@ def tenant_update_action(
     status: str = Form(""),
     edition_id: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     changes: dict[str, Any] = {"version": version}
@@ -1734,7 +1735,7 @@ def tenant_add_user_action(
     login_id: str = Form(...),
 ) -> RedirectResponse:
     """Attach an existing account (by email / login id) to the tenant."""
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -1759,7 +1760,7 @@ def user_create_action(
     role: str = Form(""),
     is_tenant_admin: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     import bcrypt
@@ -1791,7 +1792,7 @@ def user_update_action(
     mfa_enabled: str = Form(""),
     is_tenant_admin: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     changes: dict[str, Any] = {"version": version}
@@ -1822,7 +1823,7 @@ def role_create_action(
     name: str = Form(...),
     description: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -1844,7 +1845,7 @@ def role_update_action(
     name: str = Form(""),
     description: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     changes: dict[str, Any] = {"version": version}
@@ -1862,7 +1863,7 @@ def role_update_action(
 
 @router.post("/admin/tenant/roles/{role_id}/delete")
 def role_delete_action(request: Request, role_id: UUID) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -1881,7 +1882,7 @@ def permission_create_action(
     action: str = Form(...),
     description: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -1907,7 +1908,7 @@ def permission_update_action(
     action: str = Form(""),
     description: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     changes: dict[str, Any] = {}
@@ -1933,7 +1934,7 @@ def permission_update_action(
 
 @router.post("/admin/tenant/permissions/{permission_id}/delete")
 def permission_delete_action(request: Request, permission_id: UUID) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -2021,7 +2022,7 @@ def _bulk_upload_context(ident: auth.Identity, request: Request) -> dict[str, An
 
 @router.get("/admin/bulk-upload", response_class=HTMLResponse, response_model=None)
 def bulk_upload_page(request: Request) -> HTMLResponse | RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     context = _base_context(request)
@@ -2040,7 +2041,7 @@ def bulk_upload_run_action(
     folder: str = Form(...),
     prefix: str = Form("DOC"),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_tenant_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -2058,7 +2059,7 @@ def bulk_upload_run_action(
 
 @router.get("/admin/index", response_class=HTMLResponse, response_model=None)
 def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     context = _base_context(request)
@@ -2113,7 +2114,7 @@ def index_run_action(
     tenant_id: str = Form(...),
     full: str = Form(""),
 ) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     tid = _safe_uuid(tenant_id)
@@ -2132,7 +2133,7 @@ def index_run_action(
 
 @router.post("/admin/index/ingest")
 def index_ingest_action(request: Request, file: str = Form("")) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
@@ -2156,14 +2157,9 @@ def _latest_index_path():
 
 @router.post("/admin/index/nuke/{tenant_id}")
 def index_nuke_action(request: Request, tenant_id: UUID) -> RedirectResponse:
-    ident = _require_identity(request)
+    ident = _require_platform_admin(request)
     if isinstance(ident, RedirectResponse):
         return ident
-    if not ident.is_tenant_admin:
-        return RedirectResponse(
-            f"/admin/index?err={quote('only tenant administrators may nuke Elasticsearch data')}",
-            status_code=303,
-        )
     try:
         summary = ingest.nuke_tenant(tenant_id)
     except ServiceError as exc:
@@ -2183,6 +2179,9 @@ def _actor(request: Request) -> str:
 
 @router.get("/help", response_class=HTMLResponse)
 def help_page(request: Request) -> HTMLResponse:
+    ident = _require_identity(request)
+    if isinstance(ident, RedirectResponse):
+        return ident
     context = _base_context(request)
     ctx = context["ctx"]
     if not ctx.matched_pattern:

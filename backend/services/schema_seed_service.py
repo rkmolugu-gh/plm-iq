@@ -28,6 +28,9 @@ tail so operators can audit a run without leaving the browser.
 from __future__ import annotations
 
 import logging
+import os
+import subprocess
+import sys
 import threading
 from datetime import datetime as dt
 from datetime import timezone
@@ -47,52 +50,83 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCHEMA_DIR = _REPO_ROOT / "database" / "schema"
 _SEED_DIR = _REPO_ROOT / "database" / "seed"
 _LOG_DIR = _REPO_ROOT / "logs"
+_FRESH_HELPER = _REPO_ROOT / "backend" / "scripts" / "apply_schema_seed.py"
 
 
 def _split_sql(content: str) -> list[str]:
-    """Split SQL content into statements, respecting PostgreSQL dollar quoting."""
+    """Split SQL content into statements, respecting SQL syntax.
+
+    A semicolon only terminates a statement when it is not inside:
+      * PostgreSQL dollar-quoted bodies (``$$ ... $$`` / ``$tag$ ... $tag$``),
+      * single-quoted string literals (``''`` escapes),
+      * ``--`` line comments (which are dropped from the output).
+    """
     statements: list[str] = []
     current: list[str] = []
     in_dollar = False
     dollar_tag = ""
+    in_squote = False
     i = 0
     n = len(content)
 
     while i < n:
-        if not in_dollar:
-            if content[i] == "$":
+        ch = content[i]
+
+        if in_dollar:
+            if ch == "$":
                 j = i + 1
                 while j < n and content[j] != "$":
                     j += 1
-                if j < n:
-                    tag = content[i + 1 : j]
+                if j < n and content[i + 1 : j] == dollar_tag:
                     current.append(content[i : j + 1])
                     i = j + 1
-                    in_dollar = True
-                    dollar_tag = tag
+                    in_dollar = False
+                    dollar_tag = ""
                     continue
-            if content[i] == ";":
-                stmt = "".join(current).strip()
-                if stmt:
-                    statements.append(stmt)
-                current = []
-                i += 1
-                continue
-        else:
-            if content[i] == "$":
-                j = i + 1
-                while j < n and content[j] != "$":
-                    j += 1
-                if j < n:
-                    tag = content[i + 1 : j]
-                    if tag == dollar_tag:
-                        current.append(content[i : j + 1])
-                        i = j + 1
-                        in_dollar = False
-                        dollar_tag = ""
-                        continue
+            current.append(ch)
+            i += 1
+            continue
 
-        current.append(content[i])
+        if in_squote:
+            if ch == "'":
+                if i + 1 < n and content[i + 1] == "'":
+                    current.append("''")
+                    i += 2
+                    continue
+                in_squote = False
+            current.append(ch)
+            i += 1
+            continue
+
+        if ch == "$":
+            j = i + 1
+            while j < n and content[j] != "$":
+                j += 1
+            if j < n:
+                tag = content[i + 1 : j]
+                current.append(content[i : j + 1])
+                i = j + 1
+                in_dollar = True
+                dollar_tag = tag
+                continue
+        if ch == "-" and i + 1 < n and content[i + 1] == "-":
+            while i < n and content[i] != "\n":
+                i += 1
+            continue
+        if ch == ";":
+            stmt = "".join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+            i += 1
+            continue
+        if ch == "'":
+            in_squote = True
+            current.append(ch)
+            i += 1
+            continue
+
+        current.append(ch)
         i += 1
 
     stmt = "".join(current).strip()
@@ -112,6 +146,12 @@ class SchemaSeedService:
         """Validate inputs and launch the background deployment job.
 
         Returns the job id immediately; progress lives in the JobRegistry.
+
+        ``delta`` mode runs in-process on a daemon thread. ``fresh`` mode
+        spawns a detached helper process that stops this gateway first (the
+        schema drop invalidates every live connection), applies schema/seed,
+        then restarts the gateway - so the in-process job only records the
+        handoff and the real work happens in the helper's own log file.
         """
         mode = (mode or "").strip().lower()
         if mode not in ("delta", "fresh"):
@@ -126,10 +166,57 @@ class SchemaSeedService:
                 f"a schema/seed job is already {active['status']} (job {active['id']})"
             )
 
+        if mode == "fresh":
+            return self._start_fresh(actions)
+
         def target() -> dict[str, Any]:
             return self.run(mode, actions, actor=actor)
 
         return self.jobs.start_job(name, target)
+
+    def _start_fresh(self, actions: list[str]) -> str:
+        """Kill the gateway, apply schema/seed, restart - via a detached helper.
+
+        The helper is spawned before any schema change so the server is already
+        down when ``DROP SCHEMA ... CASCADE`` runs. Returns a handoff job id.
+        """
+        run_log = self._open_run_log()
+        run_log.warning(
+            "schema_seed.fresh.handoff: stopping gateway pid=%d then applying %s",
+            os.getpid(),
+            ",".join(actions),
+        )
+        self._close_run_log(run_log)
+
+        cmd = [sys.executable, str(_FRESH_HELPER), str(os.getpid()), "fresh", ",".join(actions)]
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        try:
+            subprocess.Popen(
+                cmd,
+                cwd=str(_REPO_ROOT),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=creationflags,
+            )
+        except Exception as exc:  # pragma: no cover - environment dependent
+            run_log = self._open_run_log()
+            run_log.error("schema_seed.fresh.spawn.failed: %s", exc)
+            self._close_run_log(run_log)
+            raise ValidationFailed(f"could not spawn fresh deploy helper: {exc}") from exc
+
+        def target() -> dict[str, Any]:
+            return {
+                "mode": "fresh",
+                "actions": actions,
+                "status": "done",
+                "note": "fresh deploy handed off to detached process; gateway is restarting",
+            }
+
+        return self.jobs.start_job("schema-seed:fresh", target)
 
     def run(self, mode: str, actions: list[str], *, actor: str) -> dict[str, Any]:
         """Synchronous core: drop (fresh), apply files, report."""
@@ -150,6 +237,8 @@ class SchemaSeedService:
         try:
             if mode == "fresh":
                 self._fresh_drop(run_log)
+
+            self._ensure_bookkeeping()
 
             if "schema" in actions:
                 self._apply_dir(_SCHEMA_DIR, mode, run_log, report)
@@ -225,6 +314,18 @@ class SchemaSeedService:
             session.execute(text("DROP SCHEMA IF EXISTS plmiqdb CASCADE"))
         run_log.info("schema_seed.fresh.dropped")
 
+    def _ensure_bookkeeping(self) -> None:
+        """Prepare schema + migration bookkeeping, mirroring deploy-schema.bat."""
+        with db.admin_session() as session:
+            session.execute(text("CREATE SCHEMA IF NOT EXISTS plmiqdb"))
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS plmiqdb.foundation_schema_migrations ("
+                    "filename text PRIMARY KEY, "
+                    "applied_on timestamptz NOT NULL DEFAULT now())"
+                )
+            )
+
     def _execute_sql_file(self, path: Path) -> None:
         content = path.read_text(encoding="utf-8")
         statements = _split_sql(content)
@@ -253,6 +354,13 @@ class SchemaSeedService:
 
     def _record_applied(self, filename: str) -> None:
         with db.admin_session() as session:
+            session.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS plmiqdb.foundation_schema_migrations ("
+                    "filename text PRIMARY KEY, "
+                    "applied_on timestamptz NOT NULL DEFAULT now())"
+                )
+            )
             session.execute(
                 text(
                     "INSERT INTO plmiqdb.foundation_schema_migrations (filename) "
