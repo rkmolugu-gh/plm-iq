@@ -227,7 +227,7 @@ class EdgeCreate(CamelModel):
     lifecycle_state: enums.EdgeState = enums.EdgeState.PENDING_APPROVAL
     effective_from: date | None = None
     effective_to: date | None = None
-    graph_rule_id: UUID | None = None
+    edge_constraint_id: UUID | None = None
     annotation: dict[str, Any] = {}
     tenant_attributes: dict[str, Any] = {}
 
@@ -238,7 +238,7 @@ class EdgeUpdate(CamelModel):
     lifecycle_state: enums.EdgeState | None = None
     effective_from: date | None = None
     effective_to: date | None = None
-    graph_rule_id: UUID | None = None
+    edge_constraint_id: UUID | None = None
     annotation: dict[str, Any] | None = None
     tenant_attributes: dict[str, Any] | None = None
 
@@ -256,7 +256,7 @@ class EdgeOut(CamelModel):
     lifecycle_state: enums.EdgeState
     effective_from: date | None
     effective_to: date | None
-    graph_rule_id: UUID | None
+    edge_constraint_id: UUID | None
     prefix: str
     version: int
     created_by: str
@@ -267,10 +267,10 @@ class EdgeOut(CamelModel):
     annotation: dict[str, Any]
 
 
-# ── Graph rule ──────────────────────────────────────────────────────────────
+# ── Edge constraint ──────────────────────────────────────────────────────────────
 
 
-class GraphRuleBase(CamelModel):
+class EdgeConstraintBase(CamelModel):
     scope: enums.RuleScope = enums.RuleScope.PLATFORM
     tenant_id: UUID | None = None
     edition_id: enums.EditionId | None = None
@@ -298,7 +298,7 @@ class GraphRuleBase(CamelModel):
         return [] if value is None else value
 
     @model_validator(mode="after")
-    def _scope_fields_match(self) -> GraphRuleBase:
+    def _scope_fields_match(self) -> EdgeConstraintBase:
         if (self.scope == enums.RuleScope.TENANT) != (self.tenant_id is not None):
             raise ValueError("scope 'tenant' requires tenantId; every other scope forbids it")
         if (self.scope == enums.RuleScope.EDITION) != (self.edition_id is not None):
@@ -306,11 +306,11 @@ class GraphRuleBase(CamelModel):
         return self
 
 
-class GraphRuleCreate(GraphRuleBase):
+class EdgeConstraintCreate(EdgeConstraintBase):
     pass
 
 
-class GraphRuleUpdate(CamelModel):
+class EdgeConstraintUpdate(CamelModel):
     version: int
     source_cardinality: enums.Cardinality | None = None
     target_cardinality: enums.Cardinality | None = None
@@ -323,7 +323,7 @@ class GraphRuleUpdate(CamelModel):
     allow_tenant_extension: bool | None = None
 
 
-class GraphRuleOut(GraphRuleBase):
+class EdgeConstraintOut(EdgeConstraintBase):
     id: UUID
     version: int
     created_by: str

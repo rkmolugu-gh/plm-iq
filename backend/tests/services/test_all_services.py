@@ -47,7 +47,7 @@ from services.errors import (  # noqa: E402
 from services.document_service import documents as _documents  # noqa: E402
 from services.edge_service import edges as _edge_svc  # noqa: E402
 from services.graph_query_service import queries as _queries  # noqa: E402
-from services.graph_rule_service import rules as _rules_svc  # noqa: E402
+from services.edge_constraint_service import edge_constraints as _rules_svc  # noqa: E402
 from services.jobs import registry as _registry  # noqa: E402
 from services.role_service import roles as _roles_svc  # noqa: E402
 from services.rule_engine import validator as _validator  # noqa: E402
@@ -56,7 +56,7 @@ from services.user_service import users as _users_svc  # noqa: E402
 from services.vertex_service import VertexCoreService, vertices as _vertices, parts as _parts  # noqa: E402
 from services.schemas import (  # noqa: E402
     EdgeCreate, EdgeUpdate,
-    GraphRuleCreate, GraphRuleUpdate,
+    EdgeConstraintCreate, EdgeConstraintUpdate,
     PartCreate, PartUpdate, PartOut,
     RoleCreate, RoleUpdate,
     TenantCreate, TenantUpdate,
@@ -64,7 +64,7 @@ from services.schemas import (  # noqa: E402
     VertexCreate, VertexUpdate,
 )
 from services.tables import (  # noqa: E402
-    foundation_edge, foundation_graph_rule, foundation_vertex,
+    foundation_edge, foundation_edge_constraint, foundation_vertex,
     iam_role, iam_role_permission, iam_tenant, iam_user, iam_user_role,
 )
 
@@ -315,7 +315,7 @@ def mk_bom_node_rule(tenant_id):
         lambda s: create_rule(
             s,
             tenant_id,
-            GraphRuleCreate(
+            EdgeConstraintCreate(
                 scope=enums.RuleScope.TENANT,
                 tenant_id=tenant_id,
                 edge_kind=enums.EdgeKind.BOM,
@@ -334,7 +334,7 @@ def cleanup_tenant(tenant_id):
     try:
         with db.tenant_session(tenant_id) as session:
             session.execute(delete(foundation_edge).where(foundation_edge.c.tenant_id == tenant_id))
-            session.execute(delete(foundation_graph_rule).where(foundation_graph_rule.c.tenant_id == tenant_id))
+            session.execute(delete(foundation_edge_constraint).where(foundation_edge_constraint.c.tenant_id == tenant_id))
             session.execute(delete(foundation_vertex).where(foundation_vertex.c.tenant_id == tenant_id))
     except Exception as e:
         print(f"\033[93m  ! cleanup failed for tenant {tenant_id}: {e}\033[0m")
@@ -473,17 +473,17 @@ def suite_part_service(tid):
     assert soft_delete.marked_for_deletion is True
 
 
-# ── graph_rule_service ──────────────────────────────────────────────────────
+# ── edge_constraint_service ───────────────────────────────────────────────────
 
 
-def suite_graph_rule_service(tid):
+def suite_edge_constraint_service(tid):
     def make_rule():
         return op(
             tid,
             lambda s: create_rule(
                 s,
                 tid,
-                GraphRuleCreate(
+                EdgeConstraintCreate(
                     scope=enums.RuleScope.TENANT,
                     tenant_id=tid,
                     edge_kind=enums.EdgeKind.REFDOCS,
@@ -503,7 +503,7 @@ def suite_graph_rule_service(tid):
 
     updated = op(
         tid,
-        lambda s: update_rule(s, tid, rule.id, GraphRuleUpdate(version=rule.version, duplicate_edges_allowed=True), ACTOR),
+        lambda s: update_rule(s, tid, rule.id, EdgeConstraintUpdate(version=rule.version, duplicate_edges_allowed=True), ACTOR),
     )
     assert updated.duplicate_edges_allowed is True and updated.version == rule.version + 1
 
@@ -518,7 +518,7 @@ def suite_graph_rule_service(tid):
             lambda s: create_rule(
                 s,
                 tid,
-                GraphRuleCreate(
+                EdgeConstraintCreate(
                     scope=enums.RuleScope.PLATFORM,
                     edge_kind=enums.EdgeKind.BOM,
                     source_vertex_kind=enums.VertexKind.PART,
@@ -531,7 +531,7 @@ def suite_graph_rule_service(tid):
     expect_error(
         "stale version on rule update must Conflict",
         Conflict,
-        lambda: op(tid, lambda s: update_rule(s, tid, rule.id, GraphRuleUpdate(version=1, allow_tenant_extension=False), ACTOR)),
+        lambda: op(tid, lambda s: update_rule(s, tid, rule.id, EdgeConstraintUpdate(version=1, allow_tenant_extension=False), ACTOR)),
     )
     op(tid, lambda s: delete_rule(s, tid, rule.id))
     expect_error("deleted rule must NotFound", NotFound, lambda: op(tid, lambda s: get_rule(s, rule.id)))
@@ -580,7 +580,7 @@ def suite_rule_engine(tid):
         lambda s: create_rule(
             s,
             other_tenant,
-            GraphRuleCreate(
+            EdgeConstraintCreate(
                 scope=enums.RuleScope.TENANT,
                 tenant_id=other_tenant,
                 edge_kind=enums.EdgeKind.BOM,
@@ -616,7 +616,7 @@ def suite_edge_service(tid):
         return op(tid, lambda s: create_edge(s, tid, EdgeCreate(**payload), ACTOR))
 
     edge = mk_edge(annotation={"quantity": 4})
-    assert edge.graph_rule_id == rule.id
+    assert edge.edge_constraint_id == rule.id
     assert edge.lifecycle_state == enums.EdgeState.PENDING_APPROVAL
 
     active = op(
@@ -661,7 +661,7 @@ def suite_graph_query_service(tid):
             create_rule(
                 s,
                 tid,
-                GraphRuleCreate(
+                EdgeConstraintCreate(
                     scope=enums.RuleScope.TENANT,
                     tenant_id=tid,
                     edge_kind=enums.EdgeKind.BOM,
@@ -1038,7 +1038,7 @@ def suite_role_service(tid):
 SUITES = [
     suite_vertex_service,
     suite_part_service,
-    suite_graph_rule_service,
+    suite_edge_constraint_service,
     suite_rule_engine,
     suite_edge_service,
     suite_graph_query_service,

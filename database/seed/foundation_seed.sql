@@ -81,9 +81,9 @@ INSERT INTO foundation_vertex (
  '{"changeType": "Material", "requestedBy": "procurement", "targetRelease": "2026-04-01"}',
  '{"ecoBoard": "MEB-1", "costImpactUsd": -18250, "riskLevel": "Medium"}');
 
--- ── foundation_graph_rule ─────────────────────────────────────────────────────────
+-- ── foundation_edge_constraint ─────────────────────────────────────────────────────────
 
-INSERT INTO foundation_graph_rule (
+INSERT INTO foundation_edge_constraint (
     id, scope, tenant_id, edition_id,
     edge_kind, source_vertex_kind, target_vertex_kind, direction,
     source_cardinality, target_cardinality,
@@ -155,7 +155,7 @@ INSERT INTO foundation_edge (
     source_vertex_id, source_vertex_kind,
     target_vertex_id, target_vertex_kind,
     lifecycle_state, effective_from, effective_to,
-    graph_rule_id, prefix,
+    edge_constraint_id, prefix,
     created_by, created_on, modified_by, modified_on,
     tenant_attributes, annotation
 ) VALUES
@@ -281,8 +281,8 @@ INSERT INTO foundation_vertex (
   '{"changeType": "Material", "requestedBy": "procurement"}',
   '{}'::jsonb);
 
--- Governing rule for the migrated USES relationship (no rule existed yet).
-INSERT INTO foundation_graph_rule (
+-- Governing edge constraint for the migrated USES relationship (no rule existed yet).
+INSERT INTO foundation_edge_constraint (
     id, scope, tenant_id, edition_id,
     edge_kind, source_vertex_kind, target_vertex_kind, direction,
     source_cardinality, target_cardinality,
@@ -308,7 +308,7 @@ INSERT INTO foundation_edge (
     source_vertex_id, source_vertex_kind,
     target_vertex_id, target_vertex_kind,
     lifecycle_state, effective_from, effective_to,
-    graph_rule_id, prefix,
+    edge_constraint_id, prefix,
     created_by, created_on, modified_by, modified_on,
     tenant_attributes, annotation
 ) VALUES
@@ -477,7 +477,7 @@ INSERT INTO foundation_edge (
     source_vertex_id, source_vertex_kind,
     target_vertex_id, target_vertex_kind,
     lifecycle_state, effective_from, effective_to,
-    graph_rule_id, prefix,
+    edge_constraint_id, prefix,
     created_by, created_on, modified_by, modified_on,
     tenant_attributes, annotation
 ) VALUES

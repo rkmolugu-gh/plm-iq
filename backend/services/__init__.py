@@ -1,4 +1,4 @@
-"""PLM-IQ service layer: tenants, users, roles, vertices, edges, graph rules,
+"""PLM-IQ service layer: tenants, users, roles, vertices, edges, edge constraints,
 and traversals.
 
 Public surface re-exported for the API layer; services depend only on this
@@ -16,9 +16,9 @@ from .schemas import (
     EdgeCreate,
     EdgeOut,
     EdgeUpdate,
-    GraphRuleCreate,
-    GraphRuleOut,
-    GraphRuleUpdate,
+    EdgeConstraintCreate,
+    EdgeConstraintOut,
+    EdgeConstraintUpdate,
     Page,
     PermissionOut,
     RoleCreate,
@@ -54,9 +54,9 @@ __all__ = [
     "EdgeCreate",
     "EdgeOut",
     "EdgeUpdate",
-    "GraphRuleCreate",
-    "GraphRuleOut",
-    "GraphRuleUpdate",
+    "EdgeConstraintCreate",
+    "EdgeConstraintOut",
+    "EdgeConstraintUpdate",
     "Page",
     "TenantCreate",
     "TenantOut",

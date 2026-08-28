@@ -133,7 +133,7 @@ class EdgeService(BaseService):
             raise ValidationFailed(
                 f"edge '{data.name}' ({data.kind.value}: "
                 f"{self._vertex_ref(source)} -> {self._vertex_ref(target)}) "
-                "rejected by graph rules",
+                "rejected by edge constraints",
                 details=violations,
             )
         resolved = resolved or {}
@@ -146,12 +146,12 @@ class EdgeService(BaseService):
                 source_vertex_id=data.source_vertex_id,
                 target_vertex_id=data.target_vertex_id,
             )
-        graph_rule_id = data.graph_rule_id or resolved.get("id")
+        edge_constraint_id = data.edge_constraint_id or resolved.get("id")
 
         values = data.model_dump(exclude_unset=True)
         values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
-        if graph_rule_id is not None:
-            values["graph_rule_id"] = graph_rule_id
+        if edge_constraint_id is not None:
+            values["edge_constraint_id"] = edge_constraint_id
         try:
             row = session.execute(
                 insert(tables.foundation_edge).values(**values).returning(*tables.foundation_edge.c)
@@ -161,7 +161,7 @@ class EdgeService(BaseService):
             raise Conflict("edge violates a database constraint (duplicate or missing endpoint)") from exc
         logger.info("edge.created", extra={
             "tenant": str(tenant_id), "edge": str(row.id), "kind": data.kind.value,
-            "rule": str(graph_rule_id) if graph_rule_id else "-", "actor": actor,
+            "rule": str(edge_constraint_id) if edge_constraint_id else "-", "actor": actor,
         })
         return from_row(EdgeOut, row)
 
@@ -197,7 +197,7 @@ class EdgeService(BaseService):
                 kind=current["kind"],
                 source_kind=current["source_vertex_kind"],
                 target_kind=current["target_vertex_kind"],
-                stored_rule_id=current["graph_rule_id"],
+                stored_constraint_id=current["edge_constraint_id"],
                 annotation=changes.get("annotation", current["annotation"]),
                 tenant_attributes=changes.get("tenant_attributes", current["tenant_attributes"]),
             )
@@ -300,15 +300,15 @@ class EdgeService(BaseService):
         kind: enums.EdgeKind,
         source_kind: enums.VertexKind,
         target_kind: enums.VertexKind,
-        stored_rule_id: UUID | None,
+        stored_constraint_id: UUID | None,
         annotation: dict,
         tenant_attributes: dict,
     ) -> None:
         rule = None
-        if stored_rule_id:
+        if stored_constraint_id:
             row = session.execute(
-                select(tables.foundation_graph_rule).where(
-                    tables.foundation_graph_rule.c.id == stored_rule_id
+                select(tables.foundation_edge_constraint).where(
+                    tables.foundation_edge_constraint.c.id == stored_constraint_id
                 )
             ).one_or_none()
             rule = dict(row._mapping) if row else None

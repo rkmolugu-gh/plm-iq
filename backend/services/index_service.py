@@ -381,7 +381,7 @@ class IndexBuilder:
             "lifecycle_state": row.get("lifecycle_state"),
             "effective_from": row.get("effective_from"),
             "effective_to": row.get("effective_to"),
-            "graph_rule_id": row.get("graph_rule_id"),
+            "edge_constraint_id": row.get("edge_constraint_id"),
             "prefix": row.get("prefix"),
             "source_vertex_id": row.get("source_vertex_id"),
             "source_vertex_kind": row.get("source_vertex_kind"),

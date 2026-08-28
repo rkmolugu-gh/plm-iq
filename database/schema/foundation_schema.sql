@@ -4,7 +4,7 @@
 -- Target: PostgreSQL 16+, schema plmiqdb
 --
 -- Merged stages:
---   * graph foundation : types, roles, vertex/edge/graph_rule, RLS, triggers
+--   * graph foundation : types, roles, vertex/edge/edge_constraint, RLS, triggers
 --   * identity & access: iam_tenant/user/role/permission grants and assignments
 --
 -- Conventions: UUID PKs, audit columns, GENERATED ALWAYS AS IDENTITY `version`
@@ -107,10 +107,10 @@ COMMENT ON TABLE  foundation_vertex        IS 'Business objects (graph nodes)';
 COMMENT ON COLUMN foundation_vertex.prefix  IS 'Numbering prefix; platform default V, tenant-overridable';
 COMMENT ON COLUMN foundation_vertex.version IS 'DB-autoincremented optimistic-lock token';
 
--- ── GRAPH RULE ──────────────────────────────────────────────────────────────
+-- ── EDGE CONSTRAINT ──────────────────────────────────────────────────────────────
 -- Created before edge so edges can FK their governing rule.
 
-CREATE TABLE foundation_graph_rule (
+CREATE TABLE foundation_edge_constraint (
     id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     scope                     rule_scope NOT NULL DEFAULT 'platform',
     tenant_id                 uuid,                  -- required iff scope='tenant'
@@ -138,7 +138,7 @@ CREATE TABLE foundation_graph_rule (
     CONSTRAINT chk_rule_scope_edition CHECK ((scope = 'edition') = (edition_id IS NOT NULL))
 );
 
-COMMENT ON TABLE foundation_graph_rule IS 'Governance rules for valid edges; precedence platform -> edition -> tenant -> object validation';
+COMMENT ON TABLE foundation_edge_constraint IS 'Governance rules for valid edges; precedence platform -> edition -> tenant -> object validation';
 
 -- ── EDGE ────────────────────────────────────────────────────────────────────
 
@@ -155,7 +155,7 @@ CREATE TABLE foundation_edge (
     lifecycle_state     edge_state NOT NULL DEFAULT 'pending_approval',
     effective_from      date,
     effective_to        date,
-    graph_rule_id       uuid REFERENCES foundation_graph_rule (id),
+    edge_constraint_id       uuid REFERENCES foundation_edge_constraint (id),
     prefix              text NOT NULL DEFAULT 'E',
     version             bigint GENERATED ALWAYS AS IDENTITY,
     created_by          text NOT NULL,
@@ -201,8 +201,8 @@ CREATE TRIGGER trg_edge_bump_version
     BEFORE UPDATE ON foundation_edge
     FOR EACH ROW EXECUTE FUNCTION bump_version();
 
-CREATE TRIGGER trg_graph_rule_bump_version
-    BEFORE UPDATE ON foundation_graph_rule
+CREATE TRIGGER trg_edge_constraint_bump_version
+    BEFORE UPDATE ON foundation_edge_constraint
     FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 -- ── Indexes ─────────────────────────────────────────────────────────────────
@@ -213,9 +213,9 @@ CREATE INDEX idx_vertex_tenant_lifecycle ON foundation_vertex (tenant_id, lifecy
 CREATE INDEX idx_edge_source       ON foundation_edge (source_vertex_id);
 CREATE INDEX idx_edge_target       ON foundation_edge (target_vertex_id);
 CREATE INDEX idx_edge_tenant_kind  ON foundation_edge (tenant_id, kind);
-CREATE INDEX idx_edge_rule         ON foundation_edge (graph_rule_id) WHERE graph_rule_id IS NOT NULL;
+CREATE INDEX idx_edge_rule         ON foundation_edge (edge_constraint_id) WHERE edge_constraint_id IS NOT NULL;
 
-CREATE INDEX idx_rule_lookup       ON foundation_graph_rule (scope, edition_id, edge_kind);
+CREATE INDEX idx_edge_constraint_lookup       ON foundation_edge_constraint (scope, edition_id, edge_kind);
 
 -- ── Row Level Security ──────────────────────────────────────────────────────
 -- plmiq_migrator holds BYPASSRLS; every other role is fully policy-bound.
@@ -224,8 +224,8 @@ ALTER TABLE foundation_vertex     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE foundation_vertex     FORCE  ROW LEVEL SECURITY;
 ALTER TABLE foundation_edge       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE foundation_edge       FORCE  ROW LEVEL SECURITY;
-ALTER TABLE foundation_graph_rule ENABLE ROW LEVEL SECURITY;
-ALTER TABLE foundation_graph_rule FORCE  ROW LEVEL SECURITY;
+ALTER TABLE foundation_edge_constraint ENABLE ROW LEVEL SECURITY;
+ALTER TABLE foundation_edge_constraint FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY vertex_tenant_isolation ON foundation_vertex
     USING      (tenant_id = current_tenant_id())
@@ -235,18 +235,18 @@ CREATE POLICY edge_tenant_isolation ON foundation_edge
     USING      (tenant_id = current_tenant_id())
     WITH CHECK (tenant_id = current_tenant_id());
 
--- Rules: tenants read platform rules, but manage only their own.
-CREATE POLICY graph_rule_read ON foundation_graph_rule FOR SELECT
+-- Edge constraints: tenants read platform edge constraints, but manage only their own.
+CREATE POLICY edge_constraint_read ON foundation_edge_constraint FOR SELECT
     USING (scope <> 'tenant' OR tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_insert ON foundation_graph_rule FOR INSERT
+CREATE POLICY edge_constraint_insert ON foundation_edge_constraint FOR INSERT
     WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_update ON foundation_graph_rule FOR UPDATE
+CREATE POLICY edge_constraint_update ON foundation_edge_constraint FOR UPDATE
     USING      (scope = 'tenant' AND tenant_id = current_tenant_id())
     WITH CHECK (scope = 'tenant' AND tenant_id = current_tenant_id());
 
-CREATE POLICY graph_rule_delete ON foundation_graph_rule FOR DELETE
+CREATE POLICY edge_constraint_delete ON foundation_edge_constraint FOR DELETE
     USING (scope = 'tenant' AND tenant_id = current_tenant_id());
 
 -- ── Privileges ──────────────────────────────────────────────────────────────

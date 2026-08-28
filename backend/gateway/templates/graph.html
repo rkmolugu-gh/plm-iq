@@ -40,7 +40,7 @@
   </a>
   <a class="tab{{ ' is-active' if tab == 'graph' }}" href="/graph?tab=graph">Graph Author</a>
   <a class="tab{{ ' is-active' if tab == 'rule' }}" href="/graph?tab=rule">
-    Edge rules <span class="tab-count">{{ gv_rules | length }}</span>
+    Edge constraints <span class="tab-count">{{ gv_rules | length }}</span>
   </a>
   <a class="tab{{ ' is-active' if tab == 'view' }}" href="/graph?tab=view">Graph view</a>
 </nav>
@@ -363,15 +363,15 @@
   </div>
 </div>
 <script type="application/json" id="builder-seed">{{ auth_source | tojson if auth_source else 'null' }}</script>
-  <script type="application/json" id="builder-rules">{{ builder_rules | tojson }}</script>
+  <script type="application/json" id="builder-constraints">{{ builder_constraints | tojson }}</script>
   <script type="application/json" id="builder-kinds">{{ edge_kinds | tojson }}</script>
   <script type="application/json" id="existing-edges-data">{{ gv_edges | tojson }}</script>
   <script>
     (function () {
       var canvas = document.getElementById("builder-canvas");
       if (!canvas) return;
-      var rules = [], kinds = [], existingEdges = [];
-      try { rules = JSON.parse(document.getElementById("builder-rules").textContent || "[]"); } catch (e) {}
+      var constraints = [], kinds = [], existingEdges = [];
+      try { constraints = JSON.parse(document.getElementById("builder-constraints").textContent || "[]"); } catch (e) {}
       try { kinds = JSON.parse(document.getElementById("builder-kinds").textContent || "[]"); } catch (e) {}
       try { existingEdges = JSON.parse(document.getElementById("existing-edges-data").textContent || "[]"); } catch (e) {}
       var placed = [];
@@ -629,7 +629,7 @@
         // Draw existing edges on the canvas
         drawExistingEdges();
 
-        var matches = rules.filter(function (r) {
+        var matches = constraints.filter(function (r) {
           return r.sk === a.kind && r.tk === b.kind;
         });
         var proposed = [];
@@ -651,13 +651,13 @@
 
         var hintEl = q("#proposal-hint");
         if (matches.length) {
-          hintEl.textContent = "Governing rule patterns: " + matches.map(function (m) {
+          hintEl.textContent = "Governing edge constraint patterns: " + matches.map(function (m) {
             return m.kind + " (" + m.scope + ")";
           }).join(", ") + ".";
         } else {
           hintEl.textContent =
-            "No graph rule governs " + a.kind + " -> " + b.kind +
-            "; creation will be rejected by the rules engine.";
+            "No edge constraint governs " + a.kind + " -> " + b.kind +
+            "; creation will be rejected by the edge constraints engine.";
         }
 
         proposeDefault();
@@ -852,10 +852,10 @@
   {% endif %}
   {% endif %}
 
-{# ── Edge rules ────────────────────────────────────────────────────────── #}
+{# ── Edge constraints ────────────────────────────────────────────────────────── #}
 {% else %}
   <div class="table-toolbar">
-    <p class="table-desc">Governance rules for relationships &mdash; the single rule whose
+    <p class="table-desc">Governance edge constraints for relationships &mdash; the single edge constraint whose
       pattern matches an edge governs it; when several scopes match, the most
       specific wins (tenant &gt; edition &gt; platform). Tenants author only
       tenant-scoped rules.</p>
@@ -863,7 +863,7 @@
   {% if graph_live and editing_rule %}
     {% if editing_rule.editable %}
   <form class="crud-form" method="post" action="/graph/rules/{{ editing_rule.id }}/update">
-    <h2>Edit rule {{ editing_rule.kind }}: {{ editing_rule.source_kind }} --&gt; {{ editing_rule.target_kind }}</h2>
+    <h2>Edit edge constraint {{ editing_rule.kind }}: {{ editing_rule.source_kind }} --&gt; {{ editing_rule.target_kind }}</h2>
     <input type="hidden" name="version" value="{{ editing_rule.version }}">
     <div class="form-actions">
       <button class="btn btn-primary btn-sm" type="submit">Save</button>
@@ -898,12 +898,12 @@
     </div>
   </form>
     {% else %}
-  <div class="flash flash-err">{{ editing_rule.scope | capitalize }}-scoped rules are read-only.</div>
+  <div class="flash flash-err">{{ editing_rule.scope | capitalize }}-scoped edge constraints are read-only.</div>
     {% endif %}
   {% elif graph_live %}
   <form class="crud-form" method="post" action="/graph/rules/create">
-    <h2>Create a rule</h2>
-    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create rule</button></div>
+    <h2>Create an edge constraint</h2>
+    <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">+ Create edge constraint</button></div>
     <div class="form-grid">
       <label>Edge kind
         <select name="edge_kind" required>{% for k in edge_kinds %}<option value="{{ k }}">{{ k }}</option>{% endfor %}</select>
@@ -973,7 +973,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="cell-anno">Sign in to see the governing rules of your workspace.</p>
+  <p class="cell-anno">Sign in to see the governing edge constraints of your workspace.</p>
   {% endif %}
   {% endif %}
 </section>

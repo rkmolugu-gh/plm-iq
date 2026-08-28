@@ -38,7 +38,7 @@ from services.es_client import es
 from services.es_ingest_service import ingest
 from services.file_store import files
 from services.graph_query_service import queries
-from services.graph_rule_service import rules
+from services.edge_constraint_service import edge_constraints
 from services.index_service import indexer, watermarks
 from services.jobs import registry
 from services.permission_service import permissions
@@ -48,8 +48,8 @@ from services.schemas import (
     DocumentCreate,
     EdgeCreate,
     EdgeUpdate,
-    GraphRuleCreate,
-    GraphRuleUpdate,
+    EdgeConstraintCreate,
+    EdgeConstraintUpdate,
     PartCreate,
     PartUpdate,
     PermissionCreate,
@@ -376,13 +376,13 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
     params = request.query_params
     edit_raw = params.get("edit") or ""
 
-    editing_vertex_row = editing_edge_row = editing_rule_row = None
+    editing_vertex_row = editing_edge_row = editing_constraint_row = None
     revising_source_row = None
     next_revision_value = ""
     with _request_session(request) as session:
         vertices_page = vertices.list(session, tenant_id, limit=200)
         edges_page = edges.list(session, tenant_id, limit=200)
-        rules_page = rules.list(session, limit=200)
+        rules_page = edge_constraints.list(session, limit=200)
         edit_id = _safe_uuid(edit_raw)
         if edit_id is not None:
             # find_* already returns a plain dict (or None)
@@ -391,7 +391,7 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
             elif tab == "edge":
                 editing_edge_row = edges.find(session, tenant_id, edit_id)
             elif tab == "rule":
-                editing_rule_row = rules.find(session, edit_id)
+                editing_constraint_row = edge_constraints.find(session, edit_id)
         # ?revise=<id>: the create form becomes "revise" - same business
         # identity ({prefix}-{number}), successor revision prefilled, new row
         # on submit. One row per revision IS this data model's versioning.
@@ -440,7 +440,7 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
             "attributes_text": _render_attributes(row["annotation"]),
         })
 
-    def rule_view(r) -> dict:
+    def constraint_view(r) -> dict:
         d = r.model_dump(mode="json")
         qualifier = ""
         if d["scope"] == "edition" and d.get("edition_id"):
@@ -463,12 +463,12 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
             "version": d["version"],
         }
 
-    gv_rules = [rule_view(r) for r in rules_page.items]
+    gv_constraints = [constraint_view(r) for r in rules_page.items]
     context: dict[str, Any] = {
         "graph_live": True,
         "gv_vertices": gv_vertices,
         "gv_edges": gv_edges,
-        "gv_rules": gv_rules,
+        "gv_constraints": gv_constraints,
         "tab": tab,
         "show_nav": True,
         "flash_msg": params.get("msg") or "",
@@ -482,9 +482,9 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
         "cardinalities": [c.value for c in enums.Cardinality],
         "participations": [p.value for p in enums.Participation],
         # drag-and-drop builder: rule patterns drive the edge-kind proposals
-        "builder_rules": [
+        "builder_constraints": [
             {"kind": r["kind"], "sk": r["source_kind"], "tk": r["target_kind"], "scope": r["scope"]}
-            for r in gv_rules
+            for r in gv_constraints
         ],
     }
 
@@ -525,12 +525,12 @@ def _graph_workspace(tenant_id: UUID, edition_id: str, request: Request, tab: st
         context["editing_edge"] = view
         view["source_label"] = label_of(view["source_vertex_id"])
         view["target_label"] = label_of(view["target_vertex_id"])
-    if editing_rule_row is not None:
-        context["editing_rule"] = _rule_edit_view(editing_rule_row, tenant_id)
+    if editing_constraint_row is not None:
+        context["editing_constraint"] = _constraint_edit_view(editing_constraint_row, tenant_id)
     return context
 
 
-def _rule_edit_view(row: dict, tenant_id: UUID) -> dict:
+def _constraint_edit_view(row: dict, tenant_id: UUID) -> dict:
     def val(v):
         return getattr(v, "value", v)
 
@@ -927,7 +927,7 @@ def _attr_list(raw: str) -> list[str]:
 
 
 @router.post("/graph/rules/create")
-def graph_rule_create(
+def edge_constraint_create(
     request: Request,
     edge_kind: str = Form(...),
     source_vertex_kind: str = Form(...),
@@ -946,7 +946,7 @@ def graph_rule_create(
     if isinstance(ident, RedirectResponse):
         return ident
     try:
-        data = GraphRuleCreate(
+        data = EdgeConstraintCreate(
             scope=enums.RuleScope.TENANT,
             tenant_id=UUID(ident.tenant_id),
             edge_kind=enums.EdgeKind(edge_kind),
@@ -973,10 +973,10 @@ def graph_rule_create(
         return _graph_redirect("rule", err=str(exc))
 
 
-@router.post("/graph/rules/{rule_id}/update")
-def graph_rule_update(
+@router.post("/graph/rules/{constraint_id}/update")
+def edge_constraint_update(
     request: Request,
-    rule_id: UUID,
+    constraint_id: UUID,
     version: int = Form(...),
     source_cardinality: str = Form(""),
     target_cardinality: str = Form(""),
@@ -1008,22 +1008,22 @@ def graph_rule_update(
         changes["required_edge_attributes"] = _attr_list(required_edge_attributes)
         with db.tenant_session(UUID(ident.tenant_id)) as session:
             rules.update(
-                session, UUID(ident.tenant_id), rule_id,
-                GraphRuleUpdate(**changes), actor=_actor(request),
+                session, UUID(ident.tenant_id), constraint_id,
+                EdgeConstraintUpdate(**changes), actor=_actor(request),
             )
         return _graph_redirect("rule", msg="rule saved")
     except (ServiceError, ValueError) as exc:
-        return _graph_redirect("rule", err=str(exc), edit=str(rule_id))
+        return _graph_redirect("rule", err=str(exc), edit=str(constraint_id))
 
 
-@router.post("/graph/rules/{rule_id}/delete")
-def graph_rule_delete(request: Request, rule_id: UUID) -> RedirectResponse:
+@router.post("/graph/rules/{constraint_id}/delete")
+def edge_constraint_delete(request: Request, constraint_id: UUID) -> RedirectResponse:
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return ident
     try:
         with db.tenant_session(UUID(ident.tenant_id)) as session:
-            rules.delete(session, tenant_id, rule_id)
+            rules.delete(session, tenant_id, constraint_id)
         return _graph_redirect("rule", msg="rule deleted")
     except (ServiceError, ValueError) as exc:
         return _graph_redirect("rule", err=str(exc))
@@ -2978,7 +2978,7 @@ async def bom_save(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "expected a 'rows' array"}, status_code=400)
     created = updated = deleted = 0
     try:
-        with _request_session(request) as session:
+        with db.tenant_session(tid) as session:
             for i, r in enumerate(rows, start=1):
                 if not isinstance(r, dict):
                     return JSONResponse({"ok": False, "error": f"row {i}: malformed"}, status_code=400)

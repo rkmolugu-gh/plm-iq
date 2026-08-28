@@ -73,8 +73,8 @@ foundation_part = Table(
     Column("part_role", _enum(enums.PartRole, "part_role"), nullable=False),
 )
 
-foundation_graph_rule = Table(
-    "foundation_graph_rule",
+foundation_edge_constraint = Table(
+    "foundation_edge_constraint",
     metadata,
     Column("id", UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
     Column("scope", _enum(enums.RuleScope, "rule_scope"), nullable=False),
@@ -115,7 +115,7 @@ foundation_edge = Table(
     Column("lifecycle_state", _enum(enums.EdgeState, "edge_state"), nullable=False),
     Column("effective_from", Date),
     Column("effective_to", Date),
-    Column("graph_rule_id", UUID(as_uuid=True)),
+    Column("edge_constraint_id", UUID(as_uuid=True)),
     Column("prefix", Text, nullable=False),
     Column("version", BigInteger),
     Column("created_by", Text, nullable=False),

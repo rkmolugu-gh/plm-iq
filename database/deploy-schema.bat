@@ -154,7 +154,7 @@ if "%PLMIQ_DROP_SCHEMA%"=="1" set "DROP_SCHEMA=y"
 if "%PLMIQ_DROP_SCHEMA%"=="0" set "DROP_SCHEMA=n"
 if defined DROP_SCHEMA goto drop_decided
 echo %Y%Destructive option: dropping schema %SCHEMA_NAME% erases ALL graph data,%N%
-echo %Y%including vertices, edges, rules and the migration history.%N%
+echo %Y%including vertices, edges, edge constraints and the migration history.%N%
 set /p DROP_SCHEMA="Drop schema '%SCHEMA_NAME%' in database '%PLMIQ_DB_NAME%' before deploying? [y/N] "
 :drop_decided
 if /i "%DROP_SCHEMA%"=="y" goto do_drop
@@ -175,7 +175,7 @@ if "%PLMIQ_CLEAR_SEED%"=="1" set "CLEAR_SEED=y"
 if "%PLMIQ_CLEAR_SEED%"=="0" set "CLEAR_SEED=n"
 if defined CLEAR_SEED goto clear_decided
 echo %Y%Seed option: clearing removes ALL rows from the seeded tables%N%
-echo %Y%(vertices, edges, rules, tenants, users, roles, permissions).%N%
+echo %Y%(vertices, edges, edge constraints, tenants, users, roles, permissions).%N%
 set /p CLEAR_SEED="Clear seeded tables in database '%PLMIQ_DB_NAME%' before applying seed? [y/N] "
 :clear_decided
 if /i "%CLEAR_SEED%"=="y" goto do_clear
@@ -192,7 +192,7 @@ rem skipped gracefully instead of aborting the deploy on "relation does not
 rem exist" - this happens after a schema DROP (CASCADE removes the tables)
 rem or when only -seed is run against a still-empty database.
 echo %Y%  clearing seeded tables ...%N%
-%PSQL% -c "DO $$ DECLARE tbls text[] := ARRAY['foundation_edge','foundation_vertex','foundation_graph_rule','iam_role_permission','iam_user_role','iam_user','iam_role','iam_permission','iam_tenant']; t text; BEGIN FOREACH t IN ARRAY tbls LOOP IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='%SCHEMA_NAME%' AND tablename=t) THEN EXECUTE format('DELETE FROM %SCHEMA_NAME%.%%I', t); END IF; END LOOP; END; $$;"
+%PSQL% -c "DO $$ DECLARE tbls text[] := ARRAY['foundation_edge','foundation_vertex','foundation_edge_constraint','iam_role_permission','iam_user_role','iam_user','iam_role','iam_permission','iam_tenant']; t text; BEGIN FOREACH t IN ARRAY tbls LOOP IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname='%SCHEMA_NAME%' AND tablename=t) THEN EXECUTE format('DELETE FROM %SCHEMA_NAME%.%%I', t); END IF; END LOOP; END; $$;"
 if errorlevel 1 ( echo %R%[FAIL] could not clear seeded tables%N% & exit /b 1 )
 rem Forget recorded seed filenames so they replay right after clearing.
 set "SEED_NAMES="

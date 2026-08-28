@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from .document_service import documents
 from .edge_service import edges
 from .errors import ServiceError
-from .graph_rule_service import rules as graph_rules
+from .edge_constraint_service import edge_constraints
 from .rule_engine import validator
 from .vertex_service import vertices
 
@@ -437,7 +437,7 @@ _SET_EDGE_ANNOTATION_SCHEMA = {
         "name": "set_edge_annotation",
         "description": (
             "Set or update annotation attributes on an edge. Annotation is merged "
-            "with existing attributes. Required attributes from the governing rule "
+            "with existing attributes. Required attributes from the governing edge constraint "
             "must be present after the update."
         ),
         "parameters": {
@@ -461,12 +461,12 @@ _SET_EDGE_ANNOTATION_SCHEMA = {
     },
 }
 
-# -- Graph rule tools ---------------------------------------------------------
+# -- Edge constraint tools ---------------------------------------------------------
 
 _LIST_GRAPH_RULES_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "list_graph_rules",
+        "name": "list_edge_constraints",
         "description": (
             "List all graph rules that govern edge creation. Rules define which edge "
             "kinds are allowed between vertex kinds, cardinality constraints, required "
@@ -501,7 +501,7 @@ _LIST_GRAPH_RULES_SCHEMA = {
 _GET_GRAPH_RULE_SCHEMA = {
     "type": "function",
     "function": {
-        "name": "get_graph_rule",
+        "name": "get_edge_constraint",
         "description": (
             "Get a single graph rule by its ID. Returns full rule details including "
             "cardinality, participation, lifecycle states, and required attributes."
@@ -509,12 +509,12 @@ _GET_GRAPH_RULE_SCHEMA = {
         "parameters": {
             "type": "object",
             "properties": {
-                "rule_id": {
+                "constraint_id": {
                     "type": "string",
                     "description": "The UUID of the graph rule.",
                 },
             },
-            "required": ["rule_id"],
+            "required": ["constraint_id"],
         },
     },
 }
@@ -1074,7 +1074,7 @@ class ToolService:
 
     # -- Graph Rules -------------------------------------------------------------
 
-    def list_graph_rules(
+    def list_edge_constraints(
         self,
         session: Session,
         *,
@@ -1098,7 +1098,7 @@ class ToolService:
                     kind_filter = EdgeKind(edge_kind)
                 except ValueError:
                     pass
-            page = graph_rules.list(
+            page = edge_constraints.list(
                 session,
                 scopes=[scope_filter] if scope_filter else None,
                 edge_kinds=[kind_filter] if kind_filter else None,
@@ -1118,15 +1118,15 @@ class ToolService:
                     "duplicate_edges_allowed": row.get("duplicate_edges_allowed", False),
                     "required_attributes": row.get("required_edge_attributes") or [],
                 })
-            return {"total": page.total, "limit": limit, "offset": offset, "rules": items}
+            return {"total": page.total, "limit": limit, "offset": offset, "constraints": items}
         except Exception as exc:
-            logger.warning("tool.list_graph_rules.error", exc_info=exc)
-            raise ServiceError(f"Failed to list graph rules: {exc}") from exc
+            logger.warning("tool.list_edge_constraints.error", exc_info=exc)
+            raise ServiceError(f"Failed to list edge constraints: {exc}") from exc
 
-    def get_graph_rule(self, session: Session, rule_id: str) -> dict[str, Any]:
+    def get_edge_constraint(self, session: Session, constraint_id: str) -> dict[str, Any]:
         """Get a single graph rule by ID."""
         try:
-            r = graph_rules.get(session, UUID(rule_id))
+            r = edge_constraints.get(session, UUID(constraint_id))
             row = r.model_dump(mode="json") if hasattr(r, "model_dump") else dict(r)
             return {
                 "id": str(row["id"]),
@@ -1140,14 +1140,14 @@ class ToolService:
                 "required_attributes": row.get("required_edge_attributes") or [],
             }
         except Exception as exc:
-            logger.warning("tool.get_graph_rule.error", exc_info=exc)
-            raise ServiceError(f"Failed to get graph rule {rule_id}: {exc}") from exc
+            logger.warning("tool.get_edge_constraint.error", exc_info=exc)
+            raise ServiceError(f"Failed to get edge constraint {constraint_id}: {exc}") from exc
 
     def resolve_governing_rule(
         self, session: Session, tenant_id: UUID, edition_id: str,
         edge_kind: str, source_kind: str, target_kind: str,
     ) -> dict[str, Any]:
-        """Resolve the governing rule for an edge pattern."""
+        """Resolve the governing edge constraint for an edge pattern."""
         try:
             from .enums import EdgeKind, VertexKind, EditionId
             ek = EdgeKind(edge_kind)
@@ -1166,7 +1166,7 @@ class ToolService:
             row = rule
             return {
                 "found": True,
-                "rule": {
+                "constraint": {
                     "id": str(row["id"]),
                     "scope": row["scope"].value if hasattr(row["scope"], "value") else row["scope"],
                     "kind": row["edge_kind"].value if hasattr(row["edge_kind"], "value") else row["edge_kind"],
@@ -1176,7 +1176,7 @@ class ToolService:
             }
         except Exception as exc:
             logger.warning("tool.resolve_rule.error", exc_info=exc)
-            raise ServiceError(f"Failed to resolve rule: {exc}") from exc
+            raise ServiceError(f"Failed to resolve edge constraint: {exc}") from exc
 
     # -- Graph Analysis ----------------------------------------------------------
 
@@ -1259,7 +1259,7 @@ class ToolService:
         try:
             vertices_page = vertices.list(session, tenant_id, limit=1)
             edges_page = edges.list(session, tenant_id, limit=1)
-            rules_page = graph_rules.list(session, limit=1)
+            rules_page = edge_constraints.list(session, limit=1)
             return {
                 "vertex_count": vertices_page.total,
                 "edge_count": edges_page.total,
@@ -1399,16 +1399,16 @@ class ToolService:
                     edge_id=args["edge_id"], version=int(args["version"]),
                     annotation=args["annotation"],
                 )
-            elif name == "list_graph_rules":
-                result = self.list_graph_rules(
+            elif name == "list_edge_constraints":
+                result = self.list_edge_constraints(
                     session,
                     scope=args.get("scope"),
                     edge_kind=args.get("edge_kind"),
                     limit=int(args.get("limit", 50)),
                     offset=int(args.get("offset", 0)),
                 )
-            elif name == "get_graph_rule":
-                result = self.get_graph_rule(session, args["rule_id"])
+            elif name == "get_edge_constraint":
+                result = self.get_edge_constraint(session, args["constraint_id"])
             elif name == "resolve_governing_rule":
                 result = self.resolve_governing_rule(
                     session, tenant_id, edition_id=args.get("edition_id", "foundation"),

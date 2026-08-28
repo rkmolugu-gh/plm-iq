@@ -2,7 +2,7 @@
 
 Why this class exists
 ---------------------
-Graph rules are DATA (foundation_graph_rule rows), never hardcoded
+Edge constraints are DATA (foundation_edge_constraint rows), never hardcoded
 constraints; precedence is deterministic per strategy Section 13
 (tenant > edition > platform). Wrapping the four operations in one class
 gives them a single injectable seam: edge_service composes it, tests can
@@ -57,8 +57,8 @@ class RuleValidator:
         target_kind: enums.VertexKind,
     ) -> dict | None:
         """Return the single governing rule for an edge pattern, or None."""
-        rule = tables.foundation_graph_rule.c
-        stmt = select(tables.foundation_graph_rule).where(
+        rule = tables.foundation_edge_constraint.c
+        stmt = select(tables.foundation_edge_constraint).where(
             rule.edge_kind == edge_kind,
             rule.source_vertex_kind == source_kind,
             rule.target_vertex_kind == target_kind,
@@ -132,7 +132,7 @@ class RuleValidator:
             target_kind=target_kind,
         )
         if rule is None:
-            detail = f"no graph rule governs {edge_kind.value}: {source_kind.value} -> {target_kind.value}"
+            detail = f"no edge constraint governs {edge_kind.value}: {source_kind.value} -> {target_kind.value}"
             logger.warning("edge.validation.no_rule", extra={"kind": edge_kind.value})
             return None, [detail]
         violations = self.validate_against_rule(

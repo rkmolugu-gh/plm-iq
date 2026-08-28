@@ -1,4 +1,4 @@
-"""GraphRuleService - CRUD for foundation_graph_rule.
+"""EdgeConstraintService - CRUD for foundation_edge_constraint.
 
 Why this class exists
 ---------------------
@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from . import enums, tables
 from .base import BaseService
 from .errors import Conflict, Forbidden, NotFound, ValidationFailed
-from .schemas import GraphRuleCreate, GraphRuleOut, GraphRuleUpdate, Page, from_row
+from .schemas import EdgeConstraintCreate, EdgeConstraintOut, EdgeConstraintUpdate, Page, from_row
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +53,18 @@ _UPDATABLE_FIELDS = frozenset(
 _MAX_LIMIT = 200
 
 
-class GraphRuleService(BaseService):
-    out_model = GraphRuleOut
+class EdgeConstraintService(BaseService):
+    out_model = EdgeConstraintOut
 
     # ── reads ────────────────────────────────────────────────────────────────
 
-    def find(self, session: Session, rule_id: UUID) -> dict | None:
-        return self._fetch_one(session, tables.foundation_graph_rule, row_id=rule_id)
+    def find(self, session: Session, constraint_id: UUID) -> dict | None:
+        return self._fetch_one(session, tables.foundation_edge_constraint, row_id=constraint_id)
 
-    def get(self, session: Session, rule_id: UUID) -> dict:
-        rule = self.find(session, rule_id)
+    def get(self, session: Session, constraint_id: UUID) -> dict:
+        rule = self.find(session, constraint_id)
         if rule is None:
-            raise NotFound(f"graph rule {rule_id} not found")
+            raise NotFound(f"edge constraint {constraint_id} not found")
         return rule
 
     def list(
@@ -75,101 +75,101 @@ class GraphRuleService(BaseService):
         edge_kinds: list[enums.EdgeKind] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> Page[GraphRuleOut]:
-        """List rules visible to the tenant (RLS hides other tenants' rules)."""
+    ) -> Page[EdgeConstraintOut]:
+        """List edge constraints visible to the tenant (RLS hides other tenants' rules)."""
         limit = min(max(limit, 1), _MAX_LIMIT)
         offset = max(offset, 0)
         conditions = []
         if scopes:
-            conditions.append(tables.foundation_graph_rule.c.scope.in_(scopes))
+            conditions.append(tables.foundation_edge_constraint.c.scope.in_(scopes))
         if edge_kinds:
-            conditions.append(tables.foundation_graph_rule.c.edge_kind.in_(edge_kinds))
+            conditions.append(tables.foundation_edge_constraint.c.edge_kind.in_(edge_kinds))
         total = session.execute(
             select(func.count())
-            .select_from(tables.foundation_graph_rule)
+            .select_from(tables.foundation_edge_constraint)
             .where(*conditions)
         ).scalar_one()
         rows = session.execute(
-            select(tables.foundation_graph_rule)
+            select(tables.foundation_edge_constraint)
             .where(*conditions)
-            .order_by(tables.foundation_graph_rule.c.created_on)
+            .order_by(tables.foundation_edge_constraint.c.created_on)
             .limit(limit)
             .offset(offset)
         ).all()
-        return Page[GraphRuleOut](items=[from_row(GraphRuleOut, r) for r in rows],
+        return Page[EdgeConstraintOut](items=[from_row(EdgeConstraintOut, r) for r in rows],
                                   total=total, limit=limit, offset=offset)
 
     # ── writes ───────────────────────────────────────────────────────────────
 
-    def create(self, session: Session, tenant_id: UUID, data: GraphRuleCreate, actor: str) -> GraphRuleOut:
+    def create(self, session: Session, tenant_id: UUID, data: EdgeConstraintCreate, actor: str) -> EdgeConstraintOut:
         if data.scope != enums.RuleScope.TENANT:
-            raise Forbidden("tenants may author only rules with scope 'tenant'")
+            raise Forbidden("tenants may author only edge constraints with scope 'tenant'")
         values = data.model_dump(exclude_unset=True)
         values.update(tenant_id=tenant_id, created_by=actor, modified_by=actor)
         row = session.execute(
-            insert(tables.foundation_graph_rule)
+            insert(tables.foundation_edge_constraint)
             .values(**values)
-            .returning(*tables.foundation_graph_rule.c)
+            .returning(*tables.foundation_edge_constraint.c)
         ).one()
-        logger.info("graph_rule.created", extra={
-            "tenant": str(tenant_id), "rule": str(row.id), "kind": data.edge_kind.value, "actor": actor,
+        logger.info("edge_constraint.created", extra={
+            "tenant": str(tenant_id), "constraint": str(row.id), "kind": data.edge_kind.value, "actor": actor,
         })
-        return from_row(GraphRuleOut, row)
+        return from_row(EdgeConstraintOut, row)
 
     def update(
-        self, session: Session, tenant_id: UUID, rule_id: UUID, data: GraphRuleUpdate, actor: str
-    ) -> GraphRuleOut:
-        current = self._require_own_tenant_rule(tenant_id, self.get(session, rule_id))
+        self, session: Session, tenant_id: UUID, constraint_id: UUID, data: EdgeConstraintUpdate, actor: str
+    ) -> EdgeConstraintOut:
+        current = self._require_own_tenant_constraint(tenant_id, self.get(session, constraint_id))
         if current["version"] != data.version:
             raise Conflict(
-                f"version mismatch on graph rule {rule_id}: expected {data.version}, "
+                f"version mismatch on edge constraint {constraint_id}: expected {data.version}, "
                 f"current {current['version']}"
             )
         changes = data.model_dump(exclude_unset=True, exclude={"version"})
         unknown = set(changes) - _UPDATABLE_FIELDS
         if unknown:
-            raise ValidationFailed(f"fields not updatable on a graph rule: {sorted(unknown)}")
+            raise ValidationFailed(f"fields not updatable on an edge constraint: {sorted(unknown)}")
         if not changes:
-            return from_row(GraphRuleOut, current)
+            return from_row(EdgeConstraintOut, current)
         row = session.execute(
-            update(tables.foundation_graph_rule)
+            update(tables.foundation_edge_constraint)
             .where(
-                tables.foundation_graph_rule.c.id == rule_id,
-                tables.foundation_graph_rule.c.version == data.version,
+                tables.foundation_edge_constraint.c.id == constraint_id,
+                tables.foundation_edge_constraint.c.version == data.version,
             )
             .values(**changes, modified_by=actor, modified_on=dt.now())
-            .returning(*tables.foundation_graph_rule.c)
+            .returning(*tables.foundation_edge_constraint.c)
         ).one_or_none()
         if row is None:
-            refreshed = self.find(session, rule_id)
-            raise Conflict(f"concurrent modification on graph rule {rule_id}" if refreshed
-                           else f"graph rule {rule_id} not found")
-        logger.info("graph_rule.updated", extra={
-            "tenant": str(tenant_id), "rule": str(rule_id), "actor": actor,
+            refreshed = self.find(session, constraint_id)
+            raise Conflict(f"concurrent modification on edge constraint {constraint_id}" if refreshed
+                           else f"edge constraint {constraint_id} not found")
+        logger.info("edge_constraint.updated", extra={
+            "tenant": str(tenant_id), "constraint": str(constraint_id), "actor": actor,
         })
-        return from_row(GraphRuleOut, row)
+        return from_row(EdgeConstraintOut, row)
 
-    def delete(self, session: Session, tenant_id: UUID, rule_id: UUID) -> None:
-        self._require_own_tenant_rule(tenant_id, self.get(session, rule_id))
+    def delete(self, session: Session, tenant_id: UUID, constraint_id: UUID) -> None:
+        self._require_own_tenant_constraint(tenant_id, self.get(session, constraint_id))
         try:
             deleted = session.execute(
-                delete(tables.foundation_graph_rule).where(tables.foundation_graph_rule.c.id == rule_id)
+                delete(tables.foundation_edge_constraint).where(tables.foundation_edge_constraint.c.id == constraint_id)
             ).rowcount
         except IntegrityError as exc:
-            logger.warning("graph_rule.delete.in_use", extra={"rule": str(rule_id)})
-            raise Conflict(f"graph rule {rule_id} is referenced by edges and cannot be deleted") from exc
+            logger.warning("edge_constraint.delete.in_use", extra={"constraint": str(constraint_id)})
+            raise Conflict(f"edge constraint {constraint_id} is referenced by edges and cannot be deleted") from exc
         if not deleted:
-            raise NotFound(f"graph rule {rule_id} not found")
-        logger.info("graph_rule.deleted", extra={"tenant": str(tenant_id), "rule": str(rule_id)})
+            raise NotFound(f"edge constraint {constraint_id} not found")
+        logger.info("edge_constraint.deleted", extra={"tenant": str(tenant_id), "constraint": str(constraint_id)})
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _require_own_tenant_rule(tenant_id: UUID, rule: dict) -> dict:
+    def _require_own_tenant_constraint(tenant_id: UUID, rule: dict) -> dict:
         if rule["scope"] != enums.RuleScope.TENANT or rule["tenant_id"] != tenant_id:
-            raise Forbidden("only the owning tenant may modify its own 'tenant' rules")
+            raise Forbidden("only the owning tenant may modify its own 'tenant' edge constraints")
         return rule
 
 
 #: Shared singleton for the gateway.
-rules = GraphRuleService()
+edge_constraints = EdgeConstraintService()

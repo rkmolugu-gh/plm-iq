@@ -92,7 +92,7 @@ _EDGE_MAPPING: dict = {
             "lifecycle_state": _keyword(),
             "effective_from": {"type": "date"},
             "effective_to": {"type": "date"},
-            "graph_rule_id": _keyword(),
+            "edge_constraint_id": _keyword(),
             "prefix": _keyword(),
             "source_vertex_id": _keyword(),
             "source_vertex_kind": _keyword(),

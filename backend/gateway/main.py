@@ -14,6 +14,7 @@ URLs stay byte-identical through the OOP port."""
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -22,7 +23,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .routers.pages import router as pages_router
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+_log_level = logging.DEBUG if os.getenv("DEBUG") == "1" else logging.WARNING
+logging.basicConfig(level=_log_level, format="%(levelname)s %(name)s: %(message)s")
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 

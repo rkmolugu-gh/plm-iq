@@ -9,7 +9,7 @@ over a shared core.
 
 | Path | Purpose |
 |---|---|
-| `backend/services/` | Domain service layer: vertices, edges, graph rules, traversals |
+| `backend/services/` | Domain service layer: vertices, edges, edge constraints, traversals |
 | `backend/api/` | REST API layer (`/v1`, milestone pending) |
 | `backend/gateway/` | Edge: tenant/edition host resolution, pages, dashboard |
 | `database/` | Schema + seed SQL (`plmiqdb.foundation_*`) |

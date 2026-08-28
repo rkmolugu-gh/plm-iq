@@ -23,17 +23,16 @@
     <button class="btn-mini" type="submit">Load</button>
     {% if root_vertex %}
     <span class="pill bom-root-pill">{{ root_vertex.label }} &middot; {{ root_vertex.name }}</span>
-    <button class="btn-mini" type="button" id="bom-add-root-child" data-parent-id="{{ root_vertex.id }}" data-parent-label="{{ root_vertex.label }}">+ Add component</button>
     {% endif %}
+    <button class="btn-mini" type="button" id="bom-add-root-child"{% if not root_vertex %} disabled{% endif %} data-parent-id="{{ root_vertex.id if root_vertex else '' }}" data-parent-label="{{ root_vertex.label if root_vertex else '' }}">+ Add component</button>
     <span class="bom-tooltip-icon" title="A source part (parent) connects to a target part (child) through a BOM edge. Quantity, find number, and unit of measure live on the edge. The table is one row per edge; indentation shows depth.">?</span>
   </form>
 
-  {% if root_vertex %}
+    {% if root_vertex %}
   {% if auto_loaded %}<div class="flash flash-ok">Auto-loaded first available part. Pick a different root above to change.</div>{% endif %}
   <div style="overflow-x:auto">
   <table class="data-table bom-table" id="bom-table">
     <colgroup>
-      <col style="width:4.5rem">
       <col>
       <col style="width:8.5rem">
       <col style="width:4.5rem">
@@ -44,7 +43,6 @@
     </colgroup>
     <thead>
       <tr>
-        <th>Level</th>
         <th>Target part (child)</th>
         <th>Source part (parent)</th>
         <th>Qty</th>
@@ -58,9 +56,8 @@
       {% for r in bom_rows %}
       <tr data-row="existing" data-edge-id="{{ r.edge_id }}" data-version="{{ r.edge_version }}"
           data-parent-id="{{ r.parent_id }}" data-parent-label="{{ r.parent_label }}"
-          data-vertex-id="{{ r.vertex_id }}" data-vertex-label="{{ r.label }}" data-depth="{{ r.depth }}">
-        <td><span class="pill">L{{ r.depth }}</span></td>
-        <td class="bom-indent" style="padding-left:{{ r.depth * 16 }}px" title="{{ r.name }}">{{ r.label }} <span class="cell-anno">&middot; {{ r.name | short }}</span></td>
+          data-vertex-id="{{ r.vertex_id }}" data-vertex-label="{{ r.label }}">
+        <td title="{{ r.name }}">{{ r.label }} <span class="cell-anno">&middot; {{ r.name | short }}</span></td>
         <td class="cell-mono">{{ r.parent_label }}</td>
         <td><input class="bom-input bom-qty" type="text" value="{{ r.quantity if r.quantity else 1 }}" placeholder="1" aria-label="Quantity"></td>
         <td><input class="bom-input bom-find" type="text" value="{{ r.find_number }}" placeholder="010" aria-label="Find number"></td>
@@ -72,7 +69,7 @@
         </td>
       </tr>
       {% else %}
-      <tr id="bom-empty-row"><td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td></tr>
+      <tr id="bom-empty-row"><td colspan="7" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -89,8 +86,7 @@
 
   <template id="bom-row-template">
     <tr data-row="new">
-      <td><span class="pill bom-level-pill">L?</span></td>
-      <td class="bom-indent">
+      <td>
         <select class="bom-target-select" required>
           <option value="">Select target part&hellip;</option>
         </select>
@@ -111,44 +107,61 @@
   <script id="bom-root-id" type="hidden">{{ root_vertex.id if root_vertex else '' }}</script>
   <script>
   (function () {
+    var DEBUG = true;
+    function log() { if (DEBUG && window.console) console.log.apply(console, ['[BOM]'].concat(Array.prototype.slice.call(arguments))); }
+    function warn() { if (DEBUG && window.console) console.warn.apply(console, ['[BOM]'].concat(Array.prototype.slice.call(arguments))); }
+
     var ROOT_ID = '{{ root_vertex.id if root_vertex else '' }}';
+    var ROOT_BASE = '{{ root_vertex.label.split("/")[0] if root_vertex else "" }}';
     var partOptions = JSON.parse(document.getElementById('bom-part-options').textContent || '[]');
     var partById = {};
     partOptions.forEach(function (o) { partById[o.id] = o; });
+    log('init', 'ROOT_ID=' + ROOT_ID, 'ROOT_BASE=' + ROOT_BASE, 'parts=' + partOptions.length);
+
+    function baseNumber(label) {
+      var base = (label || '').split('/')[0];
+      log('baseNumber', label, '->', base);
+      return base;
+    }
 
     var tbody = document.getElementById('bom-tbody');
     var rowTemplate = document.getElementById('bom-row-template');
     var emptyRow = document.getElementById('bom-empty-row');
     var status = document.getElementById('bom-save-status');
+    log('elements', {tbody: !!tbody, rowTemplate: !!rowTemplate, emptyRow: !!emptyRow, status: !!status});
 
     function say(message, isError) {
       if (!status) return;
       status.textContent = message;
       status.style.color = isError ? 'var(--danger, #c0392b)' : '';
+      if (message) { isError ? warn(message) : log(message); }
     }
 
-    function depthOf(row) {
-      return row.dataset.depth ? parseInt(row.dataset.depth, 10) : 1;
-    }
-
-    function ancestorIds(row) {
-      var ids = [];
+    function ancestorBaseNumbers(row) {
+      var bases = [];
       var cur = row;
-      while (cur && cur.dataset && cur.dataset.parentId) {
-        ids.push(cur.dataset.parentId);
+      while (cur && cur.tagName === 'TR' && cur.dataset && cur.dataset.parentId) {
+        var pLabel = cur.dataset.parentLabel || '';
+        bases.push(baseNumber(pLabel));
         cur = cur.parentElement;
         while (cur && cur.tagName !== 'TR') cur = cur.parentElement;
       }
-      return ids;
+      if (ROOT_BASE) bases.push(ROOT_BASE);
+      log('ancestorBaseNumbers', bases);
+      return bases;
     }
 
     function currentVertex(row) {
+      var v;
       if (row.dataset.row === 'existing') {
-        return { id: row.dataset.vertexId, label: row.dataset.vertexLabel };
+        v = { id: row.dataset.vertexId, label: row.dataset.vertexLabel, base: baseNumber(row.dataset.vertexLabel) };
+      } else {
+        var select = row.querySelector('.bom-target-select');
+        var opt = select && select.options[select.selectedIndex];
+        v = opt && opt.value ? { id: opt.value, label: opt.textContent, base: baseNumber(opt.textContent) } : null;
       }
-      var select = row.querySelector('.bom-target-select');
-      var opt = select && select.options[select.selectedIndex];
-      return opt && opt.value ? { id: opt.value, label: opt.textContent } : null;
+      log('currentVertex', row.dataset.row, v);
+      return v;
     }
 
     function populateSelect(select) {
@@ -158,11 +171,12 @@
         el.textContent = opt.label;
         select.appendChild(el);
       });
+      log('populateSelect', partOptions.length, 'options');
     }
 
     function rowPayload(row) {
       var v = currentVertex(row);
-      return {
+      var payload = {
         edgeId: row.dataset.row === 'existing' ? row.dataset.edgeId : '',
         version: row.dataset.version ? parseInt(row.dataset.version, 10) : null,
         parentId: row.dataset.parentId,
@@ -172,6 +186,8 @@
         unitOfMeasure: row.querySelector('.bom-uom').value,
         deleted: row.dataset.deleted === 'true',
       };
+      log('rowPayload', payload);
+      return payload;
     }
 
     function allRows() {
@@ -187,26 +203,25 @@
         var rows = allRows();
         if (rows.length) {
           localStorage.setItem('bom-draft-' + ROOT_ID, JSON.stringify(rows));
+          log('saveDraft', rows.length, 'rows');
         }
-      } catch (e) {}
+      } catch (e) { warn('saveDraft failed', e); }
     }
 
     function loadDraft() {
       try {
         var raw = localStorage.getItem('bom-draft-' + ROOT_ID);
-        if (!raw) return false;
+        if (!raw) { log('loadDraft', 'no draft found'); return false; }
         var draft = JSON.parse(raw);
-        if (!Array.isArray(draft) || !draft.length) return false;
+        if (!Array.isArray(draft) || !draft.length) { log('loadDraft', 'empty draft'); return false; }
+        log('loadDraft', draft.length, 'rows');
         tbody.innerHTML = '';
-        draft.forEach(function (d) {
+        draft.forEach(function (d, i) {
           var frag = rowTemplate.content.cloneNode(true);
           var row = frag.querySelector('tr');
           row.dataset.parentId = d.parentId;
           row.dataset.parentLabel = partById[d.parentId] ? partById[d.parentId].label : d.parentId;
-          row.dataset.depth = '1';
-          row.querySelector('.bom-level-pill').textContent = 'L1';
           row.querySelector('.bom-parent-label').textContent = row.dataset.parentLabel;
-          row.querySelector('.bom-indent').style.paddingLeft = '16px';
           var sel = row.querySelector('.bom-target-select');
           populateSelect(sel);
           if (d.vertexId) sel.value = d.vertexId;
@@ -218,19 +233,17 @@
         });
         say('Draft restored (' + draft.length + ' rows).');
         return true;
-      } catch (e) { return false; }
+      } catch (e) { warn('loadDraft failed', e); return false; }
     }
 
     function addChildRow(afterRow, parentId, parentLabel, depth, prefill) {
+      log('addChildRow', {parentId: parentId, parentLabel: parentLabel, depth: depth, prefill: prefill});
       if (emptyRow) { emptyRow.remove(); }
       var frag = rowTemplate.content.cloneNode(true);
       var row = frag.querySelector('tr');
       row.dataset.parentId = parentId;
       row.dataset.parentLabel = parentLabel;
-      row.dataset.depth = String(depth);
-      row.querySelector('.bom-level-pill').textContent = 'L' + depth;
       row.querySelector('.bom-parent-label').textContent = parentLabel;
-      row.querySelector('.bom-indent').style.paddingLeft = (depth * 16) + 'px';
       var sel = row.querySelector('.bom-target-select');
       populateSelect(sel);
       if (prefill && prefill.id) {
@@ -243,16 +256,21 @@
     }
 
     function wireRow(row) {
+      log('wireRow', row.dataset.row, row.dataset.parentId);
       row.querySelector('.bom-add').addEventListener('click', function () {
+        log('+ clicked', row.dataset.row, row.dataset.parentId);
         var v = currentVertex(row);
         if (!v) { say('Pick a target part on this row before adding a component under it.', true); return; }
-        var ancestors = ancestorIds(row);
-        if (ancestors.indexOf(v.id) >= 0 || v.id === ROOT_ID) {
+        var ancestors = ancestorBaseNumbers(row);
+        if (ancestors.indexOf(v.base) >= 0 || v.base === ROOT_BASE) {
+          warn('cycle blocked', v.base, 'ancestors:', ancestors);
           say('Cannot add this part: it would create a cycle in the BOM.', true); return;
         }
-        addChildRow(row, v.id, v.label, depthOf(row) + 1);
+        log('+ adding child', v.id, v.label);
+        addChildRow(row, v.id, v.label, 1);
       });
       row.querySelector('.bom-remove').addEventListener('click', function () {
+        log('- clicked', row.dataset.row, row.dataset.deleted);
         if (row.dataset.row === 'existing') {
           var deleted = row.dataset.deleted === 'true';
           row.dataset.deleted = deleted ? '' : 'true';
@@ -265,23 +283,34 @@
           if (!tbody.querySelector('tr')) {
             var tr = document.createElement('tr');
             tr.id = 'bom-empty-row';
-            tr.innerHTML = '<td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
+            tr.innerHTML = '<td colspan="7" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
             tbody.appendChild(tr);
           }
         }
         saveDraft();
       });
       row.querySelectorAll('.bom-input').forEach(function (inp) {
-        inp.addEventListener('input', saveDraft);
+        inp.addEventListener('input', function () {
+          log('input changed', inp.className, inp.value);
+          say('', false);
+          saveDraft();
+        });
       });
-      row.querySelector('.bom-target-select').addEventListener('change', saveDraft);
+      row.querySelector('.bom-target-select').addEventListener('change', function () {
+        log('select changed', this.value, this.options[this.selectedIndex] ? this.options[this.selectedIndex].textContent : '');
+        say('', false);
+        saveDraft();
+      });
     }
 
+    log('wiring existing rows', tbody.querySelectorAll('tr[data-row]').length);
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row]'), wireRow);
 
     var addRootChild = document.getElementById('bom-add-root-child');
     if (addRootChild) {
       addRootChild.addEventListener('click', function () {
+        log('+ Add component clicked', 'disabled=' + addRootChild.disabled, 'parentId=' + addRootChild.dataset.parentId);
+        if (addRootChild.disabled) { warn('add component button is disabled - no root selected'); return; }
         var last = tbody.querySelector('tr:last-child');
         var anchor = last || tbody;
         addChildRow(anchor, addRootChild.dataset.parentId, addRootChild.dataset.parentLabel, 1);
@@ -289,6 +318,7 @@
     }
 
     document.getElementById('bom-save').addEventListener('click', function () {
+      log('Save clicked');
       var rows = [];
       var bad = false;
       Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row]'), function (row) {
@@ -298,12 +328,17 @@
       });
       if (bad) { say('Every new row needs a target part before saving.', true); return; }
       say('Saving\u2026');
+      log('POST /bom/save', rows.length, 'rows');
       fetch('/bom/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: rows }),
-      }).then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      }).then(function (res) {
+        log('save response', res.status);
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+      })
         .then(function (result) {
+          log('save result', result);
           if (result.ok && result.data.ok) {
             try { localStorage.removeItem('bom-draft-' + ROOT_ID); } catch (e) {}
             window.location.href = '/bom?root=' + encodeURIComponent(ROOT_ID) +
@@ -313,22 +348,27 @@
             say(result.data.error || 'Save failed.', true);
           }
         })
-        .catch(function () { say('Save failed - check your connection and try again.', true); });
+        .catch(function (err) { warn('save fetch error', err); say('Save failed - check your connection and try again.', true); });
     });
 
     document.getElementById('bom-clear-draft').addEventListener('click', function () {
+      log('clear draft clicked');
       try { localStorage.removeItem('bom-draft-' + ROOT_ID); } catch (e) {}
       say('Draft cleared.');
     });
 
+    log('checking draft restore');
     if (!tbody.querySelector('tr[data-row]') && ROOT_ID) {
       var restored = loadDraft();
+      log('draft restore result', restored);
       if (!restored) {
+        log('adding default child row for root', ROOT_ID);
         var last = tbody.querySelector('tr:last-child');
         var anchor = last || tbody;
         addChildRow(anchor, ROOT_ID, '{{ root_vertex.label }}', 1);
       }
     }
+    log('BOM init complete');
   })();
   </script>
   {% endif %}
