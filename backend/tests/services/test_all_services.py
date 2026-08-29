@@ -116,11 +116,11 @@ def update_rule(*a, **k):
 
 
 def resolve_rule(*a, **k):
-    return _edge_validator.resolve_rule(*a, **k)
+    return _edge_validator.resolve_constraint(*a, **k)
 
 
 def validate_against_rule(*a, **k):
-    return _validator.validate_against_rule(*a, **k)
+    return _edge_validator.validate_against_constraint(*a, **k)
 
 
 def assign_roles_to_user(*a, **k):
@@ -1132,6 +1132,9 @@ def suite_bom_tree(tid):
     assert empty == [], f"leaf vertex should have no children, got {empty}"
 
     # ── inactive edge excluded from tree but subtree still reachable ──────────
+    # sub1 is already in the tree via the ACTIVE edge child1 → sub1.
+    # Adding an INACTIVE edge child2 → sub1 must NOT create a duplicate entry.
+    from sqlalchemy import text
     inactive_edge = op(tid, lambda s: create_edge(
         s, tid,
         EdgeCreate(
@@ -1147,18 +1150,31 @@ def suite_bom_tree(tid):
         ),
         ACTOR,
     ))
-    # Confirm it was stored with the right state (guards against a silent schema/ORM mismatch)
+    # Guard: confirm the edge was stored with the right state
+    raw = op(tid, lambda s: s.execute(
+        text("SELECT lifecycle_state::text FROM plmiqdb.foundation_edge WHERE id = :id"),
+        {"id": str(inactive_edge.id)}
+    ).scalar_one())
     assert inactive_edge.lifecycle_state == enums.EdgeState.INACTIVE, \
-        f"edge lifecycle_state={inactive_edge.lifecycle_state}, not INACTIVE — check EdgeCreate/lifecycle_state passthrough"
+        f"ORM returned lifecycle_state={inactive_edge.lifecycle_state}, not INACTIVE"
+    assert raw == "inactive", f"DB raw value={raw!r}, expected 'inactive'"
 
-    rows_after_inactive = op(tid, lambda s: bom_tree(s, tid, root.id))
-    ids = {str(r["vertexId"]) for r in rows_after_inactive}
-    assert str(sub1.id) not in ids, "inactive edge should not appear in tree"
-    assert len(rows_after_inactive) == 2
+    # After adding the inactive edge the tree still has exactly 3 rows:
+    # sub1 is reachable via the ACTIVE child1→sub1 edge; the INACTIVE child2→sub1
+    # edge is excluded from the traversal so no duplicate row is produced.
+    rows_with_inactive = op(tid, lambda s: bom_tree(s, tid, root.id))
+    ids = {str(r["vertexId"]) for r in rows_with_inactive}
+    assert str(sub1.id) in ids, "sub1 should still be reachable via the ACTIVE child1→sub1 edge"
+    assert len(rows_with_inactive) == 3, \
+        f"inactive edge must not add a duplicate; expected 3 rows, got {len(rows_with_inactive)}: {ids}"
+    # The real inactive-edge check: no row in the tree has child2 as its parent
+    assert not any(r["parentVertexId"] == child2.id for r in rows_with_inactive), \
+        "no tree row should have child2 as parent — its outgoing edges are all inactive"
 
-    # sub1 is still reachable via the active child1 link
-    rows_via_child2 = op(tid, lambda s: bom_tree(s, tid, child2.id))
-    assert str(sub1.id) not in {str(r["vertexId"]) for r in rows_via_child2}
+    # An orphan vertex with no BOM edges produces an empty tree
+    orphan = op(tid, lambda s: mk_vertex(s, tid, "B-ORPHAN"))
+    orphan_tree = op(tid, lambda s: bom_tree(s, tid, orphan.id))
+    assert orphan_tree == [], f"orphan vertex should have no BOM children, got {orphan_tree}"
 
     # ── max_depth bounds traversal ───────────────────────────────────────────
     shallow = op(tid, lambda s: bom_tree(s, tid, root.id, max_depth=1))
