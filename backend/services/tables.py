@@ -8,8 +8,24 @@ from __future__ import annotations
 
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Integer, MetaData, Table, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, ENUM, JSONB, UUID
+from sqlalchemy.types import UserDefinedType
 
 from . import enums
+
+
+class TSVector(UserDefinedType):
+    """Maps to PostgreSQL tsvector — used for full-text search on search_vertex/search_edge."""
+
+    cache_ok = True
+
+    def get_col_spec(self):
+        return "TSVECTOR"
+
+    def bind_processor(self, dialect):
+        return None
+
+    def result_processor(self, dialect, coldesc):
+        return None
 
 metadata = MetaData(schema="plmiqdb")
 
@@ -223,6 +239,56 @@ setting = Table(
     Column("created_by", Text, nullable=False),
     Column("created_on", DateTime(timezone=True), nullable=False),
     Column("modified_by", Text, nullable=False),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+# ── Search index (PostgreSQL FTS platform; see database/schema/zz_search_platform.sql) ──
+# Mirrors the Elasticsearch index structure. Used only when SEARCH_PLATFORM=POSTGRES.
+search_vertex = Table(
+    "search_vertex",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("entity_type", Text, nullable=False, default="vertex"),
+    Column("kind", Text),
+    Column("classification_id", UUID(as_uuid=True)),
+    Column("prefix", Text),
+    Column("number", Text),
+    Column("display_number", Text),
+    Column("name", Text),
+    Column("description", Text),
+    Column("revision", Text),
+    Column("lifecycle_state", Text),
+    Column("release_on", Date),
+    Column("marked_for_deletion", Boolean, nullable=False, default=False),
+    Column("solution_attributes", JSONB, nullable=False, default=dict),
+    Column("tenant_attributes", JSONB, nullable=False, default=dict),
+    Column("text_vector", TSVector),
+    Column("modified_on", DateTime(timezone=True), nullable=False),
+)
+
+search_edge = Table(
+    "search_edge",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("entity_type", Text, nullable=False, default="edge"),
+    Column("kind", Text),
+    Column("name", Text),
+    Column("lifecycle_state", Text),
+    Column("effective_from", Date),
+    Column("effective_to", Date),
+    Column("source_vertex_id", UUID(as_uuid=True)),
+    Column("source_vertex_kind", Text),
+    Column("source_display", Text),
+    Column("source_name", Text),
+    Column("target_vertex_id", UUID(as_uuid=True)),
+    Column("target_vertex_kind", Text),
+    Column("target_display", Text),
+    Column("target_name", Text),
+    Column("annotation", JSONB, nullable=False, default=dict),
+    Column("tenant_attributes", JSONB, nullable=False, default=dict),
+    Column("text_vector", TSVector),
     Column("modified_on", DateTime(timezone=True), nullable=False),
 )
 

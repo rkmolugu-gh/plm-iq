@@ -702,9 +702,12 @@ INSERT INTO iam_user_role (user_id, role_id, tenant_id, assigned_by) VALUES
 -- .env-style KEY=VALUE blob; bump the value to roll out new defaults.
 INSERT INTO setting (id, level, tenant_id, user_id, content, is_secret, created_by, modified_by)
 VALUES ('60000000-0000-4000-8000-000000000001', 'platform', NULL, NULL,
-         E'chatllmmodel=openrouter/free\nLLM_URL=https://openrouter.ai/api/v1',
+         E'chatllmmodel=openrouter/free\nLLM_URL=https://openrouter.ai/api/v1\nSEARCH_PLATFORM=ES',
         false, 'seed', 'seed')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    content = EXCLUDED.content,
+    modified_by = EXCLUDED.modified_by,
+    modified_on = EXCLUDED.modified_on;
 
 -- ══ Stage 2c: release workflow (templates + instances + tasks) ══════════════
 -- Templates mirror the reference repo's seeded release-approval graphs, adapted

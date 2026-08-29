@@ -64,7 +64,7 @@ from services.schemas import (
     VertexUpdate,
     WorkflowDefinitionCreate,
 )
-from services.search_service import searcher
+from services.search_service_factory import get_search_service
 from services.tenant_service import tenants
 from services.user_service import users
 from services.vertex_service import parts, vertices
@@ -670,7 +670,7 @@ def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
     if len(query) < 2:
         return JSONResponse({"query": query, "results": []})
     try:
-        outcome = searcher.search(UUID(ident.tenant_id), query, limit=12)
+        outcome = get_search_service().search(UUID(ident.tenant_id), query, limit=12)
     except ServiceError as exc:
         return JSONResponse({"query": query, "results": [], "error": str(exc)})
     results = [
@@ -688,7 +688,7 @@ def graph_vertex_search(request: Request, q: str = "") -> JSONResponse:
 
 @router.get("/search", response_class=HTMLResponse, response_model=None)
 def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectResponse:
-    """BM25 search over the signed-in tenant's Elasticsearch indices."""
+    """Full-text search over the signed-in tenant's graph (ES or PostgreSQL FTS)."""
     ident = _require_identity(request)
     if isinstance(ident, RedirectResponse):
         return ident
@@ -698,8 +698,25 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         return _render_default(request) if not ctx.valid else _render_not_found(request, path="/search")
 
     query = (q or "").strip()
-    es_status = es.cluster_status()
-    watermark = _watermark_view(watermarks.get(UUID(context["identity"].tenant_id)))
+
+    # Detect which platform is active and gather platform-specific status.
+    from services.search_service_factory import _read_platform_setting
+    platform = _read_platform_setting()
+    es_online = False
+    es_version = None
+    watermark = None
+    if platform == "ES":
+        es_status = es.cluster_status()
+        es_online = bool(es_status["online"])
+        es_version = es_status["version"]
+        if es_online:
+            watermark = _watermark_view(watermarks.get(UUID(context["identity"].tenant_id)))
+    else:
+        # PostgreSQL FTS — no separate cluster to probe; watermark is in the
+        # setting table and read by PostgresIndexBuilder._read_watermark().
+        # Pass None; the template hides the watermark block when it is absent.
+        pass
+
     context.update(
         show_nav=True,
         search_q=query,
@@ -708,16 +725,17 @@ def search_page(request: Request, q: str = "") -> HTMLResponse | RedirectRespons
         total=None,
         vertex_count=None,
         edge_count=None,
-        es_online=bool(es_status["online"]),
-        es_version=es_status["version"],
+        es_online=es_online,
+        es_version=es_version,
+        search_platform=platform,
         watermark=watermark,
         flash_err=request.query_params.get("err") or "",
     )
-    if query and not context["es_online"]:
+    if query and platform == "ES" and not es_online:
         context["flash_err"] = ""
     elif query:
         try:
-            outcome = searcher.search(UUID(context["identity"].tenant_id), query)
+            outcome = get_search_service().search(UUID(context["identity"].tenant_id), query)
             context.update(
                 results=outcome["rows"],
                 total=outcome["total"],
@@ -2066,8 +2084,14 @@ def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
     context = _base_context(request)
     params = request.query_params
 
-    es_status = es.cluster_status()
-    cat_rows = {row["index"]: row for row in ingest.indices_status()} if es_status["online"] else {}
+    from services.search_service_factory import _read_platform_setting
+    platform = _read_platform_setting()
+
+    es_status = {"online": False, "version": None, "error": None}
+    cat_rows: dict = {}
+    if platform == "ES":
+        es_status = es.cluster_status()
+        cat_rows = {row["index"]: row for row in ingest.indices_status()} if es_status["online"] else {}
 
     tenants_view = []
     with db.admin_session() as session:
@@ -2076,29 +2100,32 @@ def index_admin(request: Request) -> HTMLResponse | RedirectResponse:
         slug = index_service.slug_for(t.subdomain)
         vertex_row = cat_rows.get(index_service.vertex_index_name(slug))
         edge_row = cat_rows.get(index_service.edge_index_name(slug))
-        latest = indexer.latest_file_for_slug(slug)
+        latest = indexer.latest_file_for_slug(slug) if platform == "ES" else None
         tenants_view.append({
             "id": str(t.id),
             "name": t.name,
             "subdomain": t.subdomain,
             "slug": slug,
-            "watermark": _watermark_view(watermarks.get(t.id)),
+            "watermark": _watermark_view(watermarks.get(t.id)) if platform == "ES" else None,
             "vertex_docs": vertex_row["docs_count"] if vertex_row else None,
             "edge_docs": edge_row["docs_count"] if edge_row else None,
             "latest_file": latest["name"] if latest else None,
         })
 
-    files_view = [
-        {**f, "size_kb": round(f["size_bytes"] / 1024, 1), "modified_short": f["modified_on"].replace("T", " ")[:19]}
-        for f in indexer.list_index_files()
-    ]
+    files_view = []
+    if platform == "ES":
+        files_view = [
+            {**f, "size_kb": round(f["size_bytes"] / 1024, 1), "modified_short": f["modified_on"].replace("T", " ")[:19]}
+            for f in indexer.list_index_files()
+        ]
 
     context.update(
         show_nav=True,
         es=es_status,
-        es_indices=cat_rows.values(),
+        es_indices=list(cat_rows.values()),
         tenants_index=tenants_view,
         files=files_view,
+        search_platform=platform,
         jobs=[_job_view(j) for j in registry.list_jobs()],
         active_jobs=registry.any_active(),
         current_tenant_id=str(ident.tenant_id),

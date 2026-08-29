@@ -439,6 +439,76 @@ CREATE POLICY setting_tenant_isolation ON setting
 GRANT SELECT, INSERT, UPDATE, DELETE ON setting TO plmiq_app;
 GRANT ALL ON setting TO plmiq_migrator;
 
+-- ══ Search index tables (PostgreSQL FTS platform) ══════════════════════════════
+-- These mirror the Elasticsearch vertex/edge index structure.
+-- Used only when SEARCH_PLATFORM=POSTGRES; the ES index is the other option.
+
+CREATE TABLE search_vertex (
+    id                   uuid PRIMARY KEY,
+    tenant_id            uuid NOT NULL,
+    entity_type          text NOT NULL DEFAULT 'vertex',
+    kind                 text,
+    classification_id    uuid,
+    prefix               text,
+    number               text,
+    display_number       text,
+    name                 text,
+    description          text,
+    revision             text,
+    lifecycle_state      text,
+    release_on           date,
+    marked_for_deletion  boolean NOT NULL DEFAULT false,
+    solution_attributes   jsonb NOT NULL DEFAULT '{}',
+    tenant_attributes    jsonb NOT NULL DEFAULT '{}',
+    text_vector          tsvector,
+    modified_on          timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE  search_vertex IS 'PostgreSQL FTS denormalised index for vertex search (mirrors ES <slug>-vertices index)';
+
+CREATE INDEX idx_sv_tenant   ON search_vertex (tenant_id);
+CREATE INDEX idx_sv_fts      ON search_vertex USING GIN (text_vector);
+CREATE INDEX idx_sv_kind     ON search_vertex (tenant_id, kind);
+CREATE INDEX idx_sv_lifecycle ON search_vertex (tenant_id, lifecycle_state);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON search_vertex TO plmiq_app;
+GRANT ALL ON search_vertex TO plmiq_migrator;
+
+
+CREATE TABLE search_edge (
+    id                   uuid PRIMARY KEY,
+    tenant_id            uuid NOT NULL,
+    entity_type          text NOT NULL DEFAULT 'edge',
+    kind                 text,
+    name                 text,
+    lifecycle_state      text,
+    effective_from       date,
+    effective_to         date,
+    source_vertex_id     uuid,
+    source_vertex_kind   text,
+    source_display       text,
+    source_name          text,
+    target_vertex_id     uuid,
+    target_vertex_kind   text,
+    target_display       text,
+    target_name          text,
+    annotation           jsonb NOT NULL DEFAULT '{}',
+    tenant_attributes    jsonb NOT NULL DEFAULT '{}',
+    text_vector          tsvector,
+    modified_on          timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE  search_edge IS 'PostgreSQL FTS denormalised index for edge search (mirrors ES <slug>-edges index)';
+
+CREATE INDEX idx_se_tenant   ON search_edge (tenant_id);
+CREATE INDEX idx_se_fts      ON search_edge USING GIN (text_vector);
+CREATE INDEX idx_se_kind     ON search_edge (tenant_id, kind);
+CREATE INDEX idx_se_source   ON search_edge (source_vertex_id);
+CREATE INDEX idx_se_target   ON search_edge (target_vertex_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON search_edge TO plmiq_app;
+GRANT ALL ON search_edge TO plmiq_migrator;
+
 -- ══ Stage 2: identity & access ══════════════════════════════════════════════
 
 
