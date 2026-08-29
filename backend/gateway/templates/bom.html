@@ -245,6 +245,7 @@
         if (!Array.isArray(draft) || !draft.length) { log('loadDraft', 'empty draft'); return false; }
         log('loadDraft', draft.length, 'rows');
         tbody.innerHTML = '';
+        var levelMap = {};
         draft.forEach(function (d, i) {
           var frag = rowTemplate.content.cloneNode(true);
           var row = frag.querySelector('tr');
@@ -257,8 +258,18 @@
           row.querySelector('.bom-qty').value = d.quantity || '1';
           row.querySelector('.bom-find').value = d.findNumber || '';
           row.querySelector('.bom-uom').value = d.unitOfMeasure || 'EA';
+          var lvl;
+          if (d.parentId === ROOT_ID) {
+            lvl = 2;
+          } else if (levelMap[d.parentId]) {
+            lvl = levelMap[d.parentId] + 1;
+          } else {
+            lvl = 2;
+          }
+          row.dataset.level = lvl;
+          row.querySelector('.bom-level').textContent = 'L' + lvl;
+          if (d.vertexId) levelMap[d.vertexId] = lvl;
           tbody.appendChild(row);
-          setRowLevel(row);
           wireRow(row);
         });
         say('Draft restored (' + draft.length + ' rows).');
@@ -274,7 +285,10 @@
       row.dataset.parentId = parentId;
       row.dataset.parentLabel = parentLabel;
       row.querySelector('.bom-parent-label').textContent = parentLabel;
-      setRowLevel(row);
+      var parentLvl = afterRow.dataset.level ? parseInt(afterRow.dataset.level, 10) : rowLevel(afterRow);
+      var childLvl = parentLvl + 1;
+      row.dataset.level = childLvl;
+      row.querySelector('.bom-level').textContent = 'L' + childLvl;
       var sel = row.querySelector('.bom-target-select');
       populateSelect(sel);
       if (prefill && prefill.id) {
@@ -302,23 +316,28 @@
       });
       row.querySelector('.bom-remove').addEventListener('click', function () {
         log('- clicked', row.dataset.row, row.dataset.deleted);
-        if (row.dataset.row === 'existing') {
-          var deleted = row.dataset.deleted === 'true';
-          row.dataset.deleted = deleted ? '' : 'true';
-          row.classList.toggle('bom-deleted', !deleted);
-          row.querySelectorAll('.bom-input').forEach(function (i) { i.disabled = !deleted; });
-          row.querySelector('.bom-remove').textContent = deleted ? '\u2212' : '\u21ba';
-          row.querySelector('.bom-remove').title = deleted ? 'Remove this BOM relationship' : 'Undo removal';
-        } else {
-          row.remove();
-          if (!tbody.querySelector('tr')) {
-            var tr = document.createElement('tr');
-            tr.id = 'bom-empty-row';
-            tr.innerHTML = '<td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
-            tbody.appendChild(tr);
+        try {
+          if (row.dataset.row === 'existing') {
+            var deleted = row.dataset.deleted === 'true';
+            row.dataset.deleted = deleted ? '' : 'true';
+            row.classList.toggle('bom-deleted', !deleted);
+            row.querySelectorAll('.bom-input').forEach(function (i) { i.disabled = !deleted; });
+            row.querySelector('.bom-remove').textContent = deleted ? '\u2212' : '\u21ba';
+            row.querySelector('.bom-remove').title = deleted ? 'Remove this BOM relationship' : 'Undo removal';
+          } else {
+            row.remove();
+            if (!tbody.querySelector('tr')) {
+              var tr = document.createElement('tr');
+              tr.id = 'bom-empty-row';
+              tr.innerHTML = '<td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
+              tbody.appendChild(tr);
+            }
           }
+          saveDraft();
+        } catch (e) {
+          warn('remove handler error', e);
+          say('Error removing row: ' + e.message, true);
         }
-        saveDraft();
       });
       row.querySelectorAll('.bom-input').forEach(function (inp) {
         inp.addEventListener('input', function () {
