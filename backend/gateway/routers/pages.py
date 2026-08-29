@@ -2917,6 +2917,7 @@ def bom_page(request: Request, root: str = "") -> HTMLResponse | RedirectRespons
                 root_id = UUID(part_opts[0]["id"])
                 context["auto_loaded"] = True
             if root_id is not None:
+                context["root_id"] = str(root_id)
                 root_row = vertices.get(session, tid, root_id)
                 if enums.VertexKind(root_row["kind"]) != enums.VertexKind.PART:
                     raise ValueError("the BOM root must be a Part vertex")
@@ -2976,7 +2977,7 @@ async def bom_save(request: Request) -> JSONResponse:
     rows = payload.get("rows") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         return JSONResponse({"ok": False, "error": "expected a 'rows' array"}, status_code=400)
-    created = updated = deleted = 0
+    created = updated = deleted = skipped = 0
     try:
         with db.tenant_session(tid) as session:
             for i, r in enumerate(rows, start=1):
@@ -2991,10 +2992,12 @@ async def bom_save(request: Request) -> JSONResponse:
                     continue
                 parent_id = _safe_uuid(r.get("parentId") or "")
                 vertex_id = _safe_uuid(r.get("vertexId") or "")
-                if parent_id is None or vertex_id is None:
-                    return JSONResponse(
-                        {"ok": False, "error": f"row {i}: choose a target part"}, status_code=400
-                    )
+                if vertex_id is None:
+                    skipped += 1
+                    continue
+                if parent_id is None:
+                    skipped += 1
+                    continue
                 annotation = _bom_annotation(r)
                 if edge_id is not None:
                     current = edges.get(session, tid, edge_id)
@@ -3023,7 +3026,7 @@ async def bom_save(request: Request) -> JSONResponse:
                 created += 1
     except (ServiceError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    return JSONResponse({"ok": True, "created": created, "updated": updated, "deleted": deleted})
+    return JSONResponse({"ok": True, "created": created, "updated": updated, "deleted": deleted, "skipped": skipped})
 
 
 @router.get("/quality", response_class=HTMLResponse, response_model=None)

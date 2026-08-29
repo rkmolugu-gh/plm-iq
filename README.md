@@ -32,3 +32,9 @@ Tenant URLs follow `{tenant}.{edition}.localhost[:8080]`, e.g.
 ## Documentation
 
 - `docs/strategy-plm-iq-saas-application.md` — product/architecture strategy
+
+Railway setup
+DATABASE_URL = ${{Postgres.DATABASE_URL}}
+ELASTICSEARCH_URL = ${{Elasticsearch.ELASTICSEARCH_URL}}
+ELASTICSEARCH_USERNAME = ${{Elasticsearch.ELASTICSEARCH_USERNAME}}
+ELASTICSEARCH_PASSWORD = ${{Elasticsearch.ELASTICSEARCH_PASSWORD}}

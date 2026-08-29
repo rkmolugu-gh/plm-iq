@@ -180,9 +180,10 @@
       } else if (row.dataset.parentId === ROOT_ID) {
         v = { id: ROOT_ID, label: '{{ root_vertex.label if root_vertex else "" }}', base: ROOT_BASE };
       } else {
-        var select = row.querySelector('.bom-target-select');
-        var opt = select && select.options[select.selectedIndex];
-        v = opt && opt.value ? { id: opt.value, label: opt.textContent, base: baseNumber(opt.textContent) } : null;
+        // New row with a non-root parent: use the stored parent as the source vertex.
+        // parentLabel is already set on the row when addChildRow is called.
+        var pLabel = row.dataset.parentLabel || '';
+        v = { id: row.dataset.parentId, label: pLabel, base: baseNumber(pLabel) };
       }
       log('currentVertex', row.dataset.row, v);
       return v;
@@ -205,11 +206,19 @@
 
     function rowPayload(row) {
       var v = currentVertex(row);
+      var isNew = row.dataset.row !== 'existing';
+      var vertexId = null;
+      if (!isNew) {
+        vertexId = row.dataset.vertexId || null;
+      } else {
+        var sel = row.querySelector('.bom-target-select');
+        vertexId = (sel && sel.value) ? sel.value : null;
+      }
       var payload = {
-        edgeId: row.dataset.row === 'existing' ? row.dataset.edgeId : '',
+        edgeId: isNew ? '' : (row.dataset.edgeId || ''),
         version: row.dataset.version ? parseInt(row.dataset.version, 10) : null,
         parentId: row.dataset.parentId,
-        vertexId: v ? v.id : null,
+        vertexId: vertexId,
         quantity: row.querySelector('.bom-qty').value,
         findNumber: row.querySelector('.bom-find').value,
         unitOfMeasure: row.querySelector('.bom-uom').value,
@@ -285,8 +294,8 @@
       row.dataset.parentId = parentId;
       row.dataset.parentLabel = parentLabel;
       row.querySelector('.bom-parent-label').textContent = parentLabel;
-      var parentLvl = afterRow.dataset.level ? parseInt(afterRow.dataset.level, 10) : rowLevel(afterRow);
-      var childLvl = parentLvl + 1;
+      // Root's direct children are always L2, regardless of the last row already in the table.
+      var childLvl = (parentId === ROOT_ID) ? 2 : (parseInt(afterRow.dataset.level, 10) || rowLevel(afterRow)) + 1;
       row.dataset.level = childLvl;
       row.querySelector('.bom-level').textContent = 'L' + childLvl;
       var sel = row.querySelector('.bom-target-select');
@@ -392,9 +401,10 @@
           log('save result', result);
           if (result.ok && result.data.ok) {
             try { localStorage.removeItem('bom-draft-' + ROOT_ID); } catch (e) {}
-            window.location.href = '/bom?root=' + encodeURIComponent(ROOT_ID) +
-              '&msg=' + encodeURIComponent('BOM saved (' + result.data.created + ' added, ' +
-                result.data.updated + ' updated, ' + result.data.deleted + ' removed)');
+            var msg = 'BOM saved (' + result.data.created + ' added, ' +
+              result.data.updated + ' updated, ' + result.data.deleted + ' removed' +
+              (result.data.skipped ? ', ' + result.data.skipped + ' incomplete rows skipped' : '') + ')';
+            window.location.href = '/bom?root=' + encodeURIComponent(ROOT_ID) + '&msg=' + encodeURIComponent(msg);
           } else {
             say(result.data.error || 'Save failed.', true);
           }

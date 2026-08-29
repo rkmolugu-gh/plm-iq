@@ -1035,6 +1035,142 @@ def suite_role_service(tid):
         cleanup_iam_tenant(other_id)
 
 
+def bom_tree(session, tenant_id, root_id, **kw):
+    return _queries.bom_tree(session, tenant_id=tenant_id, root_id=root_id, **kw)
+
+
+# ── bom_tree (recursive CTE BOM traversal) ──────────────────────────────────
+
+
+def suite_bom_tree(tid):
+    """``queries.bom_tree`` returns the flattened BOM edge list for the BOM editor.
+
+    Coverage:
+    - One-level tree (root → one child).
+    - Multi-level tree (root → L2 → L3) with correct depth per row.
+    - Inactive edges are excluded from the result.
+    - Inactive edges are excluded from depth counting (a child of an inactive
+      parent still reports depth from the last active ancestor).
+    - Each row carries the annotation fields the editor needs.
+    - Empty tree when the root has no BOM children.
+    - Cycle-safe: the CTE path array prevents infinite loops.
+    """
+    with db.tenant_session(tid) as s:
+        create_rule(
+            s, tid,
+            EdgeConstraintCreate(
+                scope=enums.RuleScope.TENANT,
+                tenant_id=tid,
+                edge_kind=enums.EdgeKind.BOM,
+                source_vertex_kind=enums.VertexKind.PART,
+                target_vertex_kind=enums.VertexKind.PART,
+                duplicate_edges_allowed=True,
+            ),
+            ACTOR,
+        )
+        root   = mk_vertex(s, tid, "B-R")
+        child1 = mk_vertex(s, tid, "B-C1")
+        child2 = mk_vertex(s, tid, "B-C2")
+        sub1   = mk_vertex(s, tid, "B-S1")
+
+        def link(src, dst, annotation=None, state=enums.EdgeState.ACTIVE):
+            e = create_edge(
+                s, tid,
+                EdgeCreate(
+                    edition_id=enums.EditionId.FOUNDATION,
+                    kind=enums.EdgeKind.BOM,
+                    name="Has component",
+                    source_vertex_id=src.id,
+                    source_vertex_kind=enums.VertexKind.PART,
+                    target_vertex_id=dst.id,
+                    target_vertex_kind=enums.VertexKind.PART,
+                    lifecycle_state=state,
+                    annotation=annotation or {},
+                ),
+                ACTOR,
+            )
+            return e
+
+        link(root,   child1, {"quantity": 2,   "findNumber": "010", "unitOfMeasure": "EA"})
+        link(child1, sub1,   {"quantity": 4,   "findNumber": "020", "unitOfMeasure": "KG"})
+        link(root,   child2, {"quantity": 1,   "findNumber": "015", "unitOfMeasure": "EA"})
+
+    # ── multi-level tree ──────────────────────────────────────────────────────
+    rows = op(tid, lambda s: bom_tree(s, tid, root.id))
+    by_child = {str(r["vertexId"]): r for r in rows}
+
+    assert len(rows) == 3, f"expected 3 rows, got {len(rows)}"
+
+    r_child1 = by_child[str(child1.id)]
+    assert r_child1["depth"] == 1, f"L2 row should have depth=1, got {r_child1['depth']}"
+    assert r_child1["parentVertexId"] == root.id, f"parentVertexId={r_child1['parentVertexId']} != root.id={root.id}"
+    assert r_child1["annotation"].get("quantity") == 2
+    assert r_child1["annotation"].get("findNumber") == "010"
+    assert r_child1["annotation"].get("unitOfMeasure") == "EA"
+
+    r_sub1 = by_child[str(sub1.id)]
+    assert r_sub1["depth"] == 2, f"L3 row should have depth=2, got {r_sub1['depth']}"
+    assert r_sub1["parentVertexId"] == child1.id, f"parentVertexId={r_sub1['parentVertexId']} != child1.id={child1.id}"
+    assert r_sub1["annotation"].get("quantity") == 4
+
+    r_child2 = by_child[str(child2.id)]
+    assert r_child2["depth"] == 1
+    assert r_child2["parentVertexId"] == root.id
+
+    # vertex identity columns are present on every row
+    for r in rows:
+        assert r["prefix"], "row missing prefix"
+        assert r["number"], "row missing number"
+        assert r["name"], "row missing name"
+        assert r["revision"], "row missing revision"
+        assert r["edgeId"], "row missing edgeId"
+        assert r["edgeVersion"] is not None, "row missing edgeVersion"
+        assert r["edgeState"] in ("pending_approval", "active", "inactive")
+
+    # ── empty tree ───────────────────────────────────────────────────────────
+    empty = op(tid, lambda s: bom_tree(s, tid, sub1.id))
+    assert empty == [], f"leaf vertex should have no children, got {empty}"
+
+    # ── inactive edge excluded from tree but subtree still reachable ──────────
+    inactive_edge = op(tid, lambda s: create_edge(
+        s, tid,
+        EdgeCreate(
+            edition_id=enums.EditionId.FOUNDATION,
+            kind=enums.EdgeKind.BOM,
+            name="Inactive link",
+            source_vertex_id=child2.id,
+            source_vertex_kind=enums.VertexKind.PART,
+            target_vertex_id=sub1.id,
+            target_vertex_kind=enums.VertexKind.PART,
+            lifecycle_state=enums.EdgeState.INACTIVE,
+            annotation={"quantity": 99},
+        ),
+        ACTOR,
+    ))
+    # Confirm it was stored with the right state (guards against a silent schema/ORM mismatch)
+    assert inactive_edge.lifecycle_state == enums.EdgeState.INACTIVE, \
+        f"edge lifecycle_state={inactive_edge.lifecycle_state}, not INACTIVE — check EdgeCreate/lifecycle_state passthrough"
+
+    rows_after_inactive = op(tid, lambda s: bom_tree(s, tid, root.id))
+    ids = {str(r["vertexId"]) for r in rows_after_inactive}
+    assert str(sub1.id) not in ids, "inactive edge should not appear in tree"
+    assert len(rows_after_inactive) == 2
+
+    # sub1 is still reachable via the active child1 link
+    rows_via_child2 = op(tid, lambda s: bom_tree(s, tid, child2.id))
+    assert str(sub1.id) not in {str(r["vertexId"]) for r in rows_via_child2}
+
+    # ── max_depth bounds traversal ───────────────────────────────────────────
+    shallow = op(tid, lambda s: bom_tree(s, tid, root.id, max_depth=1))
+    shallow_ids = {str(r["vertexId"]) for r in shallow}
+    assert str(child1.id) in shallow_ids and str(child2.id) in shallow_ids
+    assert str(sub1.id) not in shallow_ids, "max_depth=1 should stop before L3"
+
+    # ── limit caps results ──────────────────────────────────────────────────
+    limited = op(tid, lambda s: bom_tree(s, tid, root.id, limit=2))
+    assert len(limited) <= 2, f"limit should cap results, got {len(limited)}"
+
+
 SUITES = [
     suite_vertex_service,
     suite_part_service,
@@ -1042,6 +1178,7 @@ SUITES = [
     suite_rule_engine,
     suite_edge_service,
     suite_graph_query_service,
+    suite_bom_tree,
     suite_tenant_service,
     suite_user_service,
     suite_role_service,

@@ -93,8 +93,8 @@ WITH RECURSIVE bom AS (
     FROM plmiqdb.foundation_edge e
     WHERE e.source_vertex_id = :root_id
       AND e.tenant_id = :tenant_id
-      AND e.kind = 'BOM'
-      AND e.lifecycle_state <> 'inactive'
+      AND e.kind::text = 'BOM'
+      AND e.lifecycle_state::text <> 'inactive'
     UNION ALL
     SELECT e.id, e.source_vertex_id, e.target_vertex_id, e.name,
            e.lifecycle_state::text, e.annotation, e.version, bom.depth + 1,
@@ -102,8 +102,8 @@ WITH RECURSIVE bom AS (
     FROM plmiqdb.foundation_edge e
     JOIN bom ON e.source_vertex_id = bom.vertex_id
     WHERE e.tenant_id = :tenant_id
-      AND e.kind = 'BOM'
-      AND e.lifecycle_state <> 'inactive'
+      AND e.kind::text = 'BOM'
+      AND e.lifecycle_state::text <> 'inactive'
       AND NOT e.target_vertex_id = ANY(bom.path)
       AND bom.depth < :max_depth
 )
