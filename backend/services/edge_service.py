@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 from . import enums, tables
 from .base import BaseService
 from .errors import Conflict, NotFound, ValidationFailed
-from .edge_constraints import edge_edge_validator
+from .edge_constraints import edge_validator
 from .schemas import EdgeCreate, EdgeOut, EdgeUpdate, Page, from_row
 from .vertex_service import vertices
 

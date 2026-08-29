@@ -14,7 +14,7 @@
 
   <form class="table-toolbar" method="get" action="/bom" id="bom-root-form">
     <label class="cell-anno" for="bom-root-select">Root part</label>
-    <select id="bom-root-select" name="root" required>
+    <select id="bom-root-select" name="root" required onchange="this.form.submit()">
       <option value="">Select a part&hellip;</option>
       {% for opt in part_options %}
       <option value="{{ opt.id }}"{{ ' selected' if opt.id == root_id else '' }}>{{ opt.label }}</option>
@@ -33,6 +33,7 @@
   <div style="overflow-x:auto">
   <table class="data-table bom-table" id="bom-table">
     <colgroup>
+      <col style="width:3rem">
       <col>
       <col style="width:8.5rem">
       <col style="width:4.5rem">
@@ -43,6 +44,7 @@
     </colgroup>
     <thead>
       <tr>
+        <th>Level</th>
         <th>Target part (child)</th>
         <th>Source part (parent)</th>
         <th>Qty</th>
@@ -56,7 +58,9 @@
       {% for r in bom_rows %}
       <tr data-row="existing" data-edge-id="{{ r.edge_id }}" data-version="{{ r.edge_version }}"
           data-parent-id="{{ r.parent_id }}" data-parent-label="{{ r.parent_label }}"
-          data-vertex-id="{{ r.vertex_id }}" data-vertex-label="{{ r.label }}">
+          data-vertex-id="{{ r.vertex_id }}" data-vertex-label="{{ r.label }}"
+          data-depth="{{ r.depth }}">
+        <td class="cell-mono">L{{ r.depth + 1 }}</td>
         <td title="{{ r.name }}">{{ r.label }} <span class="cell-anno">&middot; {{ r.name | short }}</span></td>
         <td class="cell-mono">{{ r.parent_label }}</td>
         <td><input class="bom-input bom-qty" type="text" value="{{ r.quantity if r.quantity else 1 }}" placeholder="1" aria-label="Quantity"></td>
@@ -69,7 +73,7 @@
         </td>
       </tr>
       {% else %}
-      <tr id="bom-empty-row"><td colspan="7" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td></tr>
+      <tr id="bom-empty-row"><td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -86,6 +90,7 @@
 
   <template id="bom-row-template">
     <tr data-row="new">
+      <td class="cell-mono bom-level"></td>
       <td>
         <select class="bom-target-select" required>
           <option value="">Select target part&hellip;</option>
@@ -151,10 +156,29 @@
       return bases;
     }
 
+    function rowLevel(row) {
+      if (row.dataset.row === 'existing' && row.dataset.depth !== undefined) {
+        return parseInt(row.dataset.depth, 10) + 1;
+      }
+      if (row.dataset.parentId === ROOT_ID) {
+        return 2;
+      }
+      return 1;
+    }
+
+    function setRowLevel(row) {
+      var lvl = rowLevel(row);
+      var lvlCell = row.querySelector('.bom-level');
+      if (lvlCell) lvlCell.textContent = 'L' + lvl;
+      return lvl;
+    }
+
     function currentVertex(row) {
       var v;
       if (row.dataset.row === 'existing') {
         v = { id: row.dataset.vertexId, label: row.dataset.vertexLabel, base: baseNumber(row.dataset.vertexLabel) };
+      } else if (row.dataset.parentId === ROOT_ID) {
+        v = { id: ROOT_ID, label: '{{ root_vertex.label if root_vertex else "" }}', base: ROOT_BASE };
       } else {
         var select = row.querySelector('.bom-target-select');
         var opt = select && select.options[select.selectedIndex];
@@ -165,6 +189,11 @@
     }
 
     function populateSelect(select) {
+      select.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select target part\u2026';
+      select.appendChild(placeholder);
       partOptions.forEach(function (opt) {
         var el = document.createElement('option');
         el.value = opt.id;
@@ -180,7 +209,7 @@
         edgeId: row.dataset.row === 'existing' ? row.dataset.edgeId : '',
         version: row.dataset.version ? parseInt(row.dataset.version, 10) : null,
         parentId: row.dataset.parentId,
-        vertexId: v ? v.id : row.dataset.vertexId,
+        vertexId: v ? v.id : null,
         quantity: row.querySelector('.bom-qty').value,
         findNumber: row.querySelector('.bom-find').value,
         unitOfMeasure: row.querySelector('.bom-uom').value,
@@ -229,6 +258,7 @@
           row.querySelector('.bom-find').value = d.findNumber || '';
           row.querySelector('.bom-uom').value = d.unitOfMeasure || 'EA';
           tbody.appendChild(row);
+          setRowLevel(row);
           wireRow(row);
         });
         say('Draft restored (' + draft.length + ' rows).');
@@ -244,6 +274,7 @@
       row.dataset.parentId = parentId;
       row.dataset.parentLabel = parentLabel;
       row.querySelector('.bom-parent-label').textContent = parentLabel;
+      setRowLevel(row);
       var sel = row.querySelector('.bom-target-select');
       populateSelect(sel);
       if (prefill && prefill.id) {
@@ -283,7 +314,7 @@
           if (!tbody.querySelector('tr')) {
             var tr = document.createElement('tr');
             tr.id = 'bom-empty-row';
-            tr.innerHTML = '<td colspan="7" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
+            tr.innerHTML = '<td colspan="8" class="cell-anno">No components yet &mdash; use "+ Add component" to start the structure.</td>';
             tbody.appendChild(tr);
           }
         }
@@ -327,6 +358,7 @@
         rows.push(rowPayload(row));
       });
       if (bad) { say('Every new row needs a target part before saving.', true); return; }
+      log('=== DRAFT BOM PAYLOAD ===', JSON.stringify(rows, null, 2));
       say('Saving\u2026');
       log('POST /bom/save', rows.length, 'rows');
       fetch('/bom/save', {

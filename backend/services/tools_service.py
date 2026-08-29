@@ -25,7 +25,7 @@ from .document_service import documents
 from .edge_service import edges
 from .errors import ServiceError
 from .edge_constraint_service import edge_constraints
-from .edge_constraints import edge_edge_validator
+from .edge_constraints import edge_validator
 from .vertex_service import vertices
 
 logger = logging.getLogger(__name__)
