@@ -25,7 +25,7 @@ from .document_service import documents
 from .edge_service import edges
 from .errors import ServiceError
 from .edge_constraint_service import edge_constraints
-from .rule_engine import validator
+from .edge_constraints import edge_edge_validator
 from .vertex_service import vertices
 
 logger = logging.getLogger(__name__)
@@ -1154,7 +1154,7 @@ class ToolService:
             sk = VertexKind(source_kind)
             tk = VertexKind(target_kind)
             eid = EditionId(edition_id)
-            rule = validator.resolve_rule(
+            rule = edge_validator.resolve_rule(
                 session, tenant_id=tenant_id, edition_id=eid,
                 edge_kind=ek, source_kind=sk, target_kind=tk,
             )
@@ -1283,7 +1283,7 @@ class ToolService:
             sk = VertexKind(source_kind)
             tk = VertexKind(target_kind)
             eid = EditionId(edition_id)
-            resolved, violations = validator.validate_edge(
+            resolved, violations = edge_validator.validate_edge(
                 session, tenant_id=tenant_id, edition_id=eid,
                 edge_kind=ek, source_kind=sk, target_kind=tk,
                 source_lifecycle_state=LifecycleState(source_lifecycle_state) if source_lifecycle_state else None,

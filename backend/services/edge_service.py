@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 from . import enums, tables
 from .base import BaseService
 from .errors import Conflict, NotFound, ValidationFailed
-from .rule_engine import validator
+from .edge_constraints import edge_edge_validator
 from .schemas import EdgeCreate, EdgeOut, EdgeUpdate, Page, from_row
 from .vertex_service import vertices
 
@@ -117,7 +117,7 @@ class EdgeService(BaseService):
         source = self._require_vertex(session, tenant_id, data.source_vertex_id, "source")
         target = self._require_vertex(session, tenant_id, data.target_vertex_id, "target")
 
-        resolved, violations = validator.validate_edge(
+        resolved, violations = edge_validator.validate_edge(
             session,
             tenant_id=tenant_id,
             edition_id=data.edition_id,
@@ -313,7 +313,7 @@ class EdgeService(BaseService):
             ).one_or_none()
             rule = dict(row._mapping) if row else None
         if rule is None:
-            resolved = validator.resolve_rule(
+            resolved = edge_validator.resolve_rule(
                 session,
                 tenant_id=tenant_id,
                 edition_id=edition_id,
@@ -325,7 +325,7 @@ class EdgeService(BaseService):
                 rule = resolved
         if rule is None:
             return
-        missing = validator.check_required_attributes(rule, {**tenant_attributes, **annotation})
+        missing = edge_validator.check_required_attributes(rule, {**tenant_attributes, **annotation})
         if missing:
             raise ValidationFailed(
                 "edge rejected by graph rules",

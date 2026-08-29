@@ -50,7 +50,7 @@ from services.graph_query_service import queries as _queries  # noqa: E402
 from services.edge_constraint_service import edge_constraints as _rules_svc  # noqa: E402
 from services.jobs import registry as _registry  # noqa: E402
 from services.role_service import roles as _roles_svc  # noqa: E402
-from services.rule_engine import validator as _validator  # noqa: E402
+from services.edge_constraints import edge_validator as _edge_validator  # noqa: E402
 from services.tenant_service import tenants as _tenants_svc  # noqa: E402
 from services.user_service import users as _users_svc  # noqa: E402
 from services.vertex_service import VertexCoreService, vertices as _vertices, parts as _parts  # noqa: E402
@@ -116,7 +116,7 @@ def update_rule(*a, **k):
 
 
 def resolve_rule(*a, **k):
-    return _validator.resolve_rule(*a, **k)
+    return _edge_validator.resolve_rule(*a, **k)
 
 
 def validate_against_rule(*a, **k):
